@@ -44,3 +44,19 @@ spec:
   annotations:
     summary: "Cassandra tombstone exceptions detected in logs"
     description: "TombstoneOverwhelmingException errors detected in cassandra system logs"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAlertRoute
+metadata:
+  name: slack-metrics-error
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: cassandra
+  integrationName: my-slack-channel
+  integrationType: slack
+  type: metrics
+  severity: error
+  enableOverride: true
