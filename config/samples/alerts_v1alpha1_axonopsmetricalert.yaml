@@ -1,0 +1,53 @@
+# Sample AxonOpsMetricAlert resource
+# This example creates a metric alert for high read latency in Cassandra
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: high-read-latency
+  namespace: default
+spec:
+  # Reference to the AxonOpsConnection in the same namespace
+  # If not provided, falls back to AXONOPS_* environment variables
+  connectionRef: production
+
+  # Cluster information
+  clusterName: production-cluster
+  clusterType: cassandra
+
+  # Alert rule configuration
+  name: high-read-latency
+  operator: ">"
+  warningValue: 50
+  criticalValue: 100
+  duration: 15m
+
+  # Dashboard and chart reference
+  dashboard: Cassandra Overview
+  chart: Read Latency
+
+  # Optional: metric name (auto-derived if not specified)
+  # metric: "cassandra_read_latency_ms"
+
+  # Optional: annotations for alert metadata
+  annotations:
+    summary: "Cassandra read latency is high"
+    description: "Read p99 latency exceeded threshold"
+
+  # Optional: routing integrations (email, Slack, PagerDuty, etc.)
+  integrations:
+    - type: email
+      routing:
+        - alerts@example.com
+      overrideWarning: true
+
+  # Optional: filters to narrow alert scope
+  filters:
+    dc:
+      - us-east-1a
+      - us-east-1b
+    hostId:
+      - host-1
+      - host-2
+    # groupBy:
+    #   - dc
+    #   - host_id

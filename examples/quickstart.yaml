@@ -1,0 +1,55 @@
+# Quick start example - minimal AxonOpsMetricAlert setup
+# Update the values below and apply: kubectl apply -f quickstart.yaml
+
+---
+# Step 1: Create a Secret with your AxonOps API credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-api-key
+  namespace: default
+type: Opaque
+stringData:
+  api_key: "YOUR_API_KEY_HERE"
+
+---
+# Step 2: Create an AxonOpsConnection to reference the credentials
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsConnection
+metadata:
+  name: my-axonops
+  namespace: default
+spec:
+  orgId: YOUR_ORG_ID
+  apiKeyRef:
+    name: axonops-api-key
+    key: api_key
+  # For SaaS, host can be omitted (defaults to dash.axonops.cloud)
+  # For on-premises, specify your AxonOps host:
+  # host: "axonops.example.com"
+
+---
+# Step 3: Create an AxonOpsMetricAlert
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: my-first-alert
+  namespace: default
+spec:
+  # Reference the connection created above
+  connectionRef: my-axonops
+
+  # Cluster information
+  clusterName: my-cluster
+  clusterType: cassandra  # cassandra, kafka, or dse
+
+  # Alert configuration
+  name: high-latency-alert
+  operator: ">"
+  warningValue: 50
+  criticalValue: 100
+  duration: 15m
+
+  # Dashboard and chart
+  dashboard: Cassandra Overview
+  chart: Read Latency

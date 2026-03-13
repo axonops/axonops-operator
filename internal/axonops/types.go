@@ -1,0 +1,86 @@
+/*
+Copyright 2026.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package axonops
+
+// MetricAlertRule represents an alert rule in AxonOps
+type MetricAlertRule struct {
+	ID            string                  `json:"id,omitempty"`
+	IsWidget      bool                    `json:"isWidget,omitempty"`
+	Alert         string                  `json:"alert"` // rule name
+	For           string                  `json:"for"`   // duration
+	Operator      string                  `json:"operator"`
+	WarningValue  float64                 `json:"warningValue"`
+	CriticalValue float64                 `json:"criticalValue"`
+	Expr          string                  `json:"expr"` // full expression: metric op value
+	WidgetTitle   string                  `json:"widgetTitle,omitempty"`
+	CorrelationId string                  `json:"correlationId,omitempty"`
+	Annotations   MetricAlertAnnotations  `json:"annotations,omitempty"`
+	Filters       []MetricAlertFilter     `json:"filters,omitempty"`
+	Integrations  MetricAlertIntegrations `json:"integrations,omitempty"`
+}
+
+// MetricAlertAnnotations represents alert annotations
+type MetricAlertAnnotations struct {
+	Description string `json:"description,omitempty"`
+	Summary     string `json:"summary,omitempty"`
+	WidgetUrl   string `json:"widget_url,omitempty"`
+}
+
+// MetricAlertFilter represents a single filter constraint
+type MetricAlertFilter struct {
+	Name  string   `json:"Name"`
+	Value []string `json:"Value"`
+}
+
+// MetricAlertIntegrations represents alert notification integrations
+type MetricAlertIntegrations struct {
+	Type            string   `json:"Type,omitempty"`
+	Routing         []string `json:"Routing,omitempty"`
+	OverrideInfo    bool     `json:"OverrideInfo,omitempty"`
+	OverrideWarning bool     `json:"OverrideWarning,omitempty"`
+	OverrideError   bool     `json:"OverrideError,omitempty"`
+}
+
+// DashboardTemplateResponse represents the response from the dashboard template API
+type DashboardTemplateResponse struct {
+	Dashboards []Dashboard `json:"dashboards"`
+}
+
+// Dashboard represents a dashboard in the template response
+type Dashboard struct {
+	UUID   string           `json:"uuid"`
+	Name   string           `json:"name"`
+	Panels []DashboardPanel `json:"panels"`
+}
+
+// DashboardPanel represents a panel/chart in a dashboard
+type DashboardPanel struct {
+	UUID    string                `json:"uuid"`
+	Title   string                `json:"title"`
+	Type    string                `json:"type,omitempty"`
+	Details DashboardPanelDetails `json:"details,omitempty"`
+}
+
+// DashboardPanelDetails represents the details of a dashboard panel
+type DashboardPanelDetails struct {
+	Queries []DashboardPanelQuery `json:"queries,omitempty"`
+}
+
+// DashboardPanelQuery represents a metric query in a panel
+type DashboardPanelQuery struct {
+	Query string `json:"query"`
+}

@@ -1,0 +1,340 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: axonopsmetricalerts.alerts.axonops.com
+spec:
+  group: alerts.axonops.com
+  names:
+    kind: AxonOpsMetricAlert
+    listKind: AxonOpsMetricAlertList
+    plural: axonopsmetricalerts
+    singular: axonopsmetricalert
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterName
+      name: Cluster
+      type: string
+    - jsonPath: .spec.clusterType
+      name: Type
+      type: string
+    - jsonPath: .status.syncedAlertId
+      name: AlertID
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AxonOpsMetricAlert is the Schema for the axonopsmetricalerts
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of AxonOpsMetricAlert
+            properties:
+              annotations:
+                description: Annotations contains optional alert metadata
+                properties:
+                  description:
+                    description: Description is a longer description of the alert
+                    type: string
+                  summary:
+                    description: Summary is a short summary of the alert
+                    type: string
+                  widgetUrl:
+                    description: WidgetURL is a URL to the dashboard widget
+                    type: string
+                type: object
+              chart:
+                description: Chart is the name of the chart/panel within the dashboard
+                minLength: 1
+                type: string
+              clusterName:
+                description: ClusterName is the name of the cluster this alert applies
+                  to
+                minLength: 1
+                type: string
+              clusterType:
+                description: ClusterType is the type of the cluster (cassandra, kafka,
+                  dse)
+                enum:
+                - cassandra
+                - kafka
+                - dse
+                type: string
+              connectionRef:
+                description: |-
+                  ConnectionRef is the name of an AxonOpsConnection in the same namespace.
+                  If not provided, falls back to operator environment variables.
+                type: string
+              criticalValue:
+                description: CriticalValue is the critical threshold
+                type: number
+              dashboard:
+                description: Dashboard is the name of the dashboard containing the
+                  chart
+                minLength: 1
+                type: string
+              duration:
+                description: Duration is how long the condition must be true to trigger
+                  the alert (e.g. 15m, 1h)
+                minLength: 1
+                type: string
+              filters:
+                description: Filters apply constraints to the alert based on metric
+                  dimensions
+                properties:
+                  consistency:
+                    description: Consistency filters alerts to specific Cassandra
+                      consistency levels
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  dc:
+                    description: DataCenter filters alerts to specific data centers
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  groupBy:
+                    description: GroupBy specifies dimensions to group alert instances
+                      by
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  groupId:
+                    description: GroupID filters alerts to specific Kafka consumer
+                      groups
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  hostId:
+                    description: HostID filters alerts to specific hosts
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  keyspace:
+                    description: Keyspace filters alerts to specific Cassandra keyspaces
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  percentile:
+                    description: Percentile filters alerts to specific percentiles
+                      (e.g., 75thPercentile, 95thPercentile)
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  rack:
+                    description: Rack filters alerts to specific racks
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  scope:
+                    description: Scope filters alerts by scope (e.g., cluster, keyspace)
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  topic:
+                    description: Topic filters alerts to specific Kafka topics
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
+              integrations:
+                description: Integrations specifies how to route alert notifications
+                items:
+                  description: MetricAlertIntegration defines alert notification routing
+                  properties:
+                    overrideError:
+                      description: OverrideError determines if the integration overrides
+                        error-level alerts
+                      type: boolean
+                    overrideInfo:
+                      description: OverrideInfo determines if the integration overrides
+                        info-level alerts
+                      type: boolean
+                    overrideWarning:
+                      description: OverrideWarning determines if the integration overrides
+                        warning-level alerts
+                      type: boolean
+                    routing:
+                      description: Routing is the list of routing destinations (email
+                        addresses, Slack channels, etc.)
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: atomic
+                    type:
+                      description: Type is the integration type (e.g., email, slack,
+                        pagerduty)
+                      type: string
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+              metric:
+                description: |-
+                  Metric is the base metric name for the alert expression (e.g., "cassandra_read_latency_ms")
+                  This is required and must match a metric from the dashboard chart query
+                minLength: 1
+                type: string
+              name:
+                description: Name is the human-readable name of the alert rule
+                minLength: 1
+                type: string
+              operator:
+                description: Operator is the comparison operator (>, >=, =, !=, <=,
+                  <)
+                enum:
+                - '>'
+                - '>='
+                - =
+                - '!='
+                - <=
+                - <
+                type: string
+              warningValue:
+                description: WarningValue is the warning threshold
+                type: number
+            required:
+            - chart
+            - clusterName
+            - clusterType
+            - criticalValue
+            - dashboard
+            - duration
+            - metric
+            - name
+            - operator
+            - warningValue
+            type: object
+          status:
+            description: status defines the observed state of AxonOpsMetricAlert
+            properties:
+              conditions:
+                description: |-
+                  Conditions represent the current state of the AxonOpsMetricAlert resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types include:
+                  - "Ready": the alert rule is synced with AxonOps and ready
+                  - "Progressing": the alert rule is being created or updated
+                  - "Failed": the alert rule failed to sync with AxonOps
+
+                  The status of each condition is one of True, False, or Unknown.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              correlationId:
+                description: CorrelationID is the UUID of the dashboard panel resolved
+                  from the dashboard template API
+                type: string
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  sync with AxonOps
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration reflects the generation of the most
+                  recently observed AxonOpsMetricAlert
+                format: int64
+                type: integer
+              syncedAlertId:
+                description: SyncedAlertID is the ID of the alert rule assigned by
+                  AxonOps API
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

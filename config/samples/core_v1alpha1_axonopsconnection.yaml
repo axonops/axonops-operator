@@ -1,0 +1,38 @@
+# Sample AxonOpsConnection for managing credentials to an AxonOps API instance
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-creds
+  namespace: default
+stringData:
+  api_key: "your-api-key-here"
+---
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsConnection
+metadata:
+  name: production
+  namespace: default
+spec:
+  # The organization ID for AxonOps
+  orgId: my-org
+
+  # Reference to the secret containing the API key
+  apiKeyRef:
+    name: axonops-creds
+    key: api_key
+
+  # Optional: Custom host for on-premises deployments
+  # If not provided, defaults to SaaS (dash.axonops.cloud)
+  # host: "axonops.example.com"
+
+  # Optional: Protocol (default: https)
+  # protocol: "https"
+
+  # Optional: Token type (default: Bearer)
+  # tokenType: "Bearer"
+
+  # Optional: Skip TLS verification (default: false)
+  # tlsSkipVerify: false
+
+  # Optional: Enable SAML (default: false, changes URL pattern)
+  # useSaml: false

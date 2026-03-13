@@ -1,0 +1,9 @@
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  labels:
+    app.kubernetes.io/name: axonops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: axonopsserver-sample
+spec:
+  # TODO(user): Add fields here

@@ -1,0 +1,240 @@
+# Complete examples of AxonOpsMetricAlert configurations
+# These examples demonstrate various alert patterns and use cases
+
+---
+# Prerequisites: Create the AxonOpsConnection and Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-prod-creds
+  namespace: default
+type: Opaque
+stringData:
+  api_key: "change-me-to-your-api-key"
+
+---
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsConnection
+metadata:
+  name: production
+  namespace: default
+spec:
+  orgId: my-org
+  apiKeyRef:
+    name: axonops-prod-creds
+    key: api_key
+  host: dash.axonops.cloud
+  protocol: https
+  tokenType: Bearer
+
+---
+# Example 1: Cassandra - High Read Latency Alert
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-high-read-latency
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: high-read-latency
+  operator: ">"
+  warningValue: 50
+  criticalValue: 100
+  duration: 15m
+  dashboard: Cassandra Overview
+  chart: Read Latency (p99)
+  annotations:
+    summary: "Cassandra read latency is high"
+    description: "Read p99 latency exceeded threshold on {{ $labels.host_id }}"
+  integrations:
+    - type: email
+      routing:
+        - dba-team@example.com
+      overrideWarning: true
+  filters:
+    dc:
+      - us-east-1a
+      - us-east-1b
+    groupBy:
+      - dc
+      - host_id
+
+---
+# Example 2: Cassandra - High Write Latency Alert
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-high-write-latency
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: high-write-latency
+  operator: ">"
+  warningValue: 30
+  criticalValue: 75
+  duration: 10m
+  dashboard: Cassandra Overview
+  chart: Write Latency (p99)
+  annotations:
+    summary: "Cassandra write latency is elevated"
+    description: "Write p99 latency is above threshold"
+  integrations:
+    - type: email
+      routing:
+        - dba-team@example.com
+      overrideWarning: true
+      overrideError: true
+
+---
+# Example 3: Cassandra - CPU Usage Alert
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-high-cpu
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: high-cpu-usage
+  operator: ">"
+  warningValue: 70
+  criticalValue: 90
+  duration: 5m
+  dashboard: Cassandra Overview
+  chart: CPU Usage
+  annotations:
+    summary: "Cassandra node CPU is high"
+    description: "CPU usage exceeded threshold"
+  filters:
+    hostId:
+      - node-1
+      - node-2
+      - node-3
+    groupBy:
+      - host_id
+
+---
+# Example 4: Cassandra - Compaction Backlog Alert
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-compaction-backlog
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: compaction-backlog
+  operator: ">"
+  warningValue: 10
+  criticalValue: 50
+  duration: 30m
+  dashboard: Cassandra Compaction
+  chart: Compaction Backlog
+  annotations:
+    summary: "Cassandra compaction backlog is growing"
+    description: "Pending compaction tasks are accumulating"
+
+---
+# Example 5: Kafka - High Consumer Lag Alert
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: kafka-high-consumer-lag
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-kafka
+  clusterType: kafka
+  name: high-consumer-lag
+  operator: ">"
+  warningValue: 10000
+  criticalValue: 50000
+  duration: 5m
+  dashboard: Kafka Overview
+  chart: Consumer Lag
+  annotations:
+    summary: "Kafka consumer lag is high"
+    description: "Consumer group {{ $labels.group_id }} is lagging"
+  filters:
+    topic:
+      - events
+      - transactions
+    groupBy:
+      - topic
+      - group_id
+
+---
+# Example 6: Kafka - Broker Replication Factor Alert
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: kafka-replication-factor
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-kafka
+  clusterType: kafka
+  name: replication-factor-alert
+  operator: "<"
+  warningValue: 3
+  criticalValue: 1
+  duration: 10m
+  dashboard: Kafka Overview
+  chart: Min Replication Factor
+  annotations:
+    summary: "Kafka replication factor is low"
+    description: "Topic {{ $labels.topic }} has reduced replication"
+
+---
+# Example 7: DSE - Graph Query Latency Alert
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: dse-graph-latency
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-dse
+  clusterType: dse
+  name: graph-query-latency
+  operator: ">"
+  warningValue: 100
+  criticalValue: 500
+  duration: 15m
+  dashboard: DSE Graph
+  chart: Query Latency (p95)
+  annotations:
+    summary: "DSE graph query latency is high"
+    description: "Graph queries are slow"
+  filters:
+    groupBy:
+      - query_type
+
+---
+# Example 8: Multi-cluster without connectionRef (using env vars fallback)
+# This alert will use AXONOPS_* environment variables for connection
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-gc-time
+  namespace: default
+spec:
+  # No connectionRef specified - will use env vars (AXONOPS_API_KEY, AXONOPS_ORG_ID, etc.)
+  clusterName: staging-cassandra
+  clusterType: cassandra
+  name: high-gc-time
+  operator: ">"
+  warningValue: 200
+  criticalValue: 500
+  duration: 10m
+  dashboard: Cassandra Overview
+  chart: GC Time
+  annotations:
+    summary: "Cassandra garbage collection time is high"
+    description: "GC pause times exceeded threshold"
