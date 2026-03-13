@@ -4,6 +4,7 @@
 resources:
 - bases/core.axonops.com_axonopsservers.yaml
 - bases/alerts.axonops.com_axonopsmetricalerts.yaml
+- bases/alerts.axonops.com_axonopsalertroutes.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

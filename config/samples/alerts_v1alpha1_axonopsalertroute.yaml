@@ -1,0 +1,26 @@
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAlertRoute
+metadata:
+  labels:
+    app.kubernetes.io/name: axonops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: axonopsalertroute-sample
+  namespace: default
+spec:
+  # Reference the AxonOpsConnection for API credentials
+  connectionRef: gridindia
+
+  # Cluster information
+  clusterName: test-cluster-000
+  clusterType: cassandra  # cassandra, kafka, or dse
+
+  # Integration to route alerts to
+  integrationName: my-slack-channel
+  integrationType: slack  # email, smtp, pagerduty, slack, teams, servicenow, webhook, opsgenie
+
+  # Route type and severity
+  type: metrics  # global, metrics, backups, servicechecks, nodes, commands, repairs, rollingrestart
+  severity: error  # info, warning, error
+
+  # Enable override (ignored for global routes)
+  enableOverride: true

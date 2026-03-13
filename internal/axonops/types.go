@@ -84,3 +84,31 @@ type DashboardPanelDetails struct {
 type DashboardPanelQuery struct {
 	Query string `json:"query"`
 }
+
+// IntegrationsResponse represents the response from the integrations API
+type IntegrationsResponse struct {
+	Definitions []IntegrationDefinition `json:"Definitions"`
+	Routings    []IntegrationRouting    `json:"Routings"`
+}
+
+// IntegrationDefinition represents an integration configuration
+type IntegrationDefinition struct {
+	ID     string            `json:"ID"`
+	Type   string            `json:"Type"`
+	Params map[string]string `json:"Params"`
+}
+
+// IntegrationRouting represents routing configuration for a route type
+type IntegrationRouting struct {
+	Type            string             `json:"Type"`
+	Routing         []IntegrationRoute `json:"Routing"`
+	OverrideInfo    bool               `json:"OverrideInfo"`
+	OverrideWarning bool               `json:"OverrideWarning"`
+	OverrideError   bool               `json:"OverrideError"`
+}
+
+// IntegrationRoute represents a single alert route to an integration
+type IntegrationRoute struct {
+	ID       string `json:"ID"`
+	Severity string `json:"Severity"`
+}

@@ -15,6 +15,7 @@ rules:
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsalertroutes
   - axonopslogalerts
   - axonopsmetricalerts
   verbs:
@@ -28,6 +29,7 @@ rules:
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsalertroutes/finalizers
   - axonopslogalerts/finalizers
   - axonopsmetricalerts/finalizers
   verbs:
@@ -35,6 +37,7 @@ rules:
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsalertroutes/status
   - axonopslogalerts/status
   - axonopsmetricalerts/status
   verbs:

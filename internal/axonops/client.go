@@ -277,3 +277,130 @@ func (e *APIError) Error() string {
 func (e *APIError) IsRetryable() bool {
 	return e.StatusCode >= 500
 }
+
+// GetIntegrations retrieves all integrations and their routing configurations for a cluster
+func (c *Client) GetIntegrations(ctx context.Context, clusterType, clusterName string) (*IntegrationsResponse, error) {
+	url := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get integrations: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	var result IntegrationsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// AddIntegrationRoute adds an alert route to an integration
+func (c *Client) AddIntegrationRoute(ctx context.Context, clusterType, clusterName, routeType, severity, integrationID string) error {
+	url := fmt.Sprintf("%s/api/v1/integrations-routing/%s/%s/%s/%s/%s/%s",
+		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity, integrationID)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to add integration route: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	return nil
+}
+
+// RemoveIntegrationRoute removes an alert route from an integration
+func (c *Client) RemoveIntegrationRoute(ctx context.Context, clusterType, clusterName, routeType, severity, integrationID string) error {
+	url := fmt.Sprintf("%s/api/v1/integrations-routing/%s/%s/%s/%s/%s/%s",
+		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity, integrationID)
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to remove integration route: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 200, 204, and 404 are success (404 means already deleted)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	return nil
+}
+
+// SetIntegrationOverride sets the override flag for a route type and severity
+func (c *Client) SetIntegrationOverride(ctx context.Context, clusterType, clusterName, routeType, severity string, value bool) error {
+	url := fmt.Sprintf("%s/api/v1/integrations-override/%s/%s/%s/%s/%s",
+		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity)
+
+	payload := map[string]bool{"value": value}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to set integration override: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
+	}
+
+	return nil
+}
