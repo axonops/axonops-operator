@@ -1,0 +1,28 @@
+# AxonOps connection credentials — apply once, do not delete while alerts exist.
+# kubectl apply -f examples/quickstart-internal-connection.yaml
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-api-key
+  namespace: default
+type: Opaque
+stringData:
+  api_key: "kjOoVIPCeTnDbdcQ083KRjU45l5EDkwjJy1HMP7r"
+
+---
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsConnection
+metadata:
+  name: gridindia
+  namespace: default
+spec:
+  orgId: gridindia
+  host: dash.10.16.0.25.nip.io
+  tokenType: AxonApi
+  protocol: https
+  tlsSkipVerify: true
+  apiKeyRef:
+    name: axonops-api-key
+    key: api_key

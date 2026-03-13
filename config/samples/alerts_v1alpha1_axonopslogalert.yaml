@@ -1,0 +1,20 @@
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsLogAlert
+metadata:
+  name: tombstone-error-log
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: prod-cassandra
+  clusterType: cassandra
+  name: tombstone-error-log
+  operator: ">="
+  warningValue: 1
+  criticalValue: 5
+  duration: 15m
+  level: "error,warning"
+  content: "TombstoneOverwhelmingException"
+  source: "/var/log/cassandra/system.log"
+  annotations:
+    summary: "Cassandra tombstone exceptions detected"
+    description: "TombstoneOverwhelmingException errors detected in system logs"

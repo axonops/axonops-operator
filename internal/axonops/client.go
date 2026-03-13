@@ -27,6 +27,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Client manages communication with the AxonOps API
@@ -120,9 +122,19 @@ func (c *Client) GetMetricAlertRules(ctx context.Context, clusterType, clusterNa
 	return result.MetricRules, nil
 }
 
-// CreateOrUpdateMetricAlertRule creates or updates a metric alert rule
+// CreateOrUpdateMetricAlertRule creates or updates a metric alert rule.
+// The server determines create vs update solely from the `id` field in the POST body:
+// if the id already exists it updates, otherwise it creates. A UUID is generated
+// client-side when no ID is present so the caller can track it for future updates.
 func (c *Client) CreateOrUpdateMetricAlertRule(ctx context.Context, clusterType, clusterName string, rule MetricAlertRule) (MetricAlertRule, error) {
+	// Always POST to the base URL — the id in the body is what the server uses.
 	url := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+
+	// Generate a stable UUID when no ID exists so the server treats this as a specific
+	// new record rather than generating its own, allowing us to detect duplicates later.
+	if rule.ID == "" {
+		rule.ID = uuid.New().String()
+	}
 
 	body, err := json.Marshal(rule)
 	if err != nil {

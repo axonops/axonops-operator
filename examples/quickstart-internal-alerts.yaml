@@ -1,0 +1,46 @@
+# AxonOps alert rules — safe to kubectl delete -f this file.
+# Requires quickstart-internal-connection.yaml to be applied first.
+# kubectl apply -f examples/quickstart-internal-alerts.yaml
+# kubectl delete -f examples/quickstart-internal-alerts.yaml
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: tombstone-scanned-alert
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: cassandra
+  name: "Tombstones Scanned per Table - 99thPercentile - system.peers table"
+  operator: ">="
+  warningValue: 500
+  criticalValue: 1000
+  duration: 15m
+  dashboard: Table
+  chart: "Tombstones Scanned per Table - $percentile"
+  metric: "cassandra_tombstones_scanned"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsLogAlert
+metadata:
+  name: tombstone-error-alert
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: cassandra
+  name: "Cassandra Tombstone Exception Alert"
+  operator: ">="
+  warningValue: 1
+  criticalValue: 5
+  duration: 15m
+  level: "error,warning"
+  content: "TombstoneOverwhelmingException"
+  source: "/var/log/cassandra/system.log"
+  logType: "system"
+  annotations:
+    summary: "Cassandra tombstone exceptions detected in logs"
+    description: "TombstoneOverwhelmingException errors detected in cassandra system logs"

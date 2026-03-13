@@ -28,4 +28,13 @@ resources:
   kind: AxonOpsMetricAlert
   path: github.com/axonops/axonops-operator/api/alerts/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: axonops.com
+  group: alerts
+  kind: AxonOpsLogAlert
+  path: github.com/axonops/axonops-operator/api/alerts/v1alpha1
+  version: v1alpha1
 version: "3"

@@ -18,7 +18,7 @@ package axonops
 
 // MetricAlertRule represents an alert rule in AxonOps
 type MetricAlertRule struct {
-	ID            string                  `json:"id,omitempty"`
+	ID            string                  `json:"id"` // always serialised; server uses it for create-vs-update
 	IsWidget      bool                    `json:"isWidget,omitempty"`
 	Alert         string                  `json:"alert"` // rule name
 	For           string                  `json:"for"`   // duration
