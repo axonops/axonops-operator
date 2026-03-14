@@ -107,9 +107,9 @@ func (r *AxonOpsHealthcheckHTTPReconciler) Reconcile(ctx context.Context, req ct
 
 	// Find and update or add our healthcheck
 	found := false
-	for i, existing := range allHealthchecks.HTTP {
+	for i, existing := range allHealthchecks.HTTPChecks {
 		if existing.ID == healthcheck.Status.SyncedHealthcheckID {
-			allHealthchecks.HTTP[i] = entry
+			allHealthchecks.HTTPChecks[i] = entry
 			found = true
 			break
 		}
@@ -119,7 +119,7 @@ func (r *AxonOpsHealthcheckHTTPReconciler) Reconcile(ctx context.Context, req ct
 		if entry.ID == "" {
 			entry.ID = uuid.New().String()
 		}
-		allHealthchecks.HTTP = append(allHealthchecks.HTTP, entry)
+		allHealthchecks.HTTPChecks = append(allHealthchecks.HTTPChecks, entry)
 	}
 
 	// Update all healthchecks via bulk PUT
@@ -192,13 +192,13 @@ func (r *AxonOpsHealthcheckHTTPReconciler) handleDeletion(ctx context.Context, h
 			}
 		} else {
 			// Remove our healthcheck from the list
-			newList := make([]axonops.HealthcheckHTTP, 0, len(allHealthchecks.HTTP))
-			for _, h := range allHealthchecks.HTTP {
+			newList := make([]axonops.HealthcheckHTTP, 0, len(allHealthchecks.HTTPChecks))
+			for _, h := range allHealthchecks.HTTPChecks {
 				if h.ID != healthcheck.Status.SyncedHealthcheckID {
 					newList = append(newList, h)
 				}
 			}
-			allHealthchecks.HTTP = newList
+			allHealthchecks.HTTPChecks = newList
 
 			// Update via bulk PUT
 			if err := apiClient.UpdateHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName, allHealthchecks); err != nil {
@@ -226,16 +226,23 @@ func (r *AxonOpsHealthcheckHTTPReconciler) handleDeletion(ctx context.Context, h
 
 // buildHealthcheckEntry builds an API healthcheck entry from the CR spec
 func (r *AxonOpsHealthcheckHTTPReconciler) buildHealthcheckEntry(healthcheck *alertsv1alpha1.AxonOpsHealthcheckHTTP) axonops.HealthcheckHTTP {
+	// Convert headers map to []string format ("Key: Value")
+	var headers []string
+	for k, v := range healthcheck.Spec.Headers {
+		headers = append(headers, k+": "+v)
+	}
+
 	entry := axonops.HealthcheckHTTP{
 		Name:                healthcheck.Spec.Name,
-		URL:                 healthcheck.Spec.URL,
+		HTTP:                healthcheck.Spec.URL,
 		Method:              healthcheck.Spec.Method,
-		Headers:             healthcheck.Spec.Headers,
+		Headers:             headers,
 		Body:                healthcheck.Spec.Body,
 		ExpectedStatus:      healthcheck.Spec.ExpectedStatus,
 		Interval:            healthcheck.Spec.Interval,
 		Timeout:             healthcheck.Spec.Timeout,
 		Readonly:            healthcheck.Spec.Readonly,
+		TLSSkipVerify:       healthcheck.Spec.TLSSkipVerify,
 		SupportedAgentTypes: healthcheck.Spec.SupportedAgentTypes,
 	}
 

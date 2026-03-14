@@ -107,9 +107,9 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 
 	// Find and update or add our healthcheck
 	found := false
-	for i, existing := range allHealthchecks.Shell {
+	for i, existing := range allHealthchecks.ShellChecks {
 		if existing.ID == healthcheck.Status.SyncedHealthcheckID {
-			allHealthchecks.Shell[i] = entry
+			allHealthchecks.ShellChecks[i] = entry
 			found = true
 			break
 		}
@@ -119,7 +119,7 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 		if entry.ID == "" {
 			entry.ID = uuid.New().String()
 		}
-		allHealthchecks.Shell = append(allHealthchecks.Shell, entry)
+		allHealthchecks.ShellChecks = append(allHealthchecks.ShellChecks, entry)
 	}
 
 	// Update all healthchecks via bulk PUT
@@ -192,13 +192,13 @@ func (r *AxonOpsHealthcheckShellReconciler) handleDeletion(ctx context.Context, 
 			}
 		} else {
 			// Remove our healthcheck from the list
-			newList := make([]axonops.HealthcheckShell, 0, len(allHealthchecks.Shell))
-			for _, h := range allHealthchecks.Shell {
+			newList := make([]axonops.HealthcheckShell, 0, len(allHealthchecks.ShellChecks))
+			for _, h := range allHealthchecks.ShellChecks {
 				if h.ID != healthcheck.Status.SyncedHealthcheckID {
 					newList = append(newList, h)
 				}
 			}
-			allHealthchecks.Shell = newList
+			allHealthchecks.ShellChecks = newList
 
 			// Update via bulk PUT
 			if err := apiClient.UpdateHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName, allHealthchecks); err != nil {

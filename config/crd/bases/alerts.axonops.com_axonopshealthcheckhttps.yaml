@@ -110,6 +110,10 @@ spec:
                 default: 1m
                 description: Timeout is the timeout for the check (e.g., 1m, 30s)
                 type: string
+              tlsSkipVerify:
+                default: false
+                description: TLSSkipVerify skips TLS certificate verification
+                type: boolean
               url:
                 description: URL is the HTTP URL to check
                 minLength: 1

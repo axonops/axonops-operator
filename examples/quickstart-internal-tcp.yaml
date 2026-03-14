@@ -7,90 +7,78 @@
 apiVersion: alerts.axonops.com/v1alpha1
 kind: AxonOpsHealthcheckTCP
 metadata:
-  name: kafka-broker-tcp
+  name: cassandra-cql-tcp
   namespace: default
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
-  name: "Kafka Broker TCP Port Check"
-  tcp: "0.0.0.0:9092"
+  clusterType: cassandra
+  name: "Cassandra CQL Port Check"
+  tcp: "0.0.0.0:9042"
   interval: "1m"
   timeout: "30s"
   readonly: false
-  supportedAgentTypes:
-    - "broker"
-    - "kraft-broker"
 
 ---
 apiVersion: alerts.axonops.com/v1alpha1
 kind: AxonOpsHealthcheckTCP
 metadata:
-  name: zookeeper-tcp
+  name: cassandra-jmx-tcp
   namespace: default
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
-  name: "Zookeeper TCP Port Check"
-  tcp: "0.0.0.0:2181"
-  interval: "1m"
-  timeout: "30s"
-  readonly: true
-  supportedAgentTypes:
-    - "zookeeper"
-
----
-apiVersion: alerts.axonops.com/v1alpha1
-kind: AxonOpsHealthcheckTCP
-metadata:
-  name: kafka-jmx-tcp
-  namespace: default
-spec:
-  connectionRef: gridindia
-  clusterName: test-cluster-000
-  clusterType: kafka
-  name: "Kafka JMX Port Check"
-  tcp: "0.0.0.0:9999"
+  clusterType: cassandra
+  name: "Cassandra JMX Port Check"
+  tcp: "0.0.0.0:7199"
   interval: "2m"
   timeout: "30s"
   readonly: true
-  supportedAgentTypes:
-    - "all"
 
 ---
 apiVersion: alerts.axonops.com/v1alpha1
 kind: AxonOpsHealthcheckTCP
 metadata:
-  name: kafka-controller-tcp
+  name: cassandra-storage-tcp
   namespace: default
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
-  name: "Kafka Controller Port Check"
-  tcp: "0.0.0.0:9093"
+  clusterType: cassandra
+  name: "Cassandra Storage Port Check"
+  tcp: "0.0.0.0:7000"
+  interval: "1m"
+  timeout: "30s"
+  readonly: true
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: cassandra-ssl-storage-tcp
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: cassandra
+  name: "Cassandra SSL Storage Port Check"
+  tcp: "0.0.0.0:7001"
+  interval: "2m"
+  timeout: "30s"
+  readonly: true
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: cassandra-native-tcp
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: cassandra
+  name: "Cassandra Native Transport Port Check"
+  tcp: "0.0.0.0:9042"
   interval: "1m"
   timeout: "30s"
   readonly: false
-  supportedAgentTypes:
-    - "kraft-controller"
-    - "kraft-broker"
-
----
-apiVersion: alerts.axonops.com/v1alpha1
-kind: AxonOpsHealthcheckTCP
-metadata:
-  name: kafka-inter-broker-tcp
-  namespace: default
-spec:
-  connectionRef: gridindia
-  clusterName: test-cluster-000
-  clusterType: kafka
-  name: "Kafka Inter-Broker Port Check"
-  tcp: "0.0.0.0:9091"
-  interval: "2m"
-  timeout: "30s"
-  readonly: true
-  supportedAgentTypes:
-    - "broker"

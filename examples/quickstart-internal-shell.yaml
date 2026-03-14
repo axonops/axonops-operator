@@ -12,7 +12,7 @@ metadata:
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
+  clusterType: cassandra
   name: "Disk Space Check"
   script: "/usr/bin/df -h / | awk 'NR==2 {print $5}' | sed 's/%//'"
   shell: "/bin/bash"
@@ -24,14 +24,14 @@ spec:
 apiVersion: alerts.axonops.com/v1alpha1
 kind: AxonOpsHealthcheckShell
 metadata:
-  name: kafka-process-check
+  name: cassandra-process-check
   namespace: default
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
-  name: "Kafka Process Running Check"
-  script: "/usr/bin/pgrep -f kafka.Kafka"
+  clusterType: cassandra
+  name: "Cassandra Process Running Check"
+  script: "/usr/bin/pgrep -f 'org.apache.cassandra.service.CassandraDaemon'"
   shell: "/bin/bash"
   interval: "1m"
   timeout: "10s"
@@ -46,9 +46,9 @@ metadata:
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
+  clusterType: cassandra
   name: "Custom Health Script"
-  script: "/opt/kafka/scripts/health-check.sh"
+  script: "/opt/cassandra/scripts/health-check.sh"
   shell: "/bin/bash"
   interval: "2m"
   timeout: "1m"
@@ -63,9 +63,9 @@ metadata:
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
+  clusterType: cassandra
   name: "JVM Heap Usage Check"
-  script: "/usr/bin/jstat -gc $(pgrep -f kafka.Kafka) | tail -1 | awk '{print ($3+$4+$6+$8)/($3+$4+$6+$8+$5+$7+$9)*100}'"
+  script: "/usr/bin/jstat -gc $(pgrep -f 'CassandraDaemon') | tail -1 | awk '{print ($3+$4+$6+$8)/($3+$4+$6+$8+$5+$7+$9)*100}'"
   shell: "/bin/bash"
   interval: "3m"
   timeout: "30s"

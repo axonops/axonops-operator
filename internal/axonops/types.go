@@ -115,44 +115,57 @@ type IntegrationRoute struct {
 
 // HealthchecksResponse represents the response from the healthchecks API
 type HealthchecksResponse struct {
-	HTTP  []HealthcheckHTTP  `json:"http"`
-	TCP   []HealthcheckTCP   `json:"tcp"`
-	Shell []HealthcheckShell `json:"shell"`
+	ShellChecks []HealthcheckShell `json:"shellchecks"`
+	HTTPChecks  []HealthcheckHTTP  `json:"httpchecks"`
+	TCPChecks   []HealthcheckTCP   `json:"tcpchecks"`
 }
 
 // HealthcheckHTTP represents an HTTP healthcheck
 type HealthcheckHTTP struct {
-	ID                  string            `json:"id"`
-	Name                string            `json:"name"`
-	URL                 string            `json:"url"`
-	Method              string            `json:"method,omitempty"`
-	Headers             map[string]string `json:"headers,omitempty"`
-	Body                string            `json:"body,omitempty"`
-	ExpectedStatus      int               `json:"expectedStatus,omitempty"`
-	Interval            string            `json:"interval,omitempty"`
-	Timeout             string            `json:"timeout,omitempty"`
-	Readonly            bool              `json:"readonly,omitempty"`
-	SupportedAgentTypes []string          `json:"supportedAgentTypes,omitempty"`
+	ID                  string                  `json:"id"`
+	Name                string                  `json:"name"`
+	HTTP                string                  `json:"http"`
+	Method              string                  `json:"method,omitempty"`
+	Headers             []string                `json:"headers,omitempty"`
+	Body                string                  `json:"body,omitempty"`
+	ExpectedStatus      int                     `json:"expectedStatus,omitempty"`
+	Interval            string                  `json:"interval,omitempty"`
+	Timeout             string                  `json:"timeout,omitempty"`
+	Readonly            bool                    `json:"readonly,omitempty"`
+	TLSSkipVerify       bool                    `json:"tls_skip_verify,omitempty"`
+	SupportedAgentTypes []string                `json:"supportedAgentTypes,omitempty"`
+	Integrations        HealthcheckIntegrations `json:"integrations,omitempty"`
 }
 
 // HealthcheckTCP represents a TCP healthcheck
 type HealthcheckTCP struct {
-	ID                  string   `json:"id"`
-	Name                string   `json:"name"`
-	TCP                 string   `json:"tcp"`
-	Interval            string   `json:"interval,omitempty"`
-	Timeout             string   `json:"timeout,omitempty"`
-	Readonly            bool     `json:"readonly,omitempty"`
-	SupportedAgentTypes []string `json:"supportedAgentTypes,omitempty"`
+	ID                  string                  `json:"id"`
+	Name                string                  `json:"name"`
+	TCP                 string                  `json:"tcp"`
+	Interval            string                  `json:"interval,omitempty"`
+	Timeout             string                  `json:"timeout,omitempty"`
+	Readonly            bool                    `json:"readonly,omitempty"`
+	SupportedAgentTypes []string                `json:"supportedAgentTypes,omitempty"`
+	Integrations        HealthcheckIntegrations `json:"integrations,omitempty"`
 }
 
 // HealthcheckShell represents a shell healthcheck
 type HealthcheckShell struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Script   string `json:"script"`
-	Shell    string `json:"shell,omitempty"`
-	Interval string `json:"interval,omitempty"`
-	Timeout  string `json:"timeout,omitempty"`
-	Readonly bool   `json:"readonly,omitempty"`
+	ID           string                  `json:"id"`
+	Name         string                  `json:"name"`
+	Script       string                  `json:"script"`
+	Shell        string                  `json:"shell,omitempty"`
+	Interval     string                  `json:"interval,omitempty"`
+	Timeout      string                  `json:"timeout,omitempty"`
+	Readonly     bool                    `json:"readonly,omitempty"`
+	Integrations HealthcheckIntegrations `json:"integrations,omitempty"`
+}
+
+// HealthcheckIntegrations represents notification integrations for healthchecks
+type HealthcheckIntegrations struct {
+	Type            string   `json:"Type,omitempty"`
+	Routing         []string `json:"Routing,omitempty"`
+	OverrideInfo    bool     `json:"OverrideInfo,omitempty"`
+	OverrideWarning bool     `json:"OverrideWarning,omitempty"`
+	OverrideError   bool     `json:"OverrideError,omitempty"`
 }

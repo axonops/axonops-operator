@@ -80,6 +80,11 @@ type AxonOpsHealthcheckHTTPSpec struct {
 	// +kubebuilder:default=false
 	Readonly bool `json:"readonly,omitempty"`
 
+	// TLSSkipVerify skips TLS certificate verification
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	TLSSkipVerify bool `json:"tlsSkipVerify,omitempty"`
+
 	// SupportedAgentTypes lists agent types this healthcheck applies to
 	// +kubebuilder:validation:Optional
 	// +listType=atomic

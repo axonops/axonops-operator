@@ -7,42 +7,37 @@
 apiVersion: alerts.axonops.com/v1alpha1
 kind: AxonOpsHealthcheckHTTP
 metadata:
-  name: broker-health-http
+  name: cassandra-health-http
   namespace: default
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
-  name: "Kafka Broker HTTP Health Check"
+  clusterType: cassandra
+  name: "Cassandra Node HTTP Health Check"
   url: "http://localhost:8080/health"
   method: "GET"
   expectedStatus: 200
   interval: "1m"
   timeout: "30s"
   readonly: false
-  supportedAgentTypes:
-    - "broker"
-    - "kraft-broker"
 
 ---
 apiVersion: alerts.axonops.com/v1alpha1
 kind: AxonOpsHealthcheckHTTP
 metadata:
-  name: zookeeper-health-http
+  name: cassandra-jolokia-http
   namespace: default
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
-  name: "Zookeeper HTTP Health Check"
-  url: "http://localhost:8080/health"
+  clusterType: cassandra
+  name: "Cassandra Jolokia HTTP Check"
+  url: "http://localhost:8778/jolokia/version"
   method: "GET"
   expectedStatus: 200
   interval: "2m"
   timeout: "30s"
   readonly: true
-  supportedAgentTypes:
-    - "zookeeper"
 
 ---
 apiVersion: alerts.axonops.com/v1alpha1
@@ -53,7 +48,7 @@ metadata:
 spec:
   connectionRef: gridindia
   clusterName: test-cluster-000
-  clusterType: kafka
+  clusterType: cassandra
   name: "API Health POST Check"
   url: "http://api.example.com/healthz"
   method: "POST"
@@ -65,5 +60,3 @@ spec:
   interval: "5m"
   timeout: "1m"
   readonly: false
-  supportedAgentTypes:
-    - "all"
