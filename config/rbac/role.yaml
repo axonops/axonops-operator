@@ -78,3 +78,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopshealthcheckhttps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopshealthcheckhttps/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopshealthcheckhttps/status
+  verbs:
+  - get
+  - patch
+  - update

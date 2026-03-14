@@ -87,9 +87,9 @@ spec:
                 - dse
                 type: string
               connectionRef:
-                description: |-
-                  ConnectionRef is the name of an AxonOpsConnection in the same namespace.
-                  If not provided, falls back to operator environment variables.
+                description: ConnectionRef is the name of an AxonOpsConnection in
+                  the same namespace.
+                minLength: 1
                 type: string
               criticalValue:
                 description: CriticalValue is the critical threshold
@@ -174,36 +174,34 @@ spec:
                     x-kubernetes-list-type: atomic
                 type: object
               integrations:
-                description: Integrations specifies how to route alert notifications
-                items:
-                  description: MetricAlertIntegration defines alert notification routing
-                  properties:
-                    overrideError:
-                      description: OverrideError determines if the integration overrides
-                        error-level alerts
-                      type: boolean
-                    overrideInfo:
-                      description: OverrideInfo determines if the integration overrides
-                        info-level alerts
-                      type: boolean
-                    overrideWarning:
-                      description: OverrideWarning determines if the integration overrides
-                        warning-level alerts
-                      type: boolean
-                    routing:
-                      description: Routing is the list of routing destinations (email
-                        addresses, Slack channels, etc.)
-                      items:
-                        type: string
-                      type: array
-                      x-kubernetes-list-type: atomic
-                    type:
-                      description: Type is the integration type (e.g., email, slack,
-                        pagerduty)
+                description: |-
+                  Integrations specifies how to route alert notifications
+                  Note: Use AxonOpsAlertRoute CRD for more granular routing control
+                properties:
+                  overrideError:
+                    description: OverrideError determines if the integration overrides
+                      error-level alerts
+                    type: boolean
+                  overrideInfo:
+                    description: OverrideInfo determines if the integration overrides
+                      info-level alerts
+                    type: boolean
+                  overrideWarning:
+                    description: OverrideWarning determines if the integration overrides
+                      warning-level alerts
+                    type: boolean
+                  routing:
+                    description: Routing is the list of routing destinations (email
+                      addresses, Slack channels, etc.)
+                    items:
                       type: string
-                  type: object
-                type: array
-                x-kubernetes-list-type: atomic
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  type:
+                    description: Type is the integration type (e.g., email, slack,
+                      pagerduty)
+                    type: string
+                type: object
               metric:
                 description: |-
                   Metric is the base metric name for the alert expression (e.g., "cassandra_read_latency_ms")
@@ -232,6 +230,7 @@ spec:
             - chart
             - clusterName
             - clusterType
+            - connectionRef
             - criticalValue
             - dashboard
             - duration
@@ -312,7 +311,7 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              correlationId:
+              correlationID:
                 description: CorrelationID is the UUID of the dashboard panel resolved
                   from the dashboard template API
                 type: string
@@ -326,7 +325,7 @@ spec:
                   recently observed AxonOpsMetricAlert
                 format: int64
                 type: integer
-              syncedAlertId:
+              syncedAlertID:
                 description: SyncedAlertID is the ID of the alert rule assigned by
                   AxonOps API
                 type: string

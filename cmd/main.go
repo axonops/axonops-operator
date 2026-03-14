@@ -36,9 +36,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
+	kafkav1alpha1 "github.com/axonops/axonops-operator/api/kafka/v1alpha1"
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/controller"
 	alertscontroller "github.com/axonops/axonops-operator/internal/controller/alerts"
+	kafkacontroller "github.com/axonops/axonops-operator/internal/controller/kafka"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -52,6 +54,7 @@ func init() {
 
 	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
 	utilruntime.Must(alertsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(kafkav1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -214,6 +217,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "AxonOpsAlertRoute")
+		os.Exit(1)
+	}
+	if err := (&kafkacontroller.AxonOpsHealthcheckHTTPReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "AxonOpsHealthcheckHTTP")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

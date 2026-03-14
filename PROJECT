@@ -46,4 +46,13 @@ resources:
   kind: AxonOpsAlertRoute
   path: github.com/axonops/axonops-operator/api/alerts/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: axonops.com
+  group: kafka
+  kind: AxonOpsHealthcheckHTTP
+  path: github.com/axonops/axonops-operator/api/kafka/v1alpha1
+  version: v1alpha1
 version: "3"

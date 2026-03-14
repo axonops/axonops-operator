@@ -26,9 +26,9 @@ import (
 // AxonOpsMetricAlertSpec defines the desired state of AxonOpsMetricAlert
 type AxonOpsMetricAlertSpec struct {
 	// ConnectionRef is the name of an AxonOpsConnection in the same namespace.
-	// If not provided, falls back to operator environment variables.
-	// +optional
-	ConnectionRef string `json:"connectionRef,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	ConnectionRef string `json:"connectionRef"`
 
 	// ClusterName is the name of the cluster this alert applies to
 	// +kubebuilder:validation:Required
@@ -84,9 +84,9 @@ type AxonOpsMetricAlertSpec struct {
 	Annotations *MetricAlertAnnotations `json:"annotations,omitempty"`
 
 	// Integrations specifies how to route alert notifications
+	// Note: Use AxonOpsAlertRoute CRD for more granular routing control
 	// +optional
-	// +listType=atomic
-	Integrations []MetricAlertIntegration `json:"integrations,omitempty"`
+	Integrations *MetricAlertIntegration `json:"integrations,omitempty"`
 
 	// Filters apply constraints to the alert based on metric dimensions
 	// +optional
@@ -203,11 +203,11 @@ type AxonOpsMetricAlertStatus struct {
 
 	// SyncedAlertID is the ID of the alert rule assigned by AxonOps API
 	// +optional
-	SyncedAlertID string `json:"syncedAlertId,omitempty"`
+	SyncedAlertID string `json:"syncedAlertID,omitempty"`
 
 	// CorrelationID is the UUID of the dashboard panel resolved from the dashboard template API
 	// +optional
-	CorrelationID string `json:"correlationId,omitempty"`
+	CorrelationID string `json:"correlationID,omitempty"`
 
 	// LastSyncTime is the timestamp of the last successful sync with AxonOps
 	// +optional

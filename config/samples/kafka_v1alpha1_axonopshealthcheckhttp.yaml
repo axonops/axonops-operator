@@ -1,0 +1,9 @@
+apiVersion: kafka.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckHTTP
+metadata:
+  labels:
+    app.kubernetes.io/name: axonops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: axonopshealthcheckhttp-sample
+spec:
+  # TODO(user): Add fields here

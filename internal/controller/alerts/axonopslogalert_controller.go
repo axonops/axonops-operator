@@ -210,29 +210,23 @@ func (r *AxonOpsLogAlertReconciler) handleDeletion(ctx context.Context, alert *a
 	if err != nil {
 		log.Error(err, "Failed to resolve API client for deletion — will retry")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-	} else {
-		// List all rules and delete any with the same alert name (handles orphaned duplicates)
-		rules, err := apiClient.GetMetricAlertRules(ctx, alert.Spec.ClusterType, alert.Spec.ClusterName)
-		if err != nil {
-			log.Error(err, "Failed to list alert rules for cleanup")
+	}
+
+	// Delete the alert using the unique ID stored in status
+	if alert.Status.SyncedAlertID != "" {
+		log.Info("Deleting alert rule from AxonOps API", "alertID", alert.Status.SyncedAlertID)
+		if err := apiClient.DeleteMetricAlertRule(ctx, alert.Spec.ClusterType, alert.Spec.ClusterName, alert.Status.SyncedAlertID); err != nil {
+			log.Error(err, "Failed to delete alert rule from AxonOps", "alertID", alert.Status.SyncedAlertID)
+			// Check for retryable API errors
 			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
+			// For non-retryable errors (like 404), proceed to remove the finalizer
 		} else {
-			for _, rule := range rules {
-				if rule.Alert == alert.Spec.Name {
-					log.Info("Deleting alert rule from AxonOps API", "alertID", rule.ID, "alertName", rule.Alert)
-					if err := apiClient.DeleteMetricAlertRule(ctx, alert.Spec.ClusterType, alert.Spec.ClusterName, rule.ID); err != nil {
-						log.Error(err, "Failed to delete alert rule from AxonOps", "alertID", rule.ID)
-						if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
-							return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-						}
-					} else {
-						log.Info("Successfully deleted alert rule from AxonOps API", "alertID", rule.ID)
-					}
-				}
-			}
+			log.Info("Successfully deleted alert rule from AxonOps API", "alertID", alert.Status.SyncedAlertID)
 		}
+	} else {
+		log.Info("SyncedAlertID is empty, skipping API deletion (resource may not have been created)")
 	}
 
 	// Remove the finalizer

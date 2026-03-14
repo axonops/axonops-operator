@@ -19,7 +19,6 @@ package alerts
 import (
 	"context"
 	"fmt"
-	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,78 +29,74 @@ import (
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
 
-// ResolveAPIClient resolves the AxonOps API client from either a referenced AxonOpsConnection
-// or from environment variables (fallback).
+// Condition reasons for alert and route resources
+const (
+	ReasonConnectionError     = "ConnectionError"
+	ReasonAPIError            = "APIError"
+	ReasonDashboardNotFound   = "DashboardNotFound"
+	ReasonAlertSynced         = "AlertSynced"
+	ReasonRouteSynced         = "RouteSynced"
+	ReasonIntegrationNotFound = "IntegrationNotFound"
+	ReasonInvalidRouteType    = "InvalidRouteType"
+	ReasonOverrideError       = "OverrideError"
+	ReasonRouteError          = "RouteError"
+)
+
+// ResolveAPIClient resolves the AxonOps API client from a referenced AxonOpsConnection.
 func ResolveAPIClient(ctx context.Context, c client.Client, namespace, connectionRef string) (*axonops.Client, error) {
 	log := logf.FromContext(ctx)
 
-	// If connectionRef is specified, resolve from the connection resource
-	if connectionRef != "" {
-		conn := &corev1alpha1.AxonOpsConnection{}
-		connKey := types.NamespacedName{Namespace: namespace, Name: connectionRef}
-		if err := c.Get(ctx, connKey, conn); err != nil {
-			return nil, fmt.Errorf("failed to get AxonOpsConnection: %w", err)
-		}
-
-		// Read the API key from the referenced secret
-		secret := &corev1.Secret{}
-		secretKey := types.NamespacedName{Namespace: namespace, Name: conn.Spec.APIKeyRef.Name}
-		if err := c.Get(ctx, secretKey, secret); err != nil {
-			return nil, fmt.Errorf("failed to get secret %s: %w", secretKey, err)
-		}
-
-		// Extract the API key from the secret
-		keyName := conn.Spec.APIKeyRef.Key
-		if keyName == "" {
-			keyName = "api_key"
-		}
-		apiKey, ok := secret.Data[keyName]
-		if !ok {
-			return nil, fmt.Errorf("secret %s does not have key %q", secretKey, keyName)
-		}
-
-		// Build client from connection spec
-		protocol := conn.Spec.Protocol
-		if protocol == "" {
-			protocol = "https"
-		}
-		tokenType := conn.Spec.TokenType
-		if tokenType == "" {
-			tokenType = "Bearer"
-		}
-
-		// Construct host URL
-		fullHost := buildHostURL(conn.Spec.Host, conn.Spec.OrgID, conn.Spec.UseSAML)
-
-		client, err := axonops.NewClient(fullHost, "", conn.Spec.OrgID, string(apiKey), tokenType, conn.Spec.TLSSkipVerify)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create AxonOps client from connection: %w", err)
-		}
-		log.Info("Resolved API client from AxonOpsConnection", "connection", connKey)
-		return client, nil
+	// connectionRef is required for security and declarative configuration
+	if connectionRef == "" {
+		return nil, fmt.Errorf("connectionRef must be specified")
 	}
 
-	// Fallback to environment variables
-	log.Info("No connectionRef specified, falling back to environment variables")
-	host := os.Getenv("AXONOPS_HOST")
-	protocol := os.Getenv("AXONOPS_PROTOCOL")
-	orgID := os.Getenv("AXONOPS_ORG_ID")
-	apiKey := os.Getenv("AXONOPS_API_KEY")
-	tokenType := os.Getenv("AXONOPS_TOKEN_TYPE")
-	tlsSkipVerify := os.Getenv("AXONOPS_TLS_SKIP_VERIFY") == "true"
-
-	if apiKey == "" {
-		return nil, fmt.Errorf("no connectionRef provided and AXONOPS_API_KEY environment variable not set")
-	}
-	if orgID == "" {
-		return nil, fmt.Errorf("no connectionRef provided and AXONOPS_ORG_ID environment variable not set")
+	// Resolve from the connection resource
+	conn := &corev1alpha1.AxonOpsConnection{}
+	connKey := types.NamespacedName{Namespace: namespace, Name: connectionRef}
+	if err := c.Get(ctx, connKey, conn); err != nil {
+		return nil, fmt.Errorf("failed to get AxonOpsConnection: %w", err)
 	}
 
-	envClient, err := axonops.NewClient(host, protocol, orgID, apiKey, tokenType, tlsSkipVerify)
+	// Read the API key from the referenced secret
+	secret := &corev1.Secret{}
+	secretKey := types.NamespacedName{Namespace: namespace, Name: conn.Spec.APIKeyRef.Name}
+	if err := c.Get(ctx, secretKey, secret); err != nil {
+		return nil, fmt.Errorf("failed to get secret %s: %w", secretKey, err)
+	}
+
+	// Extract the API key from the secret
+	keyName := conn.Spec.APIKeyRef.Key
+	if keyName == "" {
+		keyName = "api_key"
+	}
+	apiKey, ok := secret.Data[keyName]
+	if !ok {
+		return nil, fmt.Errorf("secret %s does not have key %q", secretKey, keyName)
+	}
+	if len(apiKey) == 0 {
+		return nil, fmt.Errorf("secret %s key %q is empty", secretKey, keyName)
+	}
+
+	// Build client from connection spec
+	protocol := conn.Spec.Protocol
+	if protocol == "" {
+		protocol = "https"
+	}
+	tokenType := conn.Spec.TokenType
+	if tokenType == "" {
+		tokenType = "Bearer"
+	}
+
+	// Construct host URL
+	fullHost := buildHostURL(conn.Spec.Host, conn.Spec.OrgID, conn.Spec.UseSAML)
+
+	client, err := axonops.NewClient(fullHost, "", conn.Spec.OrgID, string(apiKey), tokenType, conn.Spec.TLSSkipVerify)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create AxonOps client from environment: %w", err)
+		return nil, fmt.Errorf("failed to create AxonOps client from connection: %w", err)
 	}
-	return envClient, nil
+	log.Info("Resolved API client from AxonOpsConnection", "connection", connKey)
+	return client, nil
 }
 
 // buildHostURL constructs the AxonOps API host URL based on the connection settings

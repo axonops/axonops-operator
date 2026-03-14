@@ -188,7 +188,7 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              integrationId:
+              integrationID:
                 description: IntegrationID is the resolved ID of the integration from
                   the AxonOps API
                 type: string

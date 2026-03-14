@@ -51,7 +51,15 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: alertsv1alpha1.AxonOpsAlertRouteSpec{
+						ConnectionRef:   "test-connection",
+						ClusterName:     "test-cluster",
+						ClusterType:     "cassandra",
+						IntegrationName: "test-integration",
+						IntegrationType: "slack",
+						Type:            "metrics",
+						Severity:        "error",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}

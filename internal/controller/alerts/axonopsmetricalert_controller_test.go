@@ -52,6 +52,7 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 						Namespace: "default",
 					},
 					Spec: alertsv1alpha1.AxonOpsMetricAlertSpec{
+						ConnectionRef: "test-connection",
 						ClusterName:   "test-cluster",
 						ClusterType:   "cassandra",
 						Name:          "test-alert",

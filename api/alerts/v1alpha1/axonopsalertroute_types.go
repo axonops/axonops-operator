@@ -75,7 +75,7 @@ type AxonOpsAlertRouteStatus struct {
 
 	// IntegrationID is the resolved ID of the integration from the AxonOps API
 	// +optional
-	IntegrationID string `json:"integrationId,omitempty"`
+	IntegrationID string `json:"integrationID,omitempty"`
 
 	// LastSyncTime is the last time the route was successfully synced with the AxonOps API
 	// +optional

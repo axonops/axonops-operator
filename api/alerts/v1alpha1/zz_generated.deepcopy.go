@@ -194,10 +194,8 @@ func (in *AxonOpsLogAlertSpec) DeepCopyInto(out *AxonOpsLogAlertSpec) {
 	}
 	if in.Integrations != nil {
 		in, out := &in.Integrations, &out.Integrations
-		*out = make([]LogAlertIntegration, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		*out = new(LogAlertIntegration)
+		(*in).DeepCopyInto(*out)
 	}
 }
 
@@ -306,10 +304,8 @@ func (in *AxonOpsMetricAlertSpec) DeepCopyInto(out *AxonOpsMetricAlertSpec) {
 	}
 	if in.Integrations != nil {
 		in, out := &in.Integrations, &out.Integrations
-		*out = make([]MetricAlertIntegration, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		*out = new(MetricAlertIntegration)
+		(*in).DeepCopyInto(*out)
 	}
 	if in.Filters != nil {
 		in, out := &in.Filters, &out.Filters

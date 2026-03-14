@@ -23,9 +23,9 @@ import (
 // AxonOpsLogAlertSpec defines the desired state of AxonOpsLogAlert
 type AxonOpsLogAlertSpec struct {
 	// ConnectionRef is the name of an AxonOpsConnection in the same namespace.
-	// If not provided, falls back to operator environment variables.
-	// +optional
-	ConnectionRef string `json:"connectionRef,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	ConnectionRef string `json:"connectionRef"`
 
 	// ClusterName is the name of the cluster this alert applies to
 	// +kubebuilder:validation:Required
@@ -81,9 +81,9 @@ type AxonOpsLogAlertSpec struct {
 	Annotations *LogAlertAnnotations `json:"annotations,omitempty"`
 
 	// Integrations specifies how to route alert notifications
+	// Note: Use AxonOpsAlertRoute CRD for more granular routing control
 	// +optional
-	// +listType=atomic
-	Integrations []LogAlertIntegration `json:"integrations,omitempty"`
+	Integrations *LogAlertIntegration `json:"integrations,omitempty"`
 }
 
 // LogAlertAnnotations defines optional alert metadata
@@ -143,7 +143,7 @@ type AxonOpsLogAlertStatus struct {
 
 	// SyncedAlertID is the ID of the alert rule assigned by AxonOps API
 	// +optional
-	SyncedAlertID string `json:"syncedAlertId,omitempty"`
+	SyncedAlertID string `json:"syncedAlertID,omitempty"`
 
 	// LastSyncTime is the timestamp of the last successful sync with AxonOps
 	// +optional
