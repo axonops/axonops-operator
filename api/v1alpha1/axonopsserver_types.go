@@ -17,51 +17,66 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // AxonOpsServerSpec defines the desired state of AxonOpsServer
+// All components are enabled by default. Set component.enabled=false to disable.
 type AxonOpsServerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-
-	// foo is an example field of AxonOpsServer. Edit axonopsserver_types.go to remove/update
+	// Server configures the axon-server component
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Server *AxonServerComponent `json:"server,omitempty"`
+
+	// TimeSeries configures the axondb-timeseries component
+	// +optional
+	TimeSeries *AxonDbComponent `json:"timeSeries,omitempty"`
+
+	// Search configures the axondb-search component
+	// +optional
+	Search *AxonDbComponent `json:"search,omitempty"`
+
+	// Dashboard configures the axon-dash component
+	// +optional
+	Dashboard *AxonDashboardComponent `json:"dashboard,omitempty"`
 }
 
 // AxonOpsServerStatus defines the observed state of AxonOpsServer.
 type AxonOpsServerStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the AxonOpsServer resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// Conditions represent the current state of the AxonOpsServer resource.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// TimeSeriesSecretName is the name of the Secret containing TimeSeries credentials.
+	// This is either the user-provided SecretRef or an auto-generated secret name.
+	// +optional
+	TimeSeriesSecretName string `json:"timeSeriesSecretName,omitempty"`
+
+	// SearchSecretName is the name of the Secret containing Search credentials.
+	// This is either the user-provided SecretRef or an auto-generated secret name.
+	// +optional
+	SearchSecretName string `json:"searchSecretName,omitempty"`
+
+	// TimeSeriesCertSecretName is the name of the Secret containing the TLS certificate for TimeSeries.
+	// +optional
+	TimeSeriesCertSecretName string `json:"timeSeriesCertSecretName,omitempty"`
+
+	// SearchCertSecretName is the name of the Secret containing the TLS certificate for Search.
+	// +optional
+	SearchCertSecretName string `json:"searchCertSecretName,omitempty"`
+
+	// ObservedGeneration reflects the generation observed by the controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// AxonOpsServer is the Schema for the axonopsservers API
+// AxonOpsServer is the Schema for the axonopsservers API; it's the top-level resource for AxonOpsSever, TimeSeries and SearchDB
 type AxonOpsServer struct {
 	metav1.TypeMeta `json:",inline"`
 
@@ -85,6 +100,157 @@ type AxonOpsServerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []AxonOpsServer `json:"items"`
+}
+
+// AxonAuthentication configures database authentication credentials.
+// Priority: SecretRef > Username/Password > Auto-generated
+type AxonAuthentication struct {
+	// SecretRef references an existing Secret containing AXONOPS_DB_USER and AXONOPS_DB_PASSWORD keys.
+	// If set, Username and Password fields are ignored.
+	// +optional
+	SecretRef string `json:"secretRef,omitempty"`
+
+	// Username for database authentication. If empty and SecretRef is not set,
+	// a random username will be generated.
+	// +optional
+	Username string `json:"username,omitempty"`
+
+	// Password for database authentication. If empty and SecretRef is not set,
+	// a random password will be generated.
+	// +optional
+	Password string `json:"password,omitempty"`
+}
+
+// AxonExternalConfig configures external access to the component
+type AxonExternalConfig struct {
+	// Hosts is a list of external hostnames for the component
+	// +optional
+	Hosts []string `json:"hosts,omitempty"`
+
+	// TLS configures TLS settings for external connections
+	// +optional
+	TLS AxonTLSConfig `json:"tls,omitempty"`
+}
+
+// AxonTLSConfig configures TLS settings
+type AxonTLSConfig struct {
+	// Enabled enables TLS for connections
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// InsecureSkipVerify skips TLS certificate verification
+	// +optional
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+}
+
+// AxonRepository configures the container image
+type AxonRepository struct {
+	// Image is the container image name
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// Tag is the container image tag
+	// +optional
+	Tag string `json:"tag,omitempty"`
+	// PullPolicy is the image pull policy (e.g., "Always", "IfNotPresent", "Never")
+	// +optional
+	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
+}
+
+type AxonBaseComponent struct {
+	// Enabled determines if the component should be deployed
+	// +optional
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Annotations to add to the component pods
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Labels to add to the component pods
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Env is a list of additional environment variables
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// External configures external access to the component
+	// +optional
+	External AxonExternalConfig `json:"external,omitempty"`
+
+	// Authentication configures database credentials.
+	// If not specified, random credentials will be generated automatically.
+	// +optional
+	Authentication AxonAuthentication `json:"authentication,omitempty"`
+
+	// HeapSize configures the JVM heap size (e.g., "1024M", "4G")
+	// +optional
+	// +kubebuilder:default="1024M"
+	HeapSize string `json:"heapSize,omitempty"`
+
+	// Repository configures the container image
+	// +optional
+	Repository AxonRepository `json:"repository,omitempty"`
+
+	// Resources defines compute resources for the component
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// ExtraVolumes defines additional volumes to mount
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	ExtraVolumes []corev1.Volume `json:"extraVolumes,omitempty"`
+
+	// ExtraVolumeMounts defines additional volume mounts
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	ExtraVolumeMounts []corev1.VolumeMount `json:"extraVolumeMounts,omitempty"`
+
+	// StorageConfig defines persistent storage configuration
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	StorageConfig corev1.PersistentVolumeClaimSpec `json:"storageConfig,omitempty"`
+}
+
+// AxonDbComponent uses the base fields as-is.
+type AxonDbComponent struct {
+	AxonBaseComponent `json:",inline"`
+}
+
+// AxonServerComponent adds Ingress on top of the base fields.
+type AxonServerComponent struct {
+	AxonBaseComponent `json:",inline"`
+
+	// AgentIngress configures ingress for agent connections
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	AgentIngress networkingv1.IngressSpec `json:"agentIngress,omitempty"`
+
+	// ApiIngress configures ingress for API access
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	ApiIngress networkingv1.IngressSpec `json:"apiIngress,omitempty"`
+}
+
+// AxonDashboardComponent adds Ingress on top of the base fields.
+type AxonDashboardComponent struct {
+	AxonBaseComponent `json:",inline"`
+
+	// Ingress configures ingress for dashboard access
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	Ingress networkingv1.IngressSpec `json:"ingress,omitempty"`
 }
 
 func init() {

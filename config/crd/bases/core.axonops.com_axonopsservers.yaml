@@ -17,7 +17,8 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: AxonOpsServer is the Schema for the axonopsservers API
+        description: AxonOpsServer is the Schema for the axonopsservers API; it's
+          the top-level resource for AxonOpsSever, TimeSeries and SearchDB
         properties:
           apiVersion:
             description: |-
@@ -39,25 +40,398 @@ spec:
           spec:
             description: spec defines the desired state of AxonOpsServer
             properties:
-              foo:
-                description: foo is an example field of AxonOpsServer. Edit axonopsserver_types.go
-                  to remove/update
-                type: string
+              dashboard:
+                description: Dashboard configures the axon-dash component
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to add to the component pods
+                    type: object
+                  authentication:
+                    description: |-
+                      Authentication configures database credentials.
+                      If not specified, random credentials will be generated automatically.
+                    properties:
+                      password:
+                        description: |-
+                          Password for database authentication. If empty and SecretRef is not set,
+                          a random password will be generated.
+                        type: string
+                      secretRef:
+                        description: |-
+                          SecretRef references an existing Secret containing AXONOPS_DB_USER and AXONOPS_DB_PASSWORD keys.
+                          If set, Username and Password fields are ignored.
+                        type: string
+                      username:
+                        description: |-
+                          Username for database authentication. If empty and SecretRef is not set,
+                          a random username will be generated.
+                        type: string
+                    type: object
+                  enabled:
+                    default: true
+                    description: Enabled determines if the component should be deployed
+                    type: boolean
+                  env:
+                    description: Env is a list of additional environment variables
+                    x-kubernetes-preserve-unknown-fields: true
+                  external:
+                    description: External configures external access to the component
+                    properties:
+                      hosts:
+                        description: Hosts is a list of external hostnames for the
+                          component
+                        items:
+                          type: string
+                        type: array
+                      tls:
+                        description: TLS configures TLS settings for external connections
+                        properties:
+                          enabled:
+                            description: Enabled enables TLS for connections
+                            type: boolean
+                          insecureSkipVerify:
+                            description: InsecureSkipVerify skips TLS certificate
+                              verification
+                            type: boolean
+                        type: object
+                    type: object
+                  extraVolumeMounts:
+                    description: ExtraVolumeMounts defines additional volume mounts
+                    x-kubernetes-preserve-unknown-fields: true
+                  extraVolumes:
+                    description: ExtraVolumes defines additional volumes to mount
+                    x-kubernetes-preserve-unknown-fields: true
+                  heapSize:
+                    default: 1024M
+                    description: HeapSize configures the JVM heap size (e.g., "1024M",
+                      "4G")
+                    type: string
+                  ingress:
+                    description: Ingress configures ingress for dashboard access
+                    x-kubernetes-preserve-unknown-fields: true
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels to add to the component pods
+                    type: object
+                  repository:
+                    description: Repository configures the container image
+                    properties:
+                      image:
+                        description: Image is the container image name
+                        type: string
+                      pullPolicy:
+                        description: PullPolicy is the image pull policy (e.g., "Always",
+                          "IfNotPresent", "Never")
+                        type: string
+                      tag:
+                        description: Tag is the container image tag
+                        type: string
+                    type: object
+                  resources:
+                    description: Resources defines compute resources for the component
+                    x-kubernetes-preserve-unknown-fields: true
+                  storageConfig:
+                    description: StorageConfig defines persistent storage configuration
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              search:
+                description: Search configures the axondb-search component
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to add to the component pods
+                    type: object
+                  authentication:
+                    description: |-
+                      Authentication configures database credentials.
+                      If not specified, random credentials will be generated automatically.
+                    properties:
+                      password:
+                        description: |-
+                          Password for database authentication. If empty and SecretRef is not set,
+                          a random password will be generated.
+                        type: string
+                      secretRef:
+                        description: |-
+                          SecretRef references an existing Secret containing AXONOPS_DB_USER and AXONOPS_DB_PASSWORD keys.
+                          If set, Username and Password fields are ignored.
+                        type: string
+                      username:
+                        description: |-
+                          Username for database authentication. If empty and SecretRef is not set,
+                          a random username will be generated.
+                        type: string
+                    type: object
+                  enabled:
+                    default: true
+                    description: Enabled determines if the component should be deployed
+                    type: boolean
+                  env:
+                    description: Env is a list of additional environment variables
+                    x-kubernetes-preserve-unknown-fields: true
+                  external:
+                    description: External configures external access to the component
+                    properties:
+                      hosts:
+                        description: Hosts is a list of external hostnames for the
+                          component
+                        items:
+                          type: string
+                        type: array
+                      tls:
+                        description: TLS configures TLS settings for external connections
+                        properties:
+                          enabled:
+                            description: Enabled enables TLS for connections
+                            type: boolean
+                          insecureSkipVerify:
+                            description: InsecureSkipVerify skips TLS certificate
+                              verification
+                            type: boolean
+                        type: object
+                    type: object
+                  extraVolumeMounts:
+                    description: ExtraVolumeMounts defines additional volume mounts
+                    x-kubernetes-preserve-unknown-fields: true
+                  extraVolumes:
+                    description: ExtraVolumes defines additional volumes to mount
+                    x-kubernetes-preserve-unknown-fields: true
+                  heapSize:
+                    default: 1024M
+                    description: HeapSize configures the JVM heap size (e.g., "1024M",
+                      "4G")
+                    type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels to add to the component pods
+                    type: object
+                  repository:
+                    description: Repository configures the container image
+                    properties:
+                      image:
+                        description: Image is the container image name
+                        type: string
+                      pullPolicy:
+                        description: PullPolicy is the image pull policy (e.g., "Always",
+                          "IfNotPresent", "Never")
+                        type: string
+                      tag:
+                        description: Tag is the container image tag
+                        type: string
+                    type: object
+                  resources:
+                    description: Resources defines compute resources for the component
+                    x-kubernetes-preserve-unknown-fields: true
+                  storageConfig:
+                    description: StorageConfig defines persistent storage configuration
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              server:
+                description: Server configures the axon-server component
+                properties:
+                  agentIngress:
+                    description: AgentIngress configures ingress for agent connections
+                    x-kubernetes-preserve-unknown-fields: true
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to add to the component pods
+                    type: object
+                  apiIngress:
+                    description: ApiIngress configures ingress for API access
+                    x-kubernetes-preserve-unknown-fields: true
+                  authentication:
+                    description: |-
+                      Authentication configures database credentials.
+                      If not specified, random credentials will be generated automatically.
+                    properties:
+                      password:
+                        description: |-
+                          Password for database authentication. If empty and SecretRef is not set,
+                          a random password will be generated.
+                        type: string
+                      secretRef:
+                        description: |-
+                          SecretRef references an existing Secret containing AXONOPS_DB_USER and AXONOPS_DB_PASSWORD keys.
+                          If set, Username and Password fields are ignored.
+                        type: string
+                      username:
+                        description: |-
+                          Username for database authentication. If empty and SecretRef is not set,
+                          a random username will be generated.
+                        type: string
+                    type: object
+                  enabled:
+                    default: true
+                    description: Enabled determines if the component should be deployed
+                    type: boolean
+                  env:
+                    description: Env is a list of additional environment variables
+                    x-kubernetes-preserve-unknown-fields: true
+                  external:
+                    description: External configures external access to the component
+                    properties:
+                      hosts:
+                        description: Hosts is a list of external hostnames for the
+                          component
+                        items:
+                          type: string
+                        type: array
+                      tls:
+                        description: TLS configures TLS settings for external connections
+                        properties:
+                          enabled:
+                            description: Enabled enables TLS for connections
+                            type: boolean
+                          insecureSkipVerify:
+                            description: InsecureSkipVerify skips TLS certificate
+                              verification
+                            type: boolean
+                        type: object
+                    type: object
+                  extraVolumeMounts:
+                    description: ExtraVolumeMounts defines additional volume mounts
+                    x-kubernetes-preserve-unknown-fields: true
+                  extraVolumes:
+                    description: ExtraVolumes defines additional volumes to mount
+                    x-kubernetes-preserve-unknown-fields: true
+                  heapSize:
+                    default: 1024M
+                    description: HeapSize configures the JVM heap size (e.g., "1024M",
+                      "4G")
+                    type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels to add to the component pods
+                    type: object
+                  repository:
+                    description: Repository configures the container image
+                    properties:
+                      image:
+                        description: Image is the container image name
+                        type: string
+                      pullPolicy:
+                        description: PullPolicy is the image pull policy (e.g., "Always",
+                          "IfNotPresent", "Never")
+                        type: string
+                      tag:
+                        description: Tag is the container image tag
+                        type: string
+                    type: object
+                  resources:
+                    description: Resources defines compute resources for the component
+                    x-kubernetes-preserve-unknown-fields: true
+                  storageConfig:
+                    description: StorageConfig defines persistent storage configuration
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              timeSeries:
+                description: TimeSeries configures the axondb-timeseries component
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to add to the component pods
+                    type: object
+                  authentication:
+                    description: |-
+                      Authentication configures database credentials.
+                      If not specified, random credentials will be generated automatically.
+                    properties:
+                      password:
+                        description: |-
+                          Password for database authentication. If empty and SecretRef is not set,
+                          a random password will be generated.
+                        type: string
+                      secretRef:
+                        description: |-
+                          SecretRef references an existing Secret containing AXONOPS_DB_USER and AXONOPS_DB_PASSWORD keys.
+                          If set, Username and Password fields are ignored.
+                        type: string
+                      username:
+                        description: |-
+                          Username for database authentication. If empty and SecretRef is not set,
+                          a random username will be generated.
+                        type: string
+                    type: object
+                  enabled:
+                    default: true
+                    description: Enabled determines if the component should be deployed
+                    type: boolean
+                  env:
+                    description: Env is a list of additional environment variables
+                    x-kubernetes-preserve-unknown-fields: true
+                  external:
+                    description: External configures external access to the component
+                    properties:
+                      hosts:
+                        description: Hosts is a list of external hostnames for the
+                          component
+                        items:
+                          type: string
+                        type: array
+                      tls:
+                        description: TLS configures TLS settings for external connections
+                        properties:
+                          enabled:
+                            description: Enabled enables TLS for connections
+                            type: boolean
+                          insecureSkipVerify:
+                            description: InsecureSkipVerify skips TLS certificate
+                              verification
+                            type: boolean
+                        type: object
+                    type: object
+                  extraVolumeMounts:
+                    description: ExtraVolumeMounts defines additional volume mounts
+                    x-kubernetes-preserve-unknown-fields: true
+                  extraVolumes:
+                    description: ExtraVolumes defines additional volumes to mount
+                    x-kubernetes-preserve-unknown-fields: true
+                  heapSize:
+                    default: 1024M
+                    description: HeapSize configures the JVM heap size (e.g., "1024M",
+                      "4G")
+                    type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels to add to the component pods
+                    type: object
+                  repository:
+                    description: Repository configures the container image
+                    properties:
+                      image:
+                        description: Image is the container image name
+                        type: string
+                      pullPolicy:
+                        description: PullPolicy is the image pull policy (e.g., "Always",
+                          "IfNotPresent", "Never")
+                        type: string
+                      tag:
+                        description: Tag is the container image tag
+                        type: string
+                    type: object
+                  resources:
+                    description: Resources defines compute resources for the component
+                    x-kubernetes-preserve-unknown-fields: true
+                  storageConfig:
+                    description: StorageConfig defines persistent storage configuration
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
             type: object
           status:
             description: status defines the observed state of AxonOpsServer
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the AxonOpsServer resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                description: Conditions represent the current state of the AxonOpsServer
+                  resource.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -116,6 +490,29 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              observedGeneration:
+                description: ObservedGeneration reflects the generation observed by
+                  the controller.
+                format: int64
+                type: integer
+              searchCertSecretName:
+                description: SearchCertSecretName is the name of the Secret containing
+                  the TLS certificate for Search.
+                type: string
+              searchSecretName:
+                description: |-
+                  SearchSecretName is the name of the Secret containing Search credentials.
+                  This is either the user-provided SecretRef or an auto-generated secret name.
+                type: string
+              timeSeriesCertSecretName:
+                description: TimeSeriesCertSecretName is the name of the Secret containing
+                  the TLS certificate for TimeSeries.
+                type: string
+              timeSeriesSecretName:
+                description: |-
+                  TimeSeriesSecretName is the name of the Secret containing TimeSeries credentials.
+                  This is either the user-provided SecretRef or an auto-generated secret name.
+                type: string
             type: object
         required:
         - spec

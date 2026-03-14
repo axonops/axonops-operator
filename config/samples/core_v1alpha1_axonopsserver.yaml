@@ -5,5 +5,36 @@ metadata:
     app.kubernetes.io/name: axonops-operator
     app.kubernetes.io/managed-by: kustomize
   name: axonopsserver-sample
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  # All components are enabled by default (enabled: true)
+  # Set enabled: false to disable a component
+
+  # Server component (axon-server)
+  server: {}
+
+  # TimeSeries component (axondb-timeseries)
+  # - Credentials will be auto-generated unless you specify authentication
+  # - TLS certificates are auto-generated via cert-manager using the configured ClusterIssuer
+  # - Secret keys: AXONOPS_DB_USER, AXONOPS_DB_PASSWORD
+  #
+  # Optional authentication configuration:
+  #   authentication:
+  #     secretRef: my-secret  # Use existing secret with AXONOPS_DB_USER/AXONOPS_DB_PASSWORD keys
+  #   OR
+  #     username: myuser
+  #     password: mypassword
+  timeSeries: {}
+
+  # Search component (axondb-search)
+  # - Credentials will be auto-generated unless you specify authentication
+  # - TLS certificates are auto-generated via cert-manager using the configured ClusterIssuer
+  # - Secret keys: SEARCH_DB_USERNAME, SEARCH_DB_PASSWORD
+  search: {}
+
+  # Dashboard component (axon-dash)
+  dashboard: {}
+
+  # Example: disable a component
+  # dashboard:
+  #   enabled: false
