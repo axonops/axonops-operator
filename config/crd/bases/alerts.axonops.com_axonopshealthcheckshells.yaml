@@ -4,20 +4,33 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.1
-  name: axonopshealthcheckhttps.kafka.axonops.com
+  name: axonopshealthcheckshells.alerts.axonops.com
 spec:
-  group: kafka.axonops.com
+  group: alerts.axonops.com
   names:
-    kind: AxonOpsHealthcheckHTTP
-    listKind: AxonOpsHealthcheckHTTPList
-    plural: axonopshealthcheckhttps
-    singular: axonopshealthcheckhttp
+    kind: AxonOpsHealthcheckShell
+    listKind: AxonOpsHealthcheckShellList
+    plural: axonopshealthcheckshells
+    singular: axonopshealthcheckshell
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterName
+      name: Cluster
+      type: string
+    - jsonPath: .spec.clusterType
+      name: Type
+      type: string
+    - jsonPath: .spec.script
+      name: Script
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: AxonOpsHealthcheckHTTP is the Schema for the axonopshealthcheckhttps
+        description: AxonOpsHealthcheckShell is the Schema for the axonopshealthcheckshells
           API
         properties:
           apiVersion:
@@ -38,27 +51,63 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of AxonOpsHealthcheckHTTP
+            description: spec defines the desired state of AxonOpsHealthcheckShell
             properties:
-              foo:
-                description: foo is an example field of AxonOpsHealthcheckHTTP. Edit
-                  axonopshealthcheckhttp_types.go to remove/update
+              clusterName:
+                description: ClusterName is the name of the cluster in AxonOps
+                minLength: 1
                 type: string
+              clusterType:
+                description: ClusterType is the type of the cluster (cassandra, kafka,
+                  dse)
+                enum:
+                - cassandra
+                - kafka
+                - dse
+                type: string
+              connectionRef:
+                description: ConnectionRef is the name of an AxonOpsConnection in
+                  the same namespace.
+                minLength: 1
+                type: string
+              interval:
+                default: 1m
+                description: Interval is the interval between checks (e.g., 1m, 30s)
+                type: string
+              name:
+                description: Name is the name of the healthcheck
+                minLength: 1
+                type: string
+              readonly:
+                default: false
+                description: Readonly indicates whether the healthcheck is read-only
+                type: boolean
+              script:
+                description: Script is the script or command to execute (e.g., /usr/bin/ls,
+                  /path/to/script.sh)
+                minLength: 1
+                type: string
+              shell:
+                description: Shell is the shell to use for executing the script (e.g.,
+                  /bin/bash)
+                type: string
+              timeout:
+                default: 1m
+                description: Timeout is the timeout for the check (e.g., 1m, 30s)
+                type: string
+            required:
+            - clusterName
+            - clusterType
+            - connectionRef
+            - name
+            - script
             type: object
           status:
-            description: status defines the observed state of AxonOpsHealthcheckHTTP
+            description: status defines the observed state of AxonOpsHealthcheckShell
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the AxonOpsHealthcheckHTTP resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                description: Conditions represent the current state of the AxonOpsHealthcheckShell
+                  resource.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -117,6 +166,19 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  sync with AxonOps
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration reflects the generation observed by
+                  the controller
+                format: int64
+                type: integer
+              syncedHealthcheckID:
+                description: SyncedHealthcheckID is the ID assigned by AxonOps API
+                type: string
             type: object
         required:
         - spec

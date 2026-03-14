@@ -1,0 +1,69 @@
+# AxonOps HTTP healthchecks — safe to kubectl delete -f this file.
+# Requires quickstart-internal-connection.yaml to be applied first.
+# kubectl apply -f examples/quickstart-internal-http.yaml
+# kubectl delete -f examples/quickstart-internal-http.yaml
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckHTTP
+metadata:
+  name: broker-health-http
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Kafka Broker HTTP Health Check"
+  url: "http://localhost:8080/health"
+  method: "GET"
+  expectedStatus: 200
+  interval: "1m"
+  timeout: "30s"
+  readonly: false
+  supportedAgentTypes:
+    - "broker"
+    - "kraft-broker"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckHTTP
+metadata:
+  name: zookeeper-health-http
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Zookeeper HTTP Health Check"
+  url: "http://localhost:8080/health"
+  method: "GET"
+  expectedStatus: 200
+  interval: "2m"
+  timeout: "30s"
+  readonly: true
+  supportedAgentTypes:
+    - "zookeeper"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckHTTP
+metadata:
+  name: api-health-post-check
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "API Health POST Check"
+  url: "http://api.example.com/healthz"
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer token"
+  body: '{"check": "status"}'
+  expectedStatus: 200
+  interval: "5m"
+  timeout: "1m"
+  readonly: false
+  supportedAgentTypes:
+    - "all"

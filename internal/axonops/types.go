@@ -112,3 +112,47 @@ type IntegrationRoute struct {
 	ID       string `json:"ID"`
 	Severity string `json:"Severity"`
 }
+
+// HealthchecksResponse represents the response from the healthchecks API
+type HealthchecksResponse struct {
+	HTTP  []HealthcheckHTTP  `json:"http"`
+	TCP   []HealthcheckTCP   `json:"tcp"`
+	Shell []HealthcheckShell `json:"shell"`
+}
+
+// HealthcheckHTTP represents an HTTP healthcheck
+type HealthcheckHTTP struct {
+	ID                  string            `json:"id"`
+	Name                string            `json:"name"`
+	URL                 string            `json:"url"`
+	Method              string            `json:"method,omitempty"`
+	Headers             map[string]string `json:"headers,omitempty"`
+	Body                string            `json:"body,omitempty"`
+	ExpectedStatus      int               `json:"expectedStatus,omitempty"`
+	Interval            string            `json:"interval,omitempty"`
+	Timeout             string            `json:"timeout,omitempty"`
+	Readonly            bool              `json:"readonly,omitempty"`
+	SupportedAgentTypes []string          `json:"supportedAgentTypes,omitempty"`
+}
+
+// HealthcheckTCP represents a TCP healthcheck
+type HealthcheckTCP struct {
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	TCP                 string   `json:"tcp"`
+	Interval            string   `json:"interval,omitempty"`
+	Timeout             string   `json:"timeout,omitempty"`
+	Readonly            bool     `json:"readonly,omitempty"`
+	SupportedAgentTypes []string `json:"supportedAgentTypes,omitempty"`
+}
+
+// HealthcheckShell represents a shell healthcheck
+type HealthcheckShell struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Script   string `json:"script"`
+	Shell    string `json:"shell,omitempty"`
+	Interval string `json:"interval,omitempty"`
+	Timeout  string `json:"timeout,omitempty"`
+	Readonly bool   `json:"readonly,omitempty"`
+}

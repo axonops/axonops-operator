@@ -1,0 +1,9 @@
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  labels:
+    app.kubernetes.io/name: axonops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: axonopshealthchecktcp-sample
+spec:
+  # TODO(user): Add fields here

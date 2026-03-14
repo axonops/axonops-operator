@@ -1,7 +1,7 @@
 # This rule is not used by the project axonops-operator itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read-only access to kafka.axonops.com resources.
+# Grants read-only access to alerts.axonops.com resources.
 # This role is intended for users who need visibility into these resources
 # without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
 
@@ -11,19 +11,19 @@ metadata:
   labels:
     app.kubernetes.io/name: axonops-operator
     app.kubernetes.io/managed-by: kustomize
-  name: kafka-axonopshealthcheckhttp-viewer-role
+  name: alerts-axonopshealthchecktcp-viewer-role
 rules:
 - apiGroups:
-  - kafka.axonops.com
+  - alerts.axonops.com
   resources:
-  - axonopshealthcheckhttps
+  - axonopshealthchecktcps
   verbs:
   - get
   - list
   - watch
 - apiGroups:
-  - kafka.axonops.com
+  - alerts.axonops.com
   resources:
-  - axonopshealthcheckhttps/status
+  - axonopshealthchecktcps/status
   verbs:
   - get

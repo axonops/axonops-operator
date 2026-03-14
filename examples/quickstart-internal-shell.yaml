@@ -1,0 +1,72 @@
+# AxonOps shell healthchecks — safe to kubectl delete -f this file.
+# Requires quickstart-internal-connection.yaml to be applied first.
+# kubectl apply -f examples/quickstart-internal-shell.yaml
+# kubectl delete -f examples/quickstart-internal-shell.yaml
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckShell
+metadata:
+  name: disk-space-check
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Disk Space Check"
+  script: "/usr/bin/df -h / | awk 'NR==2 {print $5}' | sed 's/%//'"
+  shell: "/bin/bash"
+  interval: "5m"
+  timeout: "30s"
+  readonly: true
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckShell
+metadata:
+  name: kafka-process-check
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Kafka Process Running Check"
+  script: "/usr/bin/pgrep -f kafka.Kafka"
+  shell: "/bin/bash"
+  interval: "1m"
+  timeout: "10s"
+  readonly: true
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckShell
+metadata:
+  name: custom-health-script
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Custom Health Script"
+  script: "/opt/kafka/scripts/health-check.sh"
+  shell: "/bin/bash"
+  interval: "2m"
+  timeout: "1m"
+  readonly: false
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckShell
+metadata:
+  name: jvm-heap-check
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "JVM Heap Usage Check"
+  script: "/usr/bin/jstat -gc $(pgrep -f kafka.Kafka) | tail -1 | awk '{print ($3+$4+$6+$8)/($3+$4+$6+$8+$5+$7+$9)*100}'"
+  shell: "/bin/bash"
+  interval: "3m"
+  timeout: "30s"
+  readonly: true

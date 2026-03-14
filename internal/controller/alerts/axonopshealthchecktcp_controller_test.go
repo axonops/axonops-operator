@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kafka
+package alerts
 
 import (
 	"context"
@@ -27,10 +27,10 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	kafkav1alpha1 "github.com/axonops/axonops-operator/api/kafka/v1alpha1"
+	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 )
 
-var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
+var _ = Describe("AxonOpsHealthcheckTCP Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -40,18 +40,24 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		axonopshealthcheckhttp := &kafkav1alpha1.AxonOpsHealthcheckHTTP{}
+		axonopshealthchecktcp := &alertsv1alpha1.AxonOpsHealthcheckTCP{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind AxonOpsHealthcheckHTTP")
-			err := k8sClient.Get(ctx, typeNamespacedName, axonopshealthcheckhttp)
+			By("creating the custom resource for the Kind AxonOpsHealthcheckTCP")
+			err := k8sClient.Get(ctx, typeNamespacedName, axonopshealthchecktcp)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &kafkav1alpha1.AxonOpsHealthcheckHTTP{
+				resource := &alertsv1alpha1.AxonOpsHealthcheckTCP{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: alertsv1alpha1.AxonOpsHealthcheckTCPSpec{
+						ConnectionRef: "test-connection",
+						ClusterName:   "test-cluster",
+						ClusterType:   "kafka",
+						Name:          "test-tcp-healthcheck",
+						TCP:           "0.0.0.0:9092",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -59,16 +65,16 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &kafkav1alpha1.AxonOpsHealthcheckHTTP{}
+			resource := &alertsv1alpha1.AxonOpsHealthcheckTCP{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance AxonOpsHealthcheckHTTP")
+			By("Cleanup the specific resource instance AxonOpsHealthcheckTCP")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &AxonOpsHealthcheckHTTPReconciler{
+			controllerReconciler := &AxonOpsHealthcheckTCPReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}

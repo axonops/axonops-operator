@@ -16,6 +16,9 @@ rules:
   - alerts.axonops.com
   resources:
   - axonopsalertroutes
+  - axonopshealthcheckhttps
+  - axonopshealthcheckshells
+  - axonopshealthchecktcps
   - axonopslogalerts
   - axonopsmetricalerts
   verbs:
@@ -30,6 +33,9 @@ rules:
   - alerts.axonops.com
   resources:
   - axonopsalertroutes/finalizers
+  - axonopshealthcheckhttps/finalizers
+  - axonopshealthcheckshells/finalizers
+  - axonopshealthchecktcps/finalizers
   - axonopslogalerts/finalizers
   - axonopsmetricalerts/finalizers
   verbs:
@@ -38,6 +44,9 @@ rules:
   - alerts.axonops.com
   resources:
   - axonopsalertroutes/status
+  - axonopshealthcheckhttps/status
+  - axonopshealthcheckshells/status
+  - axonopshealthchecktcps/status
   - axonopslogalerts/status
   - axonopsmetricalerts/status
   verbs:
@@ -74,32 +83,6 @@ rules:
   - core.axonops.com
   resources:
   - axonopsservers/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - kafka.axonops.com
-  resources:
-  - axonopshealthcheckhttps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - kafka.axonops.com
-  resources:
-  - axonopshealthcheckhttps/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - kafka.axonops.com
-  resources:
-  - axonopshealthcheckhttps/status
   verbs:
   - get
   - patch

@@ -404,3 +404,70 @@ func (c *Client) SetIntegrationOverride(ctx context.Context, clusterType, cluste
 
 	return nil
 }
+
+// GetHealthchecks retrieves all healthchecks for a cluster
+func (c *Client) GetHealthchecks(ctx context.Context, clusterType, clusterName string) (*HealthchecksResponse, error) {
+	url := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get healthchecks: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	var result HealthchecksResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateHealthchecks updates all healthchecks for a cluster (bulk update)
+// This replaces all healthchecks with the provided list
+func (c *Client) UpdateHealthchecks(ctx context.Context, clusterType, clusterName string, healthchecks *HealthchecksResponse) error {
+	url := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+
+	body, err := json.Marshal(healthchecks)
+	if err != nil {
+		return fmt.Errorf("failed to marshal healthchecks: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update healthchecks: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
+	}
+
+	return nil
+}

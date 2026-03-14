@@ -4,4 +4,9 @@ resources:
 - alerts_v1alpha1_axonopsmetricalert.yaml
 - alerts_v1alpha1_axonopsalertroute.yaml
 - kafka_v1alpha1_axonopshealthcheckhttp.yaml
+- kafka_v1alpha1_axonopshealthcheckshell.yaml
+- kafka_v1alpha1_axonopshealthchecktcp.yaml
+- alerts_v1alpha1_axonopshealthcheckhttp.yaml
+- alerts_v1alpha1_axonopshealthcheckshell.yaml
+- alerts_v1alpha1_axonopshealthchecktcp.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

@@ -51,8 +51,26 @@ resources:
     namespaced: true
   controller: true
   domain: axonops.com
-  group: kafka
+  group: alerts
   kind: AxonOpsHealthcheckHTTP
-  path: github.com/axonops/axonops-operator/api/kafka/v1alpha1
+  path: github.com/axonops/axonops-operator/api/alerts/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: axonops.com
+  group: alerts
+  kind: AxonOpsHealthcheckShell
+  path: github.com/axonops/axonops-operator/api/alerts/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: axonops.com
+  group: alerts
+  kind: AxonOpsHealthcheckTCP
+  path: github.com/axonops/axonops-operator/api/alerts/v1alpha1
   version: v1alpha1
 version: "3"

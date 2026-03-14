@@ -22,6 +22,21 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the axonops-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- alerts_axonopshealthchecktcp_admin_role.yaml
+- alerts_axonopshealthchecktcp_editor_role.yaml
+- alerts_axonopshealthchecktcp_viewer_role.yaml
+- alerts_axonopshealthcheckshell_admin_role.yaml
+- alerts_axonopshealthcheckshell_editor_role.yaml
+- alerts_axonopshealthcheckshell_viewer_role.yaml
+- alerts_axonopshealthcheckhttp_admin_role.yaml
+- alerts_axonopshealthcheckhttp_editor_role.yaml
+- alerts_axonopshealthcheckhttp_viewer_role.yaml
+- kafka_axonopshealthchecktcp_admin_role.yaml
+- kafka_axonopshealthchecktcp_editor_role.yaml
+- kafka_axonopshealthchecktcp_viewer_role.yaml
+- kafka_axonopshealthcheckshell_admin_role.yaml
+- kafka_axonopshealthcheckshell_editor_role.yaml
+- kafka_axonopshealthcheckshell_viewer_role.yaml
 - kafka_axonopshealthcheckhttp_admin_role.yaml
 - kafka_axonopshealthcheckhttp_editor_role.yaml
 - kafka_axonopshealthcheckhttp_viewer_role.yaml

@@ -1,0 +1,96 @@
+# AxonOps TCP healthchecks — safe to kubectl delete -f this file.
+# Requires quickstart-internal-connection.yaml to be applied first.
+# kubectl apply -f examples/quickstart-internal-tcp.yaml
+# kubectl delete -f examples/quickstart-internal-tcp.yaml
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: kafka-broker-tcp
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Kafka Broker TCP Port Check"
+  tcp: "0.0.0.0:9092"
+  interval: "1m"
+  timeout: "30s"
+  readonly: false
+  supportedAgentTypes:
+    - "broker"
+    - "kraft-broker"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: zookeeper-tcp
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Zookeeper TCP Port Check"
+  tcp: "0.0.0.0:2181"
+  interval: "1m"
+  timeout: "30s"
+  readonly: true
+  supportedAgentTypes:
+    - "zookeeper"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: kafka-jmx-tcp
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Kafka JMX Port Check"
+  tcp: "0.0.0.0:9999"
+  interval: "2m"
+  timeout: "30s"
+  readonly: true
+  supportedAgentTypes:
+    - "all"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: kafka-controller-tcp
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Kafka Controller Port Check"
+  tcp: "0.0.0.0:9093"
+  interval: "1m"
+  timeout: "30s"
+  readonly: false
+  supportedAgentTypes:
+    - "kraft-controller"
+    - "kraft-broker"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: kafka-inter-broker-tcp
+  namespace: default
+spec:
+  connectionRef: gridindia
+  clusterName: test-cluster-000
+  clusterType: kafka
+  name: "Kafka Inter-Broker Port Check"
+  tcp: "0.0.0.0:9091"
+  interval: "2m"
+  timeout: "30s"
+  readonly: true
+  supportedAgentTypes:
+    - "broker"
