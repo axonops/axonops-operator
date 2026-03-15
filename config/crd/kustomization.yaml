@@ -3,11 +3,10 @@
 # It should be run by config/default
 resources:
 - bases/core.axonops.com_axonopsservers.yaml
+- bases/core.axonops.com_axonopsconnections.yaml
 - bases/alerts.axonops.com_axonopsmetricalerts.yaml
+- bases/alerts.axonops.com_axonopslogalerts.yaml
 - bases/alerts.axonops.com_axonopsalertroutes.yaml
-- bases/kafka.axonops.com_axonopshealthcheckhttps.yaml
-- bases/kafka.axonops.com_axonopshealthcheckshells.yaml
-- bases/kafka.axonops.com_axonopshealthchecktcps.yaml
 - bases/alerts.axonops.com_axonopshealthcheckhttps.yaml
 - bases/alerts.axonops.com_axonopshealthcheckshells.yaml
 - bases/alerts.axonops.com_axonopshealthchecktcps.yaml

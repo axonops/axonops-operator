@@ -61,6 +61,8 @@ const (
 	defaultSearchTag       = "3.3.2-1.5.0"
 	defaultServerImage     = "registry.axonops.com/axonops-public/axonops-docker/axon-server"
 	defaultServerTag       = "2.0.27"
+	defaultDashboardImage  = "registry.axonops.com/axonops-public/axonops-docker/axon-dash"
+	defaultDashboardTag    = "2.0.28"
 
 	// Default heap sizes
 	defaultTimeseriesHeapSize = "1024M"
@@ -98,6 +100,8 @@ type AxonOpsServerReconciler struct {
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile moves the current state of the cluster closer to the desired state.
@@ -198,6 +202,15 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// Create ServiceAccount, Services, Config Secret, and StatefulSet for Server
 		if err := r.reconcileServer(ctx, server); err != nil {
 			log.Error(err, "Failed to reconcile Server workload")
+			return ctrl.Result{}, err
+		}
+	}
+
+	// Ensure Dashboard workload (if component is enabled)
+	if r.isComponentEnabled(server.Spec.Dashboard) {
+		// Create ServiceAccount, Service, ConfigMap, and Deployment for Dashboard
+		if err := r.reconcileDashboard(ctx, server); err != nil {
+			log.Error(err, "Failed to reconcile Dashboard workload")
 			return ctrl.Result{}, err
 		}
 	}
@@ -832,6 +845,10 @@ func (r *AxonOpsServerReconciler) getServicePorts(component string, headless boo
 		return []corev1.ServicePort{
 			{Name: "api", Port: 8080, TargetPort: intstr.FromString("api"), Protocol: corev1.ProtocolTCP},
 			{Name: "agent", Port: 1888, TargetPort: intstr.FromString("agent"), Protocol: corev1.ProtocolTCP},
+		}
+	case componentDashboard:
+		return []corev1.ServicePort{
+			{Name: "http", Port: 3000, TargetPort: intstr.FromString("http"), Protocol: corev1.ProtocolTCP},
 		}
 	default:
 		return nil
@@ -2042,6 +2059,220 @@ func (r *AxonOpsServerReconciler) buildSelectorLabels(server *corev1alpha1.AxonO
 	}
 }
 
+// reconcileDashboard ensures all Dashboard resources are created/updated
+func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+
+	// Ensure ServiceAccount
+	if err := r.ensureServiceAccount(ctx, server, componentDashboard); err != nil {
+		return fmt.Errorf("failed to ensure ServiceAccount: %w", err)
+	}
+
+	// Ensure Service
+	if err := r.ensureService(ctx, server, componentDashboard); err != nil {
+		return fmt.Errorf("failed to ensure Service: %w", err)
+	}
+
+	// Ensure ConfigMap
+	if err := r.ensureDashboardConfigMap(ctx, server); err != nil {
+		return fmt.Errorf("failed to ensure ConfigMap: %w", err)
+	}
+
+	// Ensure Deployment
+	if err := r.ensureDashboardDeployment(ctx, server); err != nil {
+		return fmt.Errorf("failed to ensure Deployment: %w", err)
+	}
+
+	log.Info("Dashboard workload reconciled successfully")
+	return nil
+}
+
+// ensureDashboardConfigMap ensures the Dashboard ConfigMap exists
+func (r *AxonOpsServerReconciler) ensureDashboardConfigMap(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
+
+	// Build the axon-dash.yml config
+	serverAPIURL := fmt.Sprintf("http://%s-%s-api:8080", server.Name, componentServer)
+	configYAML := fmt.Sprintf(`axon-server:
+  private_endpoints: %s
+  context_path: ""
+
+axon-dash:
+  host: 0.0.0.0
+  port: 3000
+  ssl:
+    enabled: false
+`, serverAPIURL)
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: server.Namespace,
+		},
+	}
+
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
+		if err := controllerutil.SetControllerReference(server, cm, r.Scheme); err != nil {
+			return err
+		}
+
+		cm.Labels = r.buildLabels(server, componentDashboard)
+		cm.Data = map[string]string{
+			"axon-dash.yml": configYAML,
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	log.Info("ConfigMap reconciled", "name", name, "operation", op)
+	return nil
+}
+
+// ensureDashboardDeployment ensures the Dashboard Deployment exists
+func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
+	configMapName := name
+
+	// Get component config
+	dash := server.Spec.Dashboard
+
+	// Determine image
+	image := defaultDashboardImage
+	tag := defaultDashboardTag
+	pullPolicy := corev1.PullIfNotPresent
+	if dash.Repository.Image != "" {
+		image = dash.Repository.Image
+	}
+	if dash.Repository.Tag != "" {
+		tag = dash.Repository.Tag
+	}
+	if dash.Repository.PullPolicy != "" {
+		pullPolicy = dash.Repository.PullPolicy
+	}
+
+	// Determine replicas
+	replicas := int32(1)
+	if dash.Replicas != nil && *dash.Replicas > 0 {
+		replicas = *dash.Replicas
+	}
+
+	deploy := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: server.Namespace,
+		},
+	}
+
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, deploy, func() error {
+		if err := controllerutil.SetControllerReference(server, deploy, r.Scheme); err != nil {
+			return err
+		}
+
+		labels := r.buildLabels(server, componentDashboard)
+		selectorLabels := r.buildSelectorLabels(server, componentDashboard)
+
+		deploy.Labels = labels
+		deploy.Spec = appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: selectorLabels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      labels,
+					Annotations: dash.Annotations,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: name,
+					Containers: []corev1.Container{
+						{
+							Name:            "axon-dash",
+							Image:           fmt.Sprintf("%s:%s", image, tag),
+							ImagePullPolicy: pullPolicy,
+							Ports: []corev1.ContainerPort{
+								{Name: "http", ContainerPort: 3000, Protocol: corev1.ProtocolTCP},
+							},
+							Env: dash.Env,
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/",
+										Port: intstr.FromString("http"),
+									},
+								},
+								InitialDelaySeconds: 10,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+								FailureThreshold:    3,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/",
+										Port: intstr.FromString("http"),
+									},
+								},
+								InitialDelaySeconds: 5,
+								PeriodSeconds:       5,
+								TimeoutSeconds:      3,
+								FailureThreshold:    3,
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "config",
+									MountPath: "/etc/axonops",
+									ReadOnly:  true,
+								},
+							},
+							Resources: dash.Resources,
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: configMapName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Add extra volumes if specified
+		if len(dash.ExtraVolumes) > 0 {
+			deploy.Spec.Template.Spec.Volumes = append(deploy.Spec.Template.Spec.Volumes, dash.ExtraVolumes...)
+		}
+
+		// Add extra volume mounts if specified
+		if len(dash.ExtraVolumeMounts) > 0 {
+			deploy.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+				deploy.Spec.Template.Spec.Containers[0].VolumeMounts,
+				dash.ExtraVolumeMounts...,
+			)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	log.Info("Deployment reconciled", "name", name, "operation", op)
+	return nil
+}
+
 // ptr returns a pointer to the given value
 func ptr[T any](v T) *T {
 	return &v
@@ -2054,7 +2285,9 @@ func (r *AxonOpsServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.StatefulSet{}).
+		Owns(&appsv1.Deployment{}).
 		Owns(&certmanagerv1.Certificate{}).
 		Named("axonopsserver").
 		Complete(r)
