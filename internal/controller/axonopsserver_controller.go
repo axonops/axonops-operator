@@ -30,6 +30,7 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -103,6 +104,7 @@ type AxonOpsServerReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile moves the current state of the cluster closer to the desired state.
 func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -2083,6 +2085,13 @@ func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server
 		return fmt.Errorf("failed to ensure Deployment: %w", err)
 	}
 
+	// Ensure Ingress if enabled
+	if server.Spec.Dashboard.Ingress.Enabled {
+		if err := r.ensureDashboardIngress(ctx, server); err != nil {
+			return fmt.Errorf("failed to ensure Ingress: %w", err)
+		}
+	}
+
 	log.Info("Dashboard workload reconciled successfully")
 	return nil
 }
@@ -2273,6 +2282,98 @@ func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context,
 	return nil
 }
 
+// ensureDashboardIngress ensures the Dashboard Ingress exists
+func (r *AxonOpsServerReconciler) ensureDashboardIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
+	serviceName := name
+
+	ingressSpec := server.Spec.Dashboard.Ingress
+
+	// Build ingress rules from hosts
+	var rules []networkingv1.IngressRule
+	for _, host := range ingressSpec.Hosts {
+		pathType := networkingv1.PathTypePrefix
+		if ingressSpec.PathType != "" {
+			pathType = ingressSpec.PathType
+		}
+		path := "/"
+		if ingressSpec.Path != "" {
+			path = ingressSpec.Path
+		}
+		servicePort := int32(3000)
+		if ingressSpec.ServicePort > 0 {
+			servicePort = ingressSpec.ServicePort
+		}
+		svcName := serviceName
+		if ingressSpec.ServiceName != "" {
+			svcName = ingressSpec.ServiceName
+		}
+
+		rules = append(rules, networkingv1.IngressRule{
+			Host: host,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{
+						{
+							Path:     path,
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: svcName,
+									Port: networkingv1.ServiceBackendPort{
+										Number: servicePort,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: server.Namespace,
+		},
+	}
+
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, ingress, func() error {
+		if err := controllerutil.SetControllerReference(server, ingress, r.Scheme); err != nil {
+			return err
+		}
+
+		// Merge labels
+		labels := r.buildLabels(server, componentDashboard)
+		for k, v := range ingressSpec.Labels {
+			labels[k] = v
+		}
+		ingress.Labels = labels
+
+		// Set annotations
+		ingress.Annotations = ingressSpec.Annotations
+
+		// Set IngressClassName if specified
+		if ingressSpec.IngressClassName != "" {
+			ingress.Spec.IngressClassName = &ingressSpec.IngressClassName
+		}
+
+		ingress.Spec.Rules = rules
+		ingress.Spec.TLS = ingressSpec.TLS
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	log.Info("Ingress reconciled", "name", name, "operation", op)
+	return nil
+}
+
 // ptr returns a pointer to the given value
 func ptr[T any](v T) *T {
 	return &v
@@ -2288,6 +2389,7 @@ func (r *AxonOpsServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&networkingv1.Ingress{}).
 		Owns(&certmanagerv1.Certificate{}).
 		Named("axonopsserver").
 		Complete(r)

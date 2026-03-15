@@ -8,4 +8,15 @@ spec:
     orgName: "AxonOps"
   timeSeries: {}
   search: {}
-  dashboard: {}
+  dashboard:
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/cluster-issuer: "selfsigned-cluster-issuer"
+      hosts:
+        - "server.axonops.local"
+      tls:
+        - secretName: server-tls
+          hosts:
+            - "server.axonops.local"
+
