@@ -6,24 +6,46 @@ Kubernetes operator that manages the AxonOps observability stack. It aims to rep
 1. Helm charts from `axonops-containers/axonops/charts` for deploying AxonOps server components (axon-server, axon-dash, axondb-search, axondb-timeseries)
 2. The Terraform provider `terraform-provider-axonops` for managing AxonOps configuration resources such as alert rules
 
-Initial scope: implement the `AxonOpsMetricAlert` CRD to manage metric alert rules via the AxonOps REST API (replacing `resource_metric_alert_rule.go` in the Terraform provider).
-
 @AGENTS.md
 
 ## Current Status
-- **Last Updated**: 2026-03-13
-- **Current Phase**: Development — Phase 1 (AxonOpsMetricAlert implementation)
-- **Health**: Green — fresh scaffold, no regressions
+- **Last Updated**: 2026-03-15
+- **Current Phase**: Development — Phase 2 complete, Phase 3 starting
+- **Health**: Green — core controllers implemented and compiling
 
 ## Active Tasks
 
-1. [NOT STARTED] Implement `AxonOpsMetricAlert` CRD types and controller
+1. [IN PROGRESS] Testing & validation of AxonOpsServer controller
+   - Status: In Progress
+   - Notes: End-to-end testing against a real cluster; verify StatefulSets, Ingress, and Gateway resources
+2. [NOT STARTED] Unit tests for alert controllers (LogAlert, AlertRoute, Healthchecks)
    - Status: Not Started
-   - Notes: Full spec covering all fields from the Terraform provider schema
+   - Notes: AxonOpsMetricAlert has tests; remaining alert controllers need test coverage
+3. [NOT STARTED] Webhooks for CRD validation
+   - Status: Not Started
+   - Notes: Useful for field validation (e.g., operator enum, clusterType enum)
 
 ## Recent Progress
-- Initial kubebuilder scaffold committed with two CRD skeletons: `AxonOpsServer` (core group) and `AxonOpsMetricAlert` (alerts group)
-- Multi-group layout (`multigroup: true`) in place; controller stubs exist
+- **AxonOpsServer controller fully implemented** (2,636 lines):
+  - TimeSeries StatefulSet with auth secrets (`AXONOPS_DB_USER`, `AXONOPS_DB_PASSWORD`)
+  - Search StatefulSet with auth secrets (`AXONOPS_SEARCH_USER`, `AXONOPS_SEARCH_PASSWORD`)
+  - Server StatefulSet with config secret and TLS certificate management
+  - Dashboard Deployment with ConfigMap
+  - Ingress support for dashboard, server agent port, and server API port
+  - Gateway API support (Gateway + HTTPRoute) for dashboard, server agent, and server API
+  - Auto-generated passwords meeting complexity requirements (`generateRandomPassword`)
+  - ServiceAccounts and headless + ClusterIP Services per component
+  - TLS keystore password secrets and self-signed certificate lifecycle
+- **All six alert CRDs implemented**:
+  - `AxonOpsMetricAlert` — metric threshold alerts (with controller + tests)
+  - `AxonOpsLogAlert` — log pattern alerts (controller implemented)
+  - `AxonOpsAlertRoute` — alert routing/notification channels (controller implemented)
+  - `AxonOpsHealthcheckHTTP` — HTTP healthcheck alerts (controller implemented)
+  - `AxonOpsHealthcheckShell` — Shell script healthchecks (controller implemented)
+  - `AxonOpsHealthcheckTCP` — TCP port healthchecks (controller implemented)
+- **`AxonOpsConnection` CRD** added to `core.axonops.com` group for reusable API auth config
+- AxonOps API client (`internal/axonops/client.go` + `types.go`) implemented
+- Sample YAMLs for all CRDs under `config/samples/`
 
 ## Blockers & Issues
 None currently.
@@ -34,17 +56,52 @@ None currently.
 
 - **Stack**: Go 1.25.3, kubebuilder 4.13.0, controller-runtime v0.23.1, Kubernetes APIs v0.35.0
 - **Layout**: Multi-group kubebuilder project (`multigroup: true`)
-  - CRD group `core.axonops.com` → `api/v1alpha1/`
-  - CRD group `alerts.axonops.com` → `api/alerts/v1alpha1/`
+  - CRD group `core.axonops.com` → `api/v1alpha1/` — `AxonOpsServer`, `AxonOpsConnection`
+  - CRD group `alerts.axonops.com` → `api/alerts/v1alpha1/` — all six alert CRDs
 - **API versioning**: `v1alpha1` for all resources initially
-- **Operator config**: AxonOps API credentials (API key, org_id, host, protocol) will be injected via a referenced `Secret` in each CR spec, or via operator-level environment variables
+- **Auth strategy**:
+  - `AxonOpsConnection` CR holds org-level API credentials (orgId, apiKeyRef secret, host, protocol, tokenType, tlsSkipVerify, useSAML)
+  - Alert CRs reference an `AxonOpsConnection` by name rather than embedding credentials
+- **AxonOpsServer auth**: database credentials use `AxonAuthentication` — priority is `SecretRef` > explicit username/password > auto-generated random credentials
+- **Password policy**: `generateRandomPassword` enforces at least one uppercase, one digit, one special character
+- **Ingress + Gateway**: both `Ingress` and `GatewayConfig` structs are supported on Dashboard, Server Agent, and Server API endpoints; they are independent and can be enabled together or separately
 - **No webhooks** scaffolded yet (add later if needed for validation)
 
 ## Dependencies & Integration Points
 
-- **AxonOps REST API** (`/api/v1/alert-rules/...`, `/api/v1/dashboardtemplate/...`): all alert rule CRD operations call this API
-- **cert-manager** (optional, future): for TLS in AxonOpsServer CRD
+- **AxonOps REST API** (`/api/v1/alert-rules/...`, `/api/v1/dashboardtemplate/...`, `/api/v1/integrations/...`, `/api/v1/healthchecks/...`): all alert CRD controllers call this API
+- **Kubernetes Gateway API** (`gateway.networking.k8s.io`): used by AxonOpsServer for Gateway/HTTPRoute resources
+- **cert-manager** (optional, future): for TLS in AxonOpsServer (currently self-signed certs are generated by the controller)
 - **Prometheus Operator** (optional, future): ServiceMonitor creation
+
+## API Groups & CRDs
+
+### `core.axonops.com` (`api/v1alpha1/`)
+| CRD | File | Status |
+|---|---|---|
+| `AxonOpsServer` | `axonopsserver_types.go` | ✅ Implemented |
+| `AxonOpsConnection` | `axonopsconnection_types.go` | ✅ Implemented |
+
+### `alerts.axonops.com` (`api/alerts/v1alpha1/`)
+| CRD | File | Status |
+|---|---|---|
+| `AxonOpsMetricAlert` | `axonopsmetricalert_types.go` | ✅ Implemented + tested |
+| `AxonOpsLogAlert` | `axonopslogalert_types.go` | ✅ Implemented |
+| `AxonOpsAlertRoute` | `axonopsalertroute_types.go` | ✅ Implemented |
+| `AxonOpsHealthcheckHTTP` | `axonopshealthcheckhttp_types.go` | ✅ Implemented |
+| `AxonOpsHealthcheckShell` | `axonopshealthcheckshell_types.go` | ✅ Implemented |
+| `AxonOpsHealthcheckTCP` | `axonopshealthchecktcp_types.go` | ✅ Implemented |
+
+## AxonOpsServer Controller — Key Resources Managed
+
+Each `AxonOpsServer` CR reconciles the following Kubernetes objects (all owned via `SetControllerReference`):
+
+| Component | Resources Created |
+|---|---|
+| **TimeSeries** (`axondb-timeseries`) | ServiceAccount, headless Service, ClusterIP Service, auth Secret, keystore Secret, TLS cert Secret, StatefulSet |
+| **Search** (`axondb-search`) | ServiceAccount, headless Service, ClusterIP Service, auth Secret, keystore Secret, TLS cert Secret, StatefulSet |
+| **Server** (`axon-server`) | ServiceAccount, agent Service, API Service, config Secret, StatefulSet, Ingress (agent), Ingress (API), Gateway+HTTPRoute (agent), Gateway+HTTPRoute (API) |
+| **Dashboard** (`axon-dash`) | ServiceAccount, ClusterIP Service, ConfigMap, Deployment, Ingress, Gateway+HTTPRoute |
 
 ## Useful Commands
 
@@ -55,323 +112,39 @@ make fmt && make vet    # Format and vet code
 make test               # Run unit tests (envtest)
 make build              # Build manager binary
 make run                # Run locally against current kubeconfig
+make install            # Install CRDs into cluster
+kubectl apply -k config/samples/   # Apply sample CRs
 ```
 
 ## Known Limitations & Tech Debt
-- `AxonOpsServer` spec is still the placeholder scaffold (not implemented yet)
-- `AxonOpsMetricAlert` spec is still the placeholder scaffold (to be replaced in Phase 1)
-
----
-
-# Implementation Plan: AxonOpsMetricAlert (Phase 1)
-
-## Context
-
-The Terraform provider's `resource_metric_alert_rule.go` manages metric alert rules in AxonOps clusters via a REST API. The goal is to implement the `AxonOpsMetricAlert` Kubernetes CRD and controller that provides the same CRUD lifecycle but as a native Kubernetes resource. This enables GitOps workflows and removes the Terraform dependency for alert management.
-
----
-
-## Step 1 — Define `AxonOpsMetricAlert` Types
-
-**File**: `api/alerts/v1alpha1/axonopsmetricalert_types.go`
-
-Replace the placeholder `Foo *string` spec with the full domain model derived from the Terraform schema:
-
-```go
-// AxonOpsMetricAlertSpec defines the desired state of AxonOpsMetricAlert
-type AxonOpsMetricAlertSpec struct {
-    // AxonOps connection config (references a Secret with api_key)
-    APISecretRef corev1.SecretReference `json:"apiSecretRef"`
-    OrgID        string                 `json:"orgId"`
-    // Optional: defaults to https://dash.axonops.cloud
-    Host         string                 `json:"host,omitempty"`
-    Protocol     string                 `json:"protocol,omitempty"` // https or http
-    TLSSkipVerify bool                  `json:"tlsSkipVerify,omitempty"`
-
-    // Alert rule identity
-    ClusterName string `json:"clusterName"`
-    ClusterType string `json:"clusterType"` // cassandra, kafka, dse
-    Name        string `json:"name"`
-
-    // Thresholds and evaluation
-    Operator      string  `json:"operator"` // >, >=, =, !=, <=, <
-    WarningValue  float64 `json:"warningValue"`
-    CriticalValue float64 `json:"criticalValue"`
-    Duration      string  `json:"duration"` // e.g. 15m
-
-    // Chart/dashboard reference
-    Dashboard string `json:"dashboard"`
-    Chart     string `json:"chart"`
-    Metric    string `json:"metric,omitempty"` // auto-derived if empty
-
-    // Optional annotations
-    // +optional
-    Annotations *MetricAlertAnnotations `json:"annotations,omitempty"`
-
-    // Optional integrations
-    // +optional
-    Integrations *MetricAlertIntegrations `json:"integrations,omitempty"`
-
-    // Optional filters
-    DC          []string `json:"dc,omitempty"`
-    Rack        []string `json:"rack,omitempty"`
-    HostID      []string `json:"hostId,omitempty"`
-    Scope       []string `json:"scope,omitempty"`
-    Keyspace    []string `json:"keyspace,omitempty"`
-    Percentile  []string `json:"percentile,omitempty"`
-    Consistency []string `json:"consistency,omitempty"`
-    Topic       []string `json:"topic,omitempty"`
-    GroupID     []string `json:"groupId,omitempty"`
-    GroupBy     []string `json:"groupBy,omitempty"`
-}
-
-type MetricAlertAnnotations struct {
-    Summary     string `json:"summary,omitempty"`
-    Description string `json:"description,omitempty"`
-    WidgetURL   string `json:"widgetUrl,omitempty"`
-}
-
-type MetricAlertIntegrations struct {
-    Type            string   `json:"type,omitempty"`
-    Routing         []string `json:"routing,omitempty"`
-    OverrideInfo    bool     `json:"overrideInfo,omitempty"`
-    OverrideWarning bool     `json:"overrideWarning,omitempty"`
-    OverrideError   bool     `json:"overrideError,omitempty"`
-}
-```
-
-**Status** stays as `Conditions []metav1.Condition` plus add:
-```go
-// RemoteID is the ID assigned by the AxonOps API after creation
-RemoteID      string `json:"remoteId,omitempty"`
-CorrelationID string `json:"correlationId,omitempty"`
-```
-
-Add kubebuilder marker for additional printer columns:
-```go
-// +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.spec.clusterName`
-// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.clusterType`
-// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
-```
-
-After editing, run:
-```bash
-make generate   # regenerate zz_generated.deepcopy.go
-make manifests  # regenerate CRD YAML
-```
-
----
-
-## Step 2 — Create AxonOps API Client
-
-**New file**: `internal/axonops/client.go`
-
-Implement an HTTP client mirroring `terraform-provider-axonops/client/http_client.go` but idiomatic Go (no Terraform SDK):
-
-```go
-package axonops
-
-type Client struct {
-    httpClient    *http.Client
-    baseURL       string   // e.g. https://dash.axonops.cloud/orgid
-    orgID         string
-    apiKey        string
-    tokenType     string   // "Bearer" or "AxonApi"
-}
-
-func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bool) *Client
-
-// Alert rule operations
-func (c *Client) ListMetricAlertRules(ctx context.Context, clusterType, clusterName string) ([]MetricAlertRule, error)
-func (c *Client) CreateOrUpdateMetricAlertRule(ctx context.Context, clusterType, clusterName string, rule MetricAlertRule) (MetricAlertRule, error)
-func (c *Client) DeleteMetricAlertRule(ctx context.Context, clusterType, clusterName, alertID string) error
-
-// Dashboard lookup (for correlationId resolution)
-func (c *Client) ResolveDashboardPanel(ctx context.Context, clusterType, clusterName, dashboardName, panelTitle string) (panelUUID string, metricExpr string, err error)
-```
-
-**New file**: `internal/axonops/types.go`
-
-Contains `MetricAlertRule`, `MetricAlertAnnotations`, `MetricAlertFilter`, `MetricAlertIntegrations`, `DashboardTemplateResponse`, `Dashboard`, `DashboardPanel` structs (matching the API JSON payload from the Terraform provider).
-
----
-
-## Step 3 — Implement the Controller
-
-**File**: `internal/controller/alerts/axonopsmetricalert_controller.go`
-
-Full reconciliation logic:
-
-### Reconcile flow
-
-```
-1. Fetch AxonOpsMetricAlert CR
-   └── If not found: return (already deleted)
-
-2. Read API credentials from referenced Secret
-
-3. Build axonops.Client from spec + secret
-
-4. Handle deletion:
-   └── If DeletionTimestamp set AND finalizer present:
-       a. Call client.DeleteMetricAlertRule(status.RemoteID)
-       b. Remove finalizer
-       c. Return
-
-5. Add finalizer if absent
-
-6. Resolve correlationId via client.ResolveDashboardPanel(dashboard, chart)
-   └── On error: set Degraded condition, return with backoff
-
-7. Build MetricAlertRule payload from spec + correlationId
-
-8. If status.RemoteID == "":
-   a. Call client.CreateOrUpdateMetricAlertRule(...)
-   b. Save returned ID to status.RemoteID
-   c. Set Ready condition = True
-
-9. Else (update path):
-   a. List all rules and find by ID
-   b. If drifted: call CreateOrUpdateMetricAlertRule(...)
-   c. Set Ready condition = True
-
-10. Update status subresource
-```
-
-### Key controller implementation rules (from AGENTS.md)
-
-- Always re-fetch the CR before modifying status (use `r.Get` before `r.Status().Update`)
-- Use `ctrl.Result{RequeueAfter: 30*time.Second}` for API transient errors
-- Use structured logging: `log.FromContext(ctx).Info("message", "key", value)`
-- Add owner references only when managing child K8s objects (not needed for pure API management)
-- Use `controllerutil.AddFinalizer` / `controllerutil.RemoveFinalizer` for cleanup
-
-### RBAC markers to add to the controller struct
-
-```go
-// +kubebuilder:rbac:groups=alerts.axonops.com,resources=axonopsmetricalerts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=alerts.axonops.com,resources=axonopsmetricalerts/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=alerts.axonops.com,resources=axonopsmetricalerts/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
-```
-
----
-
-## Step 4 — Update Sample YAML
-
-**File**: `config/samples/alerts_v1alpha1_axonopsmetricalert.yaml`
-
-Provide a working example:
-
-```yaml
-apiVersion: alerts.axonops.com/v1alpha1
-kind: AxonOpsMetricAlert
-metadata:
-  name: high-read-latency
-spec:
-  apiSecretRef:
-    name: axonops-credentials
-    namespace: default
-  orgId: my-org
-  clusterName: production-cluster
-  clusterType: cassandra
-  name: high-read-latency
-  operator: ">"
-  warningValue: 50
-  criticalValue: 100
-  duration: 15m
-  dashboard: Cassandra Overview
-  chart: Read Latency
-  annotations:
-    summary: "Cassandra read latency is high"
-    description: "Read p99 latency exceeded threshold on {{ $labels.host_id }}"
-  groupBy:
-    - dc
-    - host_id
-```
-
-Also add a sample Secret:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: axonops-credentials
-  namespace: default
-stringData:
-  api_key: "your-api-key-here"
-  token_type: "Bearer"  # or AxonApi for on-prem
-```
-
----
-
-## Step 5 — Write Unit Tests
-
-**File**: `internal/controller/alerts/axonopsmetricalert_controller_test.go`
-
-Using the existing envtest suite (`suite_test.go`), add:
-
-1. Test create: CR created → controller calls API → status.RemoteID populated
-2. Test update: spec field changed → controller detects drift → calls API again
-3. Test delete: CR deleted → finalizer triggers API delete call
-
-Use interface mocking for `axonops.Client` to avoid real HTTP calls in unit tests.
-
----
-
-## Step 6 — Regenerate and Verify
-
-```bash
-make generate    # zz_generated.deepcopy.go
-make manifests   # config/crd/bases/*.yaml, config/rbac/role.yaml
-make fmt
-make vet
-make test
-make build
-```
-
----
-
-## Critical Files
-
-| File | Role |
-|---|---|
-| `api/alerts/v1alpha1/axonopsmetricalert_types.go` | CRD spec/status types |
-| `api/alerts/v1alpha1/zz_generated.deepcopy.go` | Auto-generated (never edit manually) |
-| `internal/axonops/client.go` | AxonOps API HTTP client |
-| `internal/axonops/types.go` | API payload structs |
-| `internal/controller/alerts/axonopsmetricalert_controller.go` | Controller reconciliation logic |
-| `config/samples/alerts_v1alpha1_axonopsmetricalert.yaml` | Sample CR |
-| `config/crd/bases/*.yaml` | Auto-generated CRD manifests |
-
-## Reference: Terraform Provider Equivalents
-
-| Terraform | Operator |
-|---|---|
-| `resource_metric_alert_rule.go` | `axonopsmetricalert_controller.go` + `axonopsmetricalert_types.go` |
-| `client/http_client.go` | `internal/axonops/client.go` |
-| `provider.go` auth config | `spec.apiSecretRef` + `spec.orgId` in CR |
-| `terraform import` | Standard `kubectl apply` (idempotent) |
-
----
-
-## Verification
-
-1. Run `make test` — all tests pass
-2. `make build` — binary compiles
-3. `make manifests` — CRD YAML generated correctly at `config/crd/bases/alerts.axonops.com_axonopsmetricalerts.yaml`
-4. Apply sample to a real cluster with `make install && make run` and verify:
-   - CR created → `kubectl get axonopsmetricalerts` shows the resource
-   - `status.remoteId` populated after reconciliation
-   - Deleting the CR triggers the finalizer and removes the rule from AxonOps API
-5. Inspect `kubectl describe axonopsmetricalert high-read-latency` for correct conditions
+- Alert controllers other than `AxonOpsMetricAlert` do not have unit tests yet
+- TLS certificates are self-signed and generated by the controller; cert-manager integration is not yet implemented
+- `AxonOpsLogAlert` controller exists but may not be fully wired (check `axonopslogalert_controller.go`)
+- No webhooks for field validation (e.g., `clusterType` enum enforcement, `operator` enum enforcement)
+- Gateway API CRDs must be pre-installed in the cluster (not bundled with the operator)
 
 ---
 
 ## Next Steps & Roadmap
 
-1. **Phase 1** (current): `AxonOpsMetricAlert` controller — replacing `resource_metric_alert_rule.go`
-2. **Phase 2**: `AxonOpsServer` controller — replacing helm charts for axon-server, axon-dash, axondb-search, axondb-timeseries
-3. **Phase 3**: Additional alert/config resources from the Terraform provider (if any)
-4. **Phase 4**: Webhooks for validation, conversion
-5. **Phase 5**: Helm chart for the operator itself
+1. **Phase 3** (next): Testing & hardening
+   - E2E tests for `AxonOpsServer` against a Kind cluster
+   - Unit tests for remaining alert controllers (LogAlert, AlertRoute, Healthchecks)
+   - Validate Ingress and Gateway API resources end-to-end
+2. **Phase 4**: Webhooks for validation and defaulting
+3. **Phase 5**: Helm chart for the operator itself (`kubebuilder edit --plugins=helm/v2-alpha`)
+4. **Phase 6**: cert-manager integration for AxonOpsServer TLS
+5. **Phase 7**: Additional Terraform provider resources if needed
+
+## Reference: Terraform Provider Equivalents
+
+| Terraform Resource | Operator CRD |
+|---|---|
+| `resource_metric_alert_rule.go` | `AxonOpsMetricAlert` |
+| `resource_log_alert_rule.go` | `AxonOpsLogAlert` |
+| `resource_alert_route.go` | `AxonOpsAlertRoute` |
+| `resource_healthcheck_http.go` | `AxonOpsHealthcheckHTTP` |
+| `resource_healthcheck_shell.go` | `AxonOpsHealthcheckShell` |
+| `resource_healthcheck_tcp.go` | `AxonOpsHealthcheckTCP` |
+| `provider.go` auth config | `AxonOpsConnection` CR |
+| Helm chart (axon-server, axon-dash, axondb-*) | `AxonOpsServer` CR |
