@@ -29,7 +29,7 @@ spec:
   # Search component (axondb-search)
   # - Credentials will be auto-generated unless you specify authentication
   # - TLS certificates are auto-generated via cert-manager using the configured ClusterIssuer
-  # - Secret keys: SEARCH_DB_USERNAME, SEARCH_DB_PASSWORD
+  # - Secret keys: AXONOPS_SEARCH_USER, AXONOPS_SEARCH_PASSWORD
   search: {}
 
   # Dashboard component (axon-dash)

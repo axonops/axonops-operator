@@ -79,10 +79,6 @@ func ResolveAPIClient(ctx context.Context, c client.Client, namespace, connectio
 	}
 
 	// Build client from connection spec
-	protocol := conn.Spec.Protocol
-	if protocol == "" {
-		protocol = "https"
-	}
 	tokenType := conn.Spec.TokenType
 	if tokenType == "" {
 		tokenType = "Bearer"
@@ -91,12 +87,12 @@ func ResolveAPIClient(ctx context.Context, c client.Client, namespace, connectio
 	// Construct host URL
 	fullHost := buildHostURL(conn.Spec.Host, conn.Spec.OrgID, conn.Spec.UseSAML)
 
-	client, err := axonops.NewClient(fullHost, "", conn.Spec.OrgID, string(apiKey), tokenType, conn.Spec.TLSSkipVerify)
+	apiClient, err := axonops.NewClient(fullHost, "", conn.Spec.OrgID, string(apiKey), tokenType, conn.Spec.TLSSkipVerify)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AxonOps client from connection: %w", err)
 	}
 	log.Info("Resolved API client from AxonOpsConnection", "connection", connKey)
-	return client, nil
+	return apiClient, nil
 }
 
 // buildHostURL constructs the AxonOps API host URL based on the connection settings

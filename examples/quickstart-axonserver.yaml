@@ -1,0 +1,11 @@
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  name: server
+  namespace: default
+spec:
+  server:
+    orgName: "AxonOps"
+  timeSeries: {}
+  search: {}
+  dashboard: {}

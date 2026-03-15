@@ -89,9 +89,9 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 
 // GetMetricAlertRules fetches all metric alert rules for a cluster
 func (c *Client) GetMetricAlertRules(ctx context.Context, clusterType, clusterName string) ([]MetricAlertRule, error) {
-	url := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
 	// URL format: https://host/api/v1/alert-rules/{orgId}/{clusterType}/{clusterName}
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -128,7 +128,7 @@ func (c *Client) GetMetricAlertRules(ctx context.Context, clusterType, clusterNa
 // client-side when no ID is present so the caller can track it for future updates.
 func (c *Client) CreateOrUpdateMetricAlertRule(ctx context.Context, clusterType, clusterName string, rule MetricAlertRule) (MetricAlertRule, error) {
 	// Always POST to the base URL — the id in the body is what the server uses.
-	url := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
 
 	// Generate a stable UUID when no ID exists so the server treats this as a specific
 	// new record rather than generating its own, allowing us to detect duplicates later.
@@ -141,7 +141,7 @@ func (c *Client) CreateOrUpdateMetricAlertRule(ctx context.Context, clusterType,
 		return MetricAlertRule{}, fmt.Errorf("failed to marshal rule: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
 	if err != nil {
 		return MetricAlertRule{}, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -179,8 +179,8 @@ func (c *Client) CreateOrUpdateMetricAlertRule(ctx context.Context, clusterType,
 
 // DeleteMetricAlertRule deletes a metric alert rule
 func (c *Client) DeleteMetricAlertRule(ctx context.Context, clusterType, clusterName, alertID string) error {
-	url := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName, alertID)
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName, alertID)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -208,9 +208,9 @@ func (c *Client) DeleteMetricAlertRule(ctx context.Context, clusterType, cluster
 
 // ResolveDashboardPanel resolves a dashboard and chart name to a panel UUID (correlation ID)
 func (c *Client) ResolveDashboardPanel(ctx context.Context, clusterType, clusterName, dashboardName, chartTitle string) (string, error) {
-	url := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
 	// URL format: https://host/api/v1/dashboardtemplate/{orgId}/{clusterType}/{clusterName}
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -240,7 +240,7 @@ func (c *Client) ResolveDashboardPanel(ctx context.Context, clusterType, cluster
 	var result DashboardTemplateResponse
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		// Return detailed error showing the actual response
-		return "", fmt.Errorf("failed to decode dashboard response (URL: %s): %w. Response body: %s", url, err, string(bodyBytes[:min(len(bodyBytes), 500)]))
+		return "", fmt.Errorf("failed to decode dashboard response (URL: %s): %w. Response body: %s", reqURL, err, string(bodyBytes[:min(len(bodyBytes), 500)]))
 	}
 
 	// Find the dashboard and chart
@@ -280,8 +280,8 @@ func (e *APIError) IsRetryable() bool {
 
 // GetIntegrations retrieves all integrations and their routing configurations for a cluster
 func (c *Client) GetIntegrations(ctx context.Context, clusterType, clusterName string) (*IntegrationsResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -312,10 +312,10 @@ func (c *Client) GetIntegrations(ctx context.Context, clusterType, clusterName s
 
 // AddIntegrationRoute adds an alert route to an integration
 func (c *Client) AddIntegrationRoute(ctx context.Context, clusterType, clusterName, routeType, severity, integrationID string) error {
-	url := fmt.Sprintf("%s/api/v1/integrations-routing/%s/%s/%s/%s/%s/%s",
+	reqURL := fmt.Sprintf("%s/api/v1/integrations-routing/%s/%s/%s/%s/%s/%s",
 		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity, integrationID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -341,10 +341,10 @@ func (c *Client) AddIntegrationRoute(ctx context.Context, clusterType, clusterNa
 
 // RemoveIntegrationRoute removes an alert route from an integration
 func (c *Client) RemoveIntegrationRoute(ctx context.Context, clusterType, clusterName, routeType, severity, integrationID string) error {
-	url := fmt.Sprintf("%s/api/v1/integrations-routing/%s/%s/%s/%s/%s/%s",
+	reqURL := fmt.Sprintf("%s/api/v1/integrations-routing/%s/%s/%s/%s/%s/%s",
 		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity, integrationID)
 
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -371,7 +371,7 @@ func (c *Client) RemoveIntegrationRoute(ctx context.Context, clusterType, cluste
 
 // SetIntegrationOverride sets the override flag for a route type and severity
 func (c *Client) SetIntegrationOverride(ctx context.Context, clusterType, clusterName, routeType, severity string, value bool) error {
-	url := fmt.Sprintf("%s/api/v1/integrations-override/%s/%s/%s/%s/%s",
+	reqURL := fmt.Sprintf("%s/api/v1/integrations-override/%s/%s/%s/%s/%s",
 		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity)
 
 	payload := map[string]bool{"value": value}
@@ -380,7 +380,7 @@ func (c *Client) SetIntegrationOverride(ctx context.Context, clusterType, cluste
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -407,8 +407,8 @@ func (c *Client) SetIntegrationOverride(ctx context.Context, clusterType, cluste
 
 // GetHealthchecks retrieves all healthchecks for a cluster
 func (c *Client) GetHealthchecks(ctx context.Context, clusterType, clusterName string) (*HealthchecksResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	reqURL := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -440,14 +440,14 @@ func (c *Client) GetHealthchecks(ctx context.Context, clusterType, clusterName s
 // UpdateHealthchecks updates all healthchecks for a cluster (bulk update)
 // This replaces all healthchecks with the provided list
 func (c *Client) UpdateHealthchecks(ctx context.Context, clusterType, clusterName string, healthchecks *HealthchecksResponse) error {
-	url := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
 
 	body, err := json.Marshal(healthchecks)
 	if err != nil {
 		return fmt.Errorf("failed to marshal healthchecks: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

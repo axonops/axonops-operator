@@ -63,7 +63,7 @@ func (r *AxonOpsHealthcheckHTTPReconciler) Reconcile(ctx context.Context, req ct
 	log.Info("Reconciling AxonOpsHealthcheckHTTP", "healthcheck", req.NamespacedName)
 
 	// Handle deletion
-	if healthcheck.ObjectMeta.DeletionTimestamp != nil {
+	if healthcheck.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, healthcheck)
 	}
 
@@ -227,7 +227,7 @@ func (r *AxonOpsHealthcheckHTTPReconciler) handleDeletion(ctx context.Context, h
 // buildHealthcheckEntry builds an API healthcheck entry from the CR spec
 func (r *AxonOpsHealthcheckHTTPReconciler) buildHealthcheckEntry(healthcheck *alertsv1alpha1.AxonOpsHealthcheckHTTP) axonops.HealthcheckHTTP {
 	// Convert headers map to []string format ("Key: Value")
-	var headers []string
+	headers := make([]string, 0, len(healthcheck.Spec.Headers))
 	for k, v := range healthcheck.Spec.Headers {
 		headers = append(headers, k+": "+v)
 	}

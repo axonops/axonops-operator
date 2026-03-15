@@ -8,6 +8,8 @@ rules:
   - ""
   resources:
   - secrets
+  - serviceaccounts
+  - services
   verbs:
   - create
   - delete
@@ -57,6 +59,18 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - cert-manager.io
   resources:

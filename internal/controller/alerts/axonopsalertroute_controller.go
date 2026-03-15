@@ -72,7 +72,7 @@ func (r *AxonOpsAlertRouteReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 
 	// Handle deletion
-	if route.ObjectMeta.DeletionTimestamp != nil {
+	if route.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, route)
 	}
 

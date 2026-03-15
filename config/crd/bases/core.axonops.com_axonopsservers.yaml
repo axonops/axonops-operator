@@ -103,6 +103,9 @@ spec:
                   extraVolumes:
                     description: ExtraVolumes defines additional volumes to mount
                     x-kubernetes-preserve-unknown-fields: true
+                  gateway:
+                    description: Gateway configures GatewayAPI for dashboard access
+                    x-kubernetes-preserve-unknown-fields: true
                   heapSize:
                     default: 1024M
                     description: HeapSize configures the JVM heap size (e.g., "1024M",
@@ -116,6 +119,9 @@ spec:
                       type: string
                     description: Labels to add to the component pods
                     type: object
+                  replicas:
+                    default: 1
+                    x-kubernetes-preserve-unknown-fields: true
                   repository:
                     description: Repository configures the container image
                     properties:
@@ -234,6 +240,9 @@ spec:
               server:
                 description: Server configures the axon-server component
                 properties:
+                  agentGateway:
+                    description: AgentGateway configures gateway for agent connections
+                    x-kubernetes-preserve-unknown-fields: true
                   agentIngress:
                     description: AgentIngress configures ingress for agent connections
                     x-kubernetes-preserve-unknown-fields: true
@@ -242,6 +251,9 @@ spec:
                       type: string
                     description: Annotations to add to the component pods
                     type: object
+                  apiGateway:
+                    description: ApiGateway configures ingress for API access
+                    x-kubernetes-preserve-unknown-fields: true
                   apiIngress:
                     description: ApiIngress configures ingress for API access
                     x-kubernetes-preserve-unknown-fields: true
@@ -310,6 +322,11 @@ spec:
                       type: string
                     description: Labels to add to the component pods
                     type: object
+                  license:
+                    x-kubernetes-preserve-unknown-fields: true
+                  orgName:
+                    description: OrgName configures to organization
+                    type: string
                   repository:
                     description: Repository configures the container image
                     properties:
@@ -330,6 +347,8 @@ spec:
                   storageConfig:
                     description: StorageConfig defines persistent storage configuration
                     x-kubernetes-preserve-unknown-fields: true
+                required:
+                - orgName
                 type: object
               timeSeries:
                 description: TimeSeries configures the axondb-timeseries component

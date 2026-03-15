@@ -63,7 +63,7 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 	log.Info("Reconciling AxonOpsHealthcheckShell", "healthcheck", req.NamespacedName)
 
 	// Handle deletion
-	if healthcheck.ObjectMeta.DeletionTimestamp != nil {
+	if healthcheck.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, healthcheck)
 	}
 

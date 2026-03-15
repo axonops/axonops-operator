@@ -24,6 +24,10 @@ linters:
     - unused
     - logcheck
   settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - (*net/http.Response.Body).Close
     custom:
       logcheck:
         type: "module"

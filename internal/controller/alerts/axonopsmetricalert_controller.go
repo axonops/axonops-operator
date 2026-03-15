@@ -64,7 +64,7 @@ func (r *AxonOpsMetricAlertReconciler) Reconcile(ctx context.Context, req ctrl.R
 	log.Info("Reconciling AxonOpsMetricAlert", "alert", req.NamespacedName)
 
 	// Handle deletion
-	if alert.ObjectMeta.DeletionTimestamp != nil {
+	if alert.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, alert)
 	}
 

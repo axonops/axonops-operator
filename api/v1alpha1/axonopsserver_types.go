@@ -143,6 +143,104 @@ type AxonTLSConfig struct {
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
 }
 
+// Ingress defines an ingress configuration for the AxonOps Workbench.
+type Ingress struct {
+	// Enabled specifies whether an Ingress resource should be created for the Workbench.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// ApiVersion allows overriding the default networking.k8s.io/v1 API version if necessary.
+	// +optional
+	ApiVersion string `json:"apiVersion,omitempty"`
+
+	// Annotations are custom annotations to be added to the Ingress resource.
+	// This is often used for cert-manager (e.g., cert-manager.io/issuer).
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Labels are custom labels to be added to the Ingress resource.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// IngressClassName specifies the IngressClass cluster resource that should handle this Ingress.
+	// +optional
+	IngressClassName string `json:"ingressClassName,omitempty"`
+
+	// Hosts is a list of hostnames that the Ingress will rule over.
+	// +kubebuilder:validation:MinItems=1
+	Hosts []string `json:"hosts,omitempty"`
+
+	// TLS configuration for the Ingress. If cert-manager is used,
+	// this defines the secret names where certificates will be stored.
+	// +optional
+	TLS []networkingv1.IngressTLS `json:"tls,omitempty"`
+
+	// Path is the URL path that the Ingress will route to the service.
+	// +kubebuilder:default="/"
+	// +optional
+	Path string `json:"path,omitempty"`
+
+	// PathType determines how the Ingress path matching is performed.
+	// Supported values are Exact, Prefix, and ImplementationSpecific.
+	// +kubebuilder:validation:Enum=Exact;Prefix;ImplementationSpecific
+	// +kubebuilder:default=Prefix
+	PathType networkingv1.PathType `json:"pathType,omitempty"`
+
+	// ServiceName is the name of the Kubernetes Service to route traffic to.
+	ServiceName string `json:"serviceName,omitempty"`
+
+	// ServicePort is the port number of the service to route traffic to.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	ServicePort int32 `json:"servicePort,omitempty"`
+}
+
+// GatewayConfig defines the configuration for exposing the AxonOps Workbench
+// using the Kubernetes Gateway API.
+type GatewayConfig struct {
+	// Enabled specifies whether Gateway API resources (Gateway and HTTPRoute)
+	// should be created for the Workbench.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// GatewayClassName is the name of the GatewayClass that should manage the Gateway.
+	// Common values include 'istio', 'nginx', or 'traefik'.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	GatewayClassName string `json:"gatewayClassName,omitempty"`
+
+	// Annotations are custom annotations to be added to the Gateway resource.
+	// To enable automated TLS, include cert-manager annotations like 'cert-manager.io/issuer'.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Labels are custom labels to be added to the Gateway and HTTPRoute resources.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Port is the network port the Gateway listener will stay open on.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +kubebuilder:default=443
+	Port int32 `json:"port,omitempty"`
+
+	// Hostname is the DNS name used for the Gateway listener and HTTPRoute matching.
+	// For example: 'workbench.example.com'.
+	// +kubebuilder:validation:MinLength=1
+	Hostname string `json:"hostname,omitempty"`
+
+	// Path is the URL prefix used for routing traffic to the Workbench service.
+	// +kubebuilder:default="/"
+	// +optional
+	Path string `json:"path,omitempty"`
+
+	// ServiceName is the name of the backend Kubernetes Service to route traffic to.
+	ServiceName string `json:"serviceName,omitempty"`
+
+	// ServicePort is the port of the backend Service to route traffic to.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	ServicePort int32 `json:"servicePort,omitempty"`
+}
+
 // AxonRepository configures the container image
 type AxonRepository struct {
 	// Image is the container image name
@@ -229,28 +327,70 @@ type AxonDbComponent struct {
 type AxonServerComponent struct {
 	AxonBaseComponent `json:",inline"`
 
+	// OrgName configures to organization
+	// +required
+	OrgName string `json:"orgName"`
+
+	// License configures licence key or secret reference
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+
+	License License `json:"license,omitempty"`
+
 	// AgentIngress configures ingress for agent connections
 	// +optional
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
-	AgentIngress networkingv1.IngressSpec `json:"agentIngress,omitempty"`
+	AgentIngress Ingress `json:"agentIngress,omitempty"`
 
 	// ApiIngress configures ingress for API access
 	// +optional
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
-	ApiIngress networkingv1.IngressSpec `json:"apiIngress,omitempty"`
+	ApiIngress Ingress `json:"apiIngress,omitempty"`
+
+	// AgentGateway configures gateway for agent connections
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	AgentGateway GatewayConfig `json:"agentGateway,omitempty"`
+
+	// ApiGateway configures ingress for API access
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	ApiGateway GatewayConfig `json:"apiGateway,omitempty"`
+}
+
+type License struct {
+	Key       string `json:"key,omitempty"`
+	SecretRef string `json:"secretRef,omitempty"`
 }
 
 // AxonDashboardComponent adds Ingress on top of the base fields.
 type AxonDashboardComponent struct {
 	AxonBaseComponent `json:",inline"`
 
+	// Replicas configures the number of dashboard replicas
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:default=1
+
+	Replicas *int32 `json:"replicas,omitempty"`
+
 	// Ingress configures ingress for dashboard access
 	// +optional
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
-	Ingress networkingv1.IngressSpec `json:"ingress,omitempty"`
+	Ingress Ingress `json:"ingress,omitempty"`
+
+	// Gateway configures GatewayAPI for dashboard access
+	// +optional
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	Gateway GatewayConfig `json:"gateway,omitempty"`
 }
 
 func init() {
