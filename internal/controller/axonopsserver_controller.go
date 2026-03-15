@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 )
@@ -106,6 +107,8 @@ type AxonOpsServerReconciler struct {
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile moves the current state of the cluster closer to the desired state.
 func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -1538,6 +1541,20 @@ func (r *AxonOpsServerReconciler) reconcileServer(ctx context.Context, server *c
 		}
 	}
 
+	// Ensure Agent Gateway if enabled
+	if server.Spec.Server.AgentGateway.Enabled {
+		if err := r.ensureServerAgentGateway(ctx, server); err != nil {
+			return fmt.Errorf("failed to ensure Agent Gateway: %w", err)
+		}
+	}
+
+	// Ensure API Gateway if enabled
+	if server.Spec.Server.ApiGateway.Enabled {
+		if err := r.ensureServerApiGateway(ctx, server); err != nil {
+			return fmt.Errorf("failed to ensure API Gateway: %w", err)
+		}
+	}
+
 	log.Info("Server workload reconciled successfully")
 	return nil
 }
@@ -2107,6 +2124,13 @@ func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server
 		}
 	}
 
+	// Ensure Gateway if enabled
+	if server.Spec.Dashboard.Gateway.Enabled {
+		if err := r.ensureDashboardGateway(ctx, server); err != nil {
+			return fmt.Errorf("failed to ensure Gateway: %w", err)
+		}
+	}
+
 	log.Info("Dashboard workload reconciled successfully")
 	return nil
 }
@@ -2404,6 +2428,190 @@ func (r *AxonOpsServerReconciler) ensureServerApiIngress(ctx context.Context, se
 	return r.ensureIngress(ctx, server, name, serviceName, 8080, componentServer, server.Spec.Server.ApiIngress)
 }
 
+// ensureHTTPRoute is a generic helper to create/update an HTTPRoute resource
+func (r *AxonOpsServerReconciler) ensureHTTPRoute(ctx context.Context, server *corev1alpha1.AxonOpsServer, routeName, serviceName string, servicePort int32, component string, gatewaySpec corev1alpha1.GatewayConfig) error {
+	log := logf.FromContext(ctx)
+
+	// Use provided port or default
+	port := gatewaySpec.Port
+	if port == 0 {
+		port = servicePort
+	}
+
+	httpRoute := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      routeName,
+			Namespace: server.Namespace,
+		},
+	}
+
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, httpRoute, func() error {
+		if err := controllerutil.SetControllerReference(server, httpRoute, r.Scheme); err != nil {
+			return err
+		}
+
+		// Merge labels
+		labels := r.buildLabels(server, component)
+		maps.Copy(labels, gatewaySpec.Labels)
+		httpRoute.Labels = labels
+
+		// Set annotations
+		httpRoute.Annotations = gatewaySpec.Annotations
+
+		// Build parent refs to the gateway
+		gatewayName := fmt.Sprintf("%s-%s-gateway", server.Name, component)
+		namespace := gatewayv1.Namespace(server.Namespace)
+		httpRoute.Spec.ParentRefs = []gatewayv1.ParentReference{
+			{
+				Name:      gatewayv1.ObjectName(gatewayName),
+				Namespace: &namespace,
+			},
+		}
+
+		// Build hostname matching
+		if gatewaySpec.Hostname != "" {
+			hostname := gatewayv1.Hostname(gatewaySpec.Hostname)
+			httpRoute.Spec.Hostnames = []gatewayv1.Hostname{hostname}
+		}
+
+		// Build backend refs
+		portNum := gatewayv1.PortNumber(port) //nolint:unconvert
+		httpRoute.Spec.Rules = []gatewayv1.HTTPRouteRule{
+			{
+				BackendRefs: []gatewayv1.HTTPBackendRef{
+					{
+						BackendRef: gatewayv1.BackendRef{
+							BackendObjectReference: gatewayv1.BackendObjectReference{
+								Name: gatewayv1.ObjectName(serviceName),
+								Port: &portNum,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	log.Info("HTTPRoute reconciled", "name", routeName, "operation", op)
+	return nil
+}
+
+// ensureGateway is a generic helper to create/update a Gateway resource
+func (r *AxonOpsServerReconciler) ensureGateway(ctx context.Context, server *corev1alpha1.AxonOpsServer, gatewayName string, defaultPort int32, component string, gatewaySpec corev1alpha1.GatewayConfig) error {
+	log := logf.FromContext(ctx)
+
+	// Use provided port or default
+	port := gatewaySpec.Port
+	if port == 0 {
+		port = defaultPort
+	}
+
+	gateway := &gatewayv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gatewayName,
+			Namespace: server.Namespace,
+		},
+	}
+
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, gateway, func() error {
+		if err := controllerutil.SetControllerReference(server, gateway, r.Scheme); err != nil {
+			return err
+		}
+
+		// Merge labels
+		labels := r.buildLabels(server, component)
+		maps.Copy(labels, gatewaySpec.Labels)
+		gateway.Labels = labels
+
+		// Set annotations
+		gateway.Annotations = gatewaySpec.Annotations
+
+		// Set GatewayClassName
+		gateway.Spec.GatewayClassName = gatewayv1.ObjectName(gatewaySpec.GatewayClassName)
+
+		// Build listeners
+		listenerPort := gatewayv1.PortNumber(port) //nolint:unconvert
+		protocol := gatewayv1.HTTPProtocolType
+		if port == 443 {
+			protocol = gatewayv1.HTTPSProtocolType
+		}
+
+		listener := gatewayv1.Listener{
+			Name:     gatewayv1.SectionName(component),
+			Port:     listenerPort,
+			Protocol: protocol,
+		}
+
+		// Add hostname if specified
+		if gatewaySpec.Hostname != "" {
+			hostname := gatewayv1.Hostname(gatewaySpec.Hostname)
+			listener.Hostname = &hostname
+		}
+
+		gateway.Spec.Listeners = []gatewayv1.Listener{listener}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	log.Info("Gateway reconciled", "name", gatewayName, "operation", op)
+	return nil
+}
+
+// ensureDashboardGateway ensures the Dashboard Gateway and HTTPRoute exist
+func (r *AxonOpsServerReconciler) ensureDashboardGateway(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	gatewayName := fmt.Sprintf("%s-%s-gateway", server.Name, componentDashboard)
+	routeName := fmt.Sprintf("%s-%s-route", server.Name, componentDashboard)
+	serviceName := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
+
+	// Create Gateway
+	if err := r.ensureGateway(ctx, server, gatewayName, 3000, componentDashboard, server.Spec.Dashboard.Gateway); err != nil {
+		return err
+	}
+
+	// Create HTTPRoute
+	return r.ensureHTTPRoute(ctx, server, routeName, serviceName, 3000, componentDashboard, server.Spec.Dashboard.Gateway)
+}
+
+// ensureServerAgentGateway ensures the Server Agent Gateway and HTTPRoute exist
+func (r *AxonOpsServerReconciler) ensureServerAgentGateway(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	gatewayName := fmt.Sprintf("%s-%s-agent-gateway", server.Name, componentServer)
+	routeName := fmt.Sprintf("%s-%s-agent-route", server.Name, componentServer)
+	serviceName := fmt.Sprintf("%s-%s-agent", server.Name, componentServer)
+
+	// Create Gateway
+	if err := r.ensureGateway(ctx, server, gatewayName, 1888, componentServer, server.Spec.Server.AgentGateway); err != nil {
+		return err
+	}
+
+	// Create HTTPRoute
+	return r.ensureHTTPRoute(ctx, server, routeName, serviceName, 1888, componentServer, server.Spec.Server.AgentGateway)
+}
+
+// ensureServerApiGateway ensures the Server API Gateway and HTTPRoute exist
+func (r *AxonOpsServerReconciler) ensureServerApiGateway(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	gatewayName := fmt.Sprintf("%s-%s-api-gateway", server.Name, componentServer)
+	routeName := fmt.Sprintf("%s-%s-api-route", server.Name, componentServer)
+	serviceName := fmt.Sprintf("%s-%s-api", server.Name, componentServer)
+
+	// Create Gateway
+	if err := r.ensureGateway(ctx, server, gatewayName, 8080, componentServer, server.Spec.Server.ApiGateway); err != nil {
+		return err
+	}
+
+	// Create HTTPRoute
+	return r.ensureHTTPRoute(ctx, server, routeName, serviceName, 8080, componentServer, server.Spec.Server.ApiGateway)
+}
+
 // ptr returns a pointer to the given value
 func ptr[T any](v T) *T {
 	return &v
@@ -2420,6 +2628,8 @@ func (r *AxonOpsServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&networkingv1.Ingress{}).
+		Owns(&gatewayv1.Gateway{}).
+		Owns(&gatewayv1.HTTPRoute{}).
 		Owns(&certmanagerv1.Certificate{}).
 		Named("axonopsserver").
 		Complete(r)
