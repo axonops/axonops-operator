@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"maps"
 	"math/big"
 	"slices"
 	"text/template"
@@ -1523,6 +1524,20 @@ func (r *AxonOpsServerReconciler) reconcileServer(ctx context.Context, server *c
 		return fmt.Errorf("failed to ensure StatefulSet: %w", err)
 	}
 
+	// Ensure Agent Ingress if enabled
+	if server.Spec.Server.AgentIngress.Enabled {
+		if err := r.ensureServerAgentIngress(ctx, server); err != nil {
+			return fmt.Errorf("failed to ensure Agent Ingress: %w", err)
+		}
+	}
+
+	// Ensure API Ingress if enabled
+	if server.Spec.Server.ApiIngress.Enabled {
+		if err := r.ensureServerApiIngress(ctx, server); err != nil {
+			return fmt.Errorf("failed to ensure API Ingress: %w", err)
+		}
+	}
+
 	log.Info("Server workload reconciled successfully")
 	return nil
 }
@@ -2282,16 +2297,12 @@ func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context,
 	return nil
 }
 
-// ensureDashboardIngress ensures the Dashboard Ingress exists
-func (r *AxonOpsServerReconciler) ensureDashboardIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+// ensureIngress is a generic helper to create/update an Ingress resource
+func (r *AxonOpsServerReconciler) ensureIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer, ingressName, serviceName string, defaultPort int32, component string, ingressSpec corev1alpha1.Ingress) error {
 	log := logf.FromContext(ctx)
-	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
-	serviceName := name
-
-	ingressSpec := server.Spec.Dashboard.Ingress
 
 	// Build ingress rules from hosts
-	var rules []networkingv1.IngressRule
+	rules := make([]networkingv1.IngressRule, 0, len(ingressSpec.Hosts))
 	for _, host := range ingressSpec.Hosts {
 		pathType := networkingv1.PathTypePrefix
 		if ingressSpec.PathType != "" {
@@ -2301,7 +2312,7 @@ func (r *AxonOpsServerReconciler) ensureDashboardIngress(ctx context.Context, se
 		if ingressSpec.Path != "" {
 			path = ingressSpec.Path
 		}
-		servicePort := int32(3000)
+		servicePort := defaultPort
 		if ingressSpec.ServicePort > 0 {
 			servicePort = ingressSpec.ServicePort
 		}
@@ -2335,7 +2346,7 @@ func (r *AxonOpsServerReconciler) ensureDashboardIngress(ctx context.Context, se
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      ingressName,
 			Namespace: server.Namespace,
 		},
 	}
@@ -2346,10 +2357,8 @@ func (r *AxonOpsServerReconciler) ensureDashboardIngress(ctx context.Context, se
 		}
 
 		// Merge labels
-		labels := r.buildLabels(server, componentDashboard)
-		for k, v := range ingressSpec.Labels {
-			labels[k] = v
-		}
+		labels := r.buildLabels(server, component)
+		maps.Copy(labels, ingressSpec.Labels)
 		ingress.Labels = labels
 
 		// Set annotations
@@ -2370,8 +2379,29 @@ func (r *AxonOpsServerReconciler) ensureDashboardIngress(ctx context.Context, se
 		return err
 	}
 
-	log.Info("Ingress reconciled", "name", name, "operation", op)
+	log.Info("Ingress reconciled", "name", ingressName, "operation", op)
 	return nil
+}
+
+// ensureDashboardIngress ensures the Dashboard Ingress exists
+func (r *AxonOpsServerReconciler) ensureDashboardIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
+	serviceName := name
+	return r.ensureIngress(ctx, server, name, serviceName, 3000, componentDashboard, server.Spec.Dashboard.Ingress)
+}
+
+// ensureServerAgentIngress ensures the Server Agent Ingress exists
+func (r *AxonOpsServerReconciler) ensureServerAgentIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	name := fmt.Sprintf("%s-%s-agent", server.Name, componentServer)
+	serviceName := name
+	return r.ensureIngress(ctx, server, name, serviceName, 1888, componentServer, server.Spec.Server.AgentIngress)
+}
+
+// ensureServerApiIngress ensures the Server API Ingress exists
+func (r *AxonOpsServerReconciler) ensureServerApiIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	name := fmt.Sprintf("%s-%s-api", server.Name, componentServer)
+	serviceName := name
+	return r.ensureIngress(ctx, server, name, serviceName, 8080, componentServer, server.Spec.Server.ApiIngress)
 }
 
 // ptr returns a pointer to the given value
