@@ -24,6 +24,7 @@ import (
 	"maps"
 	"math/big"
 	"slices"
+	"strings"
 	"text/template"
 	"time"
 
@@ -912,7 +913,7 @@ func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Contex
 			Namespace: server.Namespace,
 		},
 	}
-	orgName := server.Spec.Server.OrgName
+	orgName := strings.ToLower(server.Spec.Server.OrgName)
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, sts, func() error {
 		if err := controllerutil.SetControllerReference(server, sts, r.Scheme); err != nil {
@@ -1754,7 +1755,7 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 	data := serverConfigData{
 		SearchURL:    searchURL,
 		SearchCACert: "/etc/axonops/certs/search/ca.crt",
-		OrgName:      server.Spec.Server.OrgName,
+		OrgName:      strings.ToLower(server.Spec.Server.OrgName),
 		DashURL:      dashURL,
 		CQLHosts:     cqlHosts,
 		CQLCACert:    "/etc/axonops/certs/timeseries/ca.crt",
