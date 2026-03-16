@@ -2280,7 +2280,7 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 								}
 								// Only mount search-tls if search is internal
 								if !isSearchExternal(server) {
-									mounts = append([]corev1.VolumeMount{{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true}}, mounts[3:]...)
+									mounts = append(mounts, corev1.VolumeMount{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true})
 								}
 								return mounts
 							}(),
@@ -2318,21 +2318,19 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 						}
 						// Only include search-tls volume if search is internal
 						if !isSearchExternal(server) {
-							volumes = append([]corev1.Volume{
-								{
-									Name: "search-tls",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											SecretName: searchTLSSecretName,
-											Items: []corev1.KeyToPath{
-												{Key: "ca.crt", Path: "ca.crt"},
-												{Key: "tls.crt", Path: "tls.crt"},
-												{Key: "tls.key", Path: "tls.key"},
-											},
+							volumes = append(volumes, corev1.Volume{
+								Name: "search-tls",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: searchTLSSecretName,
+										Items: []corev1.KeyToPath{
+											{Key: "ca.crt", Path: "ca.crt"},
+											{Key: "tls.crt", Path: "tls.crt"},
+											{Key: "tls.key", Path: "tls.key"},
 										},
 									},
 								},
-							}, volumes[2:]...)
+							})
 						}
 						return volumes
 					}(),
