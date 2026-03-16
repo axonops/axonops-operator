@@ -1,0 +1,4 @@
+resources:
+  - servicemonitor.yaml
+
+namespace: axonops-operator-system

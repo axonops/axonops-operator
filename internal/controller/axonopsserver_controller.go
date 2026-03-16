@@ -30,6 +30,9 @@ import (
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -48,6 +51,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
+	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
 const (
@@ -127,6 +131,23 @@ func (r *AxonOpsServerReconciler) resolveIssuerName(server *corev1alpha1.AxonOps
 	return r.ClusterIssuerName
 }
 
+// createOrUpdate wraps controllerutil.CreateOrUpdate and records Prometheus metrics.
+func (r *AxonOpsServerReconciler) createOrUpdate(
+	ctx context.Context, obj client.Object, f controllerutil.MutateFn, resourceType string,
+) error {
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, f)
+	if err != nil {
+		return err
+	}
+	switch op {
+	case controllerutil.OperationResultCreated:
+		axonopsmetrics.ResourceCreatedTotal.WithLabelValues(resourceType).Inc()
+	case controllerutil.OperationResultUpdated:
+		axonopsmetrics.ResourceUpdatedTotal.WithLabelValues(resourceType).Inc()
+	}
+	return nil
+}
+
 // isCertManagerAvailable checks if cert-manager Certificate CRD is registered
 // in the cluster by querying the RESTMapper.
 func (r *AxonOpsServerReconciler) isCertManagerAvailable() bool {
@@ -188,8 +209,31 @@ func (r *AxonOpsServerReconciler) ensureClusterIssuer(
 }
 
 // Reconcile moves the current state of the cluster closer to the desired state.
-func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
 	log := logf.FromContext(ctx)
+
+	// Start OpenTelemetry span for this reconciliation
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.axonopsserver",
+		trace.WithAttributes())
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+
+	// Record reconciliation duration and count metrics
+	start := time.Now()
+	defer func() {
+		resultStr := "success"
+		if err != nil {
+			resultStr = "error"
+			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
+		}
+		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopsserver", resultStr).Observe(time.Since(start).Seconds())
+		axonopsmetrics.ReconcileTotal.WithLabelValues("axonopsserver", resultStr).Inc()
+	}()
 
 	// Fetch the AxonOpsServer CR
 	server := &corev1alpha1.AxonOpsServer{}
@@ -551,7 +595,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
+	err = r.createOrUpdate(ctx, secret, func() error {
 		// Set owner reference for garbage collection
 		if err := controllerutil.SetControllerReference(server, secret, r.Scheme); err != nil {
 			return err
@@ -573,13 +617,13 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		}
 
 		return nil
-	})
+	}, "secret")
 
 	if err != nil {
 		return "", fmt.Errorf("failed to create/update secret: %w", err)
 	}
 
-	log.Info("Secret reconciled", "component", component, "secret", secretName, "operation", op)
+	log.Info("Secret reconciled", "component", component, "secret", secretName)
 	return secretName, nil
 }
 
@@ -638,7 +682,7 @@ func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
+	err = r.createOrUpdate(ctx, secret, func() error {
 		if err := controllerutil.SetControllerReference(server, secret, r.Scheme); err != nil {
 			return err
 		}
@@ -649,13 +693,13 @@ func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
 			"password": []byte(password),
 		}
 		return nil
-	})
+	}, "secret")
 
 	if err != nil {
 		return "", fmt.Errorf("failed to create/update keystore password secret: %w", err)
 	}
 
-	log.Info("Keystore password secret reconciled", "name", secretName, "operation", op)
+	log.Info("Keystore password secret reconciled", "name", secretName)
 	return secretName, nil
 }
 
@@ -690,7 +734,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, cert, func() error {
+	err := r.createOrUpdate(ctx, cert, func() error {
 		// Set owner reference for garbage collection
 		if err := controllerutil.SetControllerReference(server, cert, r.Scheme); err != nil {
 			return err
@@ -769,13 +813,13 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		}
 
 		return nil
-	})
+	}, "certificate")
 
 	if err != nil {
 		return "", fmt.Errorf("failed to create/update certificate: %w", err)
 	}
 
-	log.Info("Certificate reconciled", "component", component, "certificate", certName, "operation", op)
+	log.Info("Certificate reconciled", "component", component, "certificate", certName)
 	return secretName, nil
 }
 
@@ -909,6 +953,9 @@ func generateRandomPassword(length int) (string, error) {
 
 // reconcileTimeseries ensures all TimeSeries resources are created/updated
 func (r *AxonOpsServerReconciler) reconcileTimeseries(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.timeseries")
+	defer span.End()
+
 	log := logf.FromContext(ctx)
 
 	// Ensure ServiceAccount
@@ -947,7 +994,7 @@ func (r *AxonOpsServerReconciler) ensureServiceAccount(ctx context.Context, serv
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, sa, func() error {
+	err := r.createOrUpdate(ctx, sa, func() error {
 		if err := controllerutil.SetControllerReference(server, sa, r.Scheme); err != nil {
 			return err
 		}
@@ -955,13 +1002,13 @@ func (r *AxonOpsServerReconciler) ensureServiceAccount(ctx context.Context, serv
 		sa.Labels = r.buildLabels(server, component)
 		sa.AutomountServiceAccountToken = ptr(true)
 		return nil
-	})
+	}, "serviceaccount")
 
 	if err != nil {
 		return err
 	}
 
-	log.Info("ServiceAccount reconciled", "name", name, "operation", op)
+	log.Info("ServiceAccount reconciled", "name", name)
 	return nil
 }
 
@@ -977,7 +1024,7 @@ func (r *AxonOpsServerReconciler) ensureHeadlessService(ctx context.Context, ser
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
+	err := r.createOrUpdate(ctx, svc, func() error {
 		if err := controllerutil.SetControllerReference(server, svc, r.Scheme); err != nil {
 			return err
 		}
@@ -995,13 +1042,13 @@ func (r *AxonOpsServerReconciler) ensureHeadlessService(ctx context.Context, ser
 			Ports:                    r.getServicePorts(component, true),
 		}
 		return nil
-	})
+	}, "service")
 
 	if err != nil {
 		return err
 	}
 
-	log.Info("Headless Service reconciled", "name", name, "operation", op)
+	log.Info("Headless Service reconciled", "name", name)
 	return nil
 }
 
@@ -1017,7 +1064,7 @@ func (r *AxonOpsServerReconciler) ensureService(ctx context.Context, server *cor
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
+	err := r.createOrUpdate(ctx, svc, func() error {
 		if err := controllerutil.SetControllerReference(server, svc, r.Scheme); err != nil {
 			return err
 		}
@@ -1029,13 +1076,13 @@ func (r *AxonOpsServerReconciler) ensureService(ctx context.Context, server *cor
 			Ports:    r.getServicePorts(component, false),
 		}
 		return nil
-	})
+	}, "service")
 
 	if err != nil {
 		return err
 	}
 
-	log.Info("Service reconciled", "name", name, "operation", op)
+	log.Info("Service reconciled", "name", name)
 	return nil
 }
 
@@ -1354,6 +1401,9 @@ func (r *AxonOpsServerReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, ke
 
 // reconcileSearch ensures all Search resources are created/updated
 func (r *AxonOpsServerReconciler) reconcileSearch(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.search")
+	defer span.End()
+
 	log := logf.FromContext(ctx)
 
 	// Ensure ServiceAccount
@@ -1708,6 +1758,9 @@ func (r *AxonOpsServerReconciler) buildSearchEnv(fqdn, headlessSvc, clusterName,
 
 // reconcileServer ensures all Server resources are created/updated
 func (r *AxonOpsServerReconciler) reconcileServer(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.server")
+	defer span.End()
+
 	log := logf.FromContext(ctx)
 
 	// Ensure ServiceAccount
@@ -2350,6 +2403,9 @@ func (r *AxonOpsServerReconciler) buildSelectorLabels(server *corev1alpha1.AxonO
 
 // reconcileDashboard ensures all Dashboard resources are created/updated
 func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.dashboard")
+	defer span.End()
+
 	log := logf.FromContext(ctx)
 
 	// Ensure ServiceAccount

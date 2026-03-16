@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -26,6 +27,11 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -40,6 +46,7 @@ import (
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/controller"
 	alertscontroller "github.com/axonops/axonops-operator/internal/controller/alerts"
+	_ "github.com/axonops/axonops-operator/internal/metrics"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	// +kubebuilder:scaffold:imports
 )
@@ -70,7 +77,7 @@ func main() {
 	var enableHTTP2 bool
 	var certManagerClusterIssuerName string
 	var tlsOpts []func(*tls.Config)
-	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -96,6 +103,49 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	// Check if metrics and tracing are disabled
+	disableMetrics := os.Getenv("DISABLE_METRICS") == "true"
+	if disableMetrics {
+		metricsAddr = "0" // Disable metrics endpoint
+		setupLog.Info("Metrics collection is disabled via DISABLE_METRICS environment variable")
+	}
+
+	// Initialize OpenTelemetry tracing if endpoint is configured
+	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" && !disableMetrics {
+		setupLog.Info("Initializing OpenTelemetry tracing", "endpoint", endpoint)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		insecure := os.Getenv("OTEL_EXPORTER_OTLP_INSECURE") == "true"
+		opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(endpoint)}
+		if insecure {
+			opts = append(opts, otlptracegrpc.WithInsecure())
+		}
+
+		exporter, err := otlptracegrpc.New(ctx, opts...)
+		if err != nil {
+			setupLog.Error(err, "Failed to create OTLP trace exporter")
+			os.Exit(1)
+		}
+
+		res, err := resource.New(ctx,
+			resource.WithSchemaURL(semconv.SchemaURL),
+			resource.WithAttributes(
+				semconv.ServiceNameKey.String("axonops-operator"),
+			))
+		if err != nil {
+			setupLog.Error(err, "Failed to create resource for tracing")
+			os.Exit(1)
+		}
+
+		tp := sdktrace.NewTracerProvider(
+			sdktrace.WithBatcher(exporter),
+			sdktrace.WithResource(res),
+		)
+		otel.SetTracerProvider(tp)
+		setupLog.Info("OpenTelemetry tracing initialized successfully")
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
