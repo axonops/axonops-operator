@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -32,6 +33,50 @@ import (
 
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 )
+
+// mockRESTMapper wraps the real RESTMapper but mocks cert-manager availability
+// to enable tests to run without cert-manager CRDs installed.
+type mockRESTMapper struct {
+	delegate meta.RESTMapper
+}
+
+func (m *mockRESTMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+	// Mock cert-manager as available
+	if gk.Group == "cert-manager.io" && gk.Kind == "Certificate" {
+		return &meta.RESTMapping{
+			Resource: schema.GroupVersionResource{
+				Group:    "cert-manager.io",
+				Version:  "v1",
+				Resource: "certificates",
+			},
+		}, nil
+	}
+	return m.delegate.RESTMapping(gk, versions...)
+}
+
+func (m *mockRESTMapper) RESTMappings(gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
+	return m.delegate.RESTMappings(gk, versions...)
+}
+
+func (m *mockRESTMapper) ResourceSingularizer(resource string) (string, error) {
+	return m.delegate.ResourceSingularizer(resource)
+}
+
+func (m *mockRESTMapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error) {
+	return m.delegate.ResourceFor(input)
+}
+
+func (m *mockRESTMapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
+	return m.delegate.ResourcesFor(input)
+}
+
+func (m *mockRESTMapper) KindsFor(input schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
+	return m.delegate.KindsFor(input)
+}
+
+func (m *mockRESTMapper) KindFor(input schema.GroupVersionResource) (schema.GroupVersionKind, error) {
+	return m.delegate.KindFor(input)
+}
 
 var _ = Describe("AxonOpsServer Controller", func() {
 	Context("When reconciling a resource", func() {
@@ -75,7 +120,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
-				RESTMapper:        k8sClient.RESTMapper(),
+				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -140,7 +185,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
-				RESTMapper:        k8sClient.RESTMapper(),
+				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -204,7 +249,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
-				RESTMapper:        k8sClient.RESTMapper(),
+				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -278,7 +323,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
-				RESTMapper:        k8sClient.RESTMapper(),
+				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -363,7 +408,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
-				RESTMapper:        k8sClient.RESTMapper(),
+				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -427,7 +472,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
-				RESTMapper:        k8sClient.RESTMapper(),
+				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -501,7 +546,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
-				RESTMapper:        k8sClient.RESTMapper(),
+				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
