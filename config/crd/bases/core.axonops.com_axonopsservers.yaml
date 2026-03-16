@@ -444,6 +444,33 @@ spec:
                     description: StorageConfig defines persistent storage configuration
                     x-kubernetes-preserve-unknown-fields: true
                 type: object
+              tls:
+                description: TLS configures cert-manager TLS certificate issuance
+                  for internal components.
+                properties:
+                  issuer:
+                    description: |-
+                      Issuer configures the ClusterIssuer used to sign TLS certificates.
+                      If not specified, a default SelfSigned ClusterIssuer named
+                      "axonops-selfsigned" is created and used.
+                    properties:
+                      caSecretRef:
+                        description: |-
+                          CASecretRef is the name of a Secret containing a CA key-pair
+                          (fields "tls.crt" and "tls.key") to use as the CA for a CA-backed
+                          ClusterIssuer. When set, the controller creates a CA-type ClusterIssuer
+                          instead of a SelfSigned one.
+                          The secret must exist in the operator's namespace.
+                          Mutually exclusive with Name.
+                        type: string
+                      name:
+                        description: |-
+                          Name is the name of an existing ClusterIssuer to use.
+                          When set, the controller will NOT create a default ClusterIssuer.
+                          Mutually exclusive with CASecretRef.
+                        type: string
+                    type: object
+                type: object
             type: object
           status:
             description: status defines the observed state of AxonOpsServer

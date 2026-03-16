@@ -87,7 +87,7 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&certManagerClusterIssuerName, "cluster-issuer", "selfsigned-cluster-issuer",
+	flag.StringVar(&certManagerClusterIssuerName, "cluster-issuer", "axonops-selfsigned",
 		"The name of the cert-manager ClusterIssuer to use for generating TLS certificates.")
 	opts := zap.Options{
 		Development: true,
@@ -199,6 +199,7 @@ func main() {
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		ClusterIssuerName: certManagerClusterIssuerName,
+		RESTMapper:        mgr.GetRESTMapper(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "AxonOpsServer")
 		os.Exit(1)
