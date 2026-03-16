@@ -280,24 +280,58 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Ensure TimeSeries authentication secret, certificate, and workload (if component is enabled)
 	if r.isComponentEnabled(server.Spec.TimeSeries) {
-		var err error
-		timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication)
-		if err != nil {
-			log.Error(err, "Failed to ensure TimeSeries authentication secret")
-			return ctrl.Result{}, err
-		}
+		if isTimeSeriesExternal(server) {
+			// Validate authentication credentials for external timeseries
+			auth := server.Spec.TimeSeries.Authentication
+			if auth.SecretRef == "" && auth.Username == "" {
+				// Re-fetch before status update to avoid conflicts
+				if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
+				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+					Type:               "TimeSeriesReady",
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: server.Generation,
+					Reason:             "MissingCredentials",
+					Message:            "External TimeSeries configured but authentication credentials are missing",
+				})
+				server.Status.ObservedGeneration = server.Generation
+				if err := r.Status().Update(ctx, server); err != nil {
+					log.Error(err, "Failed to update status for missing TimeSeries credentials")
+				}
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
 
-		// Create TLS certificate for TimeSeries
-		timeSeriesCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentTimeseries)
-		if err != nil {
-			log.Error(err, "Failed to ensure TimeSeries TLS certificate")
-			return ctrl.Result{}, err
-		}
+			// Clean up any internal TimeSeries resources if they exist
+			if err := r.cleanupInternalTimeseriesResources(ctx, server); err != nil {
+				log.Error(err, "Failed to cleanup internal TimeSeries resources")
+				return ctrl.Result{}, err
+			}
 
-		// Create ServiceAccount, Services, and StatefulSet for TimeSeries
-		if err := r.reconcileTimeseries(ctx, server); err != nil {
-			log.Error(err, "Failed to reconcile TimeSeries workload")
-			return ctrl.Result{}, err
+			// Use the provided SecretRef for external timeseries credentials
+			timeSeriesSecretName = auth.SecretRef
+			log.Info("TimeSeries is configured as external", "hosts", server.Spec.TimeSeries.External.Hosts)
+		} else {
+			// Internal timeseries - existing behavior
+			var err error
+			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication)
+			if err != nil {
+				log.Error(err, "Failed to ensure TimeSeries authentication secret")
+				return ctrl.Result{}, err
+			}
+
+			// Create TLS certificate for TimeSeries
+			timeSeriesCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentTimeseries)
+			if err != nil {
+				log.Error(err, "Failed to ensure TimeSeries TLS certificate")
+				return ctrl.Result{}, err
+			}
+
+			// Create ServiceAccount, Services, and StatefulSet for TimeSeries
+			if err := r.reconcileTimeseries(ctx, server); err != nil {
+				log.Error(err, "Failed to reconcile TimeSeries workload")
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
@@ -386,6 +420,22 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		server.Status.SearchSecretName != searchSecretName ||
 		server.Status.TimeSeriesCertSecretName != timeSeriesCertSecretName ||
 		server.Status.SearchCertSecretName != searchCertSecretName
+
+	// Set TimeSeries mode condition
+	if r.isComponentEnabled(server.Spec.TimeSeries) {
+		timeseriesMode := "Internal"
+		if isTimeSeriesExternal(server) {
+			timeseriesMode = "External"
+		}
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "TimeSeriesMode",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: server.Generation,
+			Reason:             timeseriesMode,
+			Message:            "TimeSeries: " + timeseriesMode,
+		})
+		statusChanged = true
+	}
 
 	// Set Search mode condition
 	if r.isComponentEnabled(server.Spec.Search) {
@@ -817,6 +867,43 @@ func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Con
 	return nil
 }
 
+// cleanupInternalTimeseriesResources deletes internal TimeSeries resources when switching to external timeseries
+func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+
+	// List of resources to delete
+	resourcesToDelete := []struct {
+		name string
+		obj  client.Object
+	}{
+		{name: "TimeSeries StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+	}
+
+	for _, item := range resourcesToDelete {
+		err := r.Delete(ctx, item.obj)
+		if err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete internal resource", "type", item.name)
+			return err
+		}
+		if err == nil {
+			log.Info("Deleted internal TimeSeries resource", "type", item.name)
+		}
+	}
+
+	return nil
+}
+
 // A component is enabled if it's not nil and its Enabled field is true (default).
 func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 	if component == nil {
@@ -837,6 +924,11 @@ func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 // isSearchExternal checks if the Search component is configured to use external hosts
 func isSearchExternal(server *corev1alpha1.AxonOpsServer) bool {
 	return server.Spec.Search != nil && len(server.Spec.Search.External.Hosts) > 0
+}
+
+// isTimeSeriesExternal checks if the TimeSeries component is configured to use external hosts
+func isTimeSeriesExternal(server *corev1alpha1.AxonOpsServer) bool {
+	return server.Spec.TimeSeries != nil && len(server.Spec.TimeSeries.External.Hosts) > 0
 }
 
 // generateRandomPassword generates a cryptographically secure random password
@@ -1861,10 +1953,15 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 		searchURL = server.Spec.Search.External.Hosts[0]
 	}
 
-	timeseriesHeadless := fmt.Sprintf("%s-%s-headless.%s.svc.cluster.local", server.Name, componentTimeseries, server.Namespace)
+	var cqlHosts string
+	if isTimeSeriesExternal(server) && len(server.Spec.TimeSeries.External.Hosts) > 0 {
+		cqlHosts = strings.Join(server.Spec.TimeSeries.External.Hosts, ",")
+	} else {
+		cqlHosts = fmt.Sprintf("%s-%s-headless.%s.svc.cluster.local", server.Name, componentTimeseries, server.Namespace)
+	}
 
 	// Build the axon-server.yml config (credentials are injected via env vars from secrets)
-	configYAML := r.buildServerConfig(server, searchURL, timeseriesHeadless)
+	configYAML := r.buildServerConfig(server, searchURL, cqlHosts)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1903,6 +2000,8 @@ type serverConfigData struct {
 	DashURL          string
 	CQLHosts         string
 	CQLCACert        string
+	CQLSSLEnabled    bool
+	CQLSkipVerify    bool
 }
 
 // serverConfigTemplate is the Go template for axon-server.yml
@@ -1955,9 +2054,11 @@ cql_reconnectionpolicy_maxretries: 10
 cql_retrypolicy_max: 10s
 cql_retrypolicy_min: 2s
 cql_retrypolicy_numretries: 3
-cql_skip_verify: true
-cql_ssl: true
+cql_skip_verify: {{ .CQLSkipVerify }}
+cql_ssl: {{ .CQLSSLEnabled }}
+{{ if .CQLCACert -}}
 cql_ca_cert: {{ .CQLCACert }}
+{{ end -}}
 `
 
 // buildServerConfig generates the axon-server.yml configuration using a Go template.
@@ -1991,6 +2092,31 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		}
 	}
 
+	// Determine timeseries TLS settings based on internal vs external
+	cqlSSLEnabled := true
+	cqlSkipVerify := true
+	cqlCACert := "/etc/axonops/certs/timeseries/ca.crt"
+
+	if isTimeSeriesExternal(server) && server.Spec.TimeSeries != nil {
+		// For external timeseries, respect the TLS configuration
+		tls := server.Spec.TimeSeries.External.TLS
+		if tls.Enabled {
+			cqlSSLEnabled = true
+			cqlSkipVerify = tls.InsecureSkipVerify
+			// Only include ca_cert if not skipping verification
+			if !tls.InsecureSkipVerify {
+				cqlCACert = "/etc/axonops/certs/timeseries/ca.crt"
+			} else {
+				cqlCACert = ""
+			}
+		} else {
+			// External timeseries without TLS
+			cqlSSLEnabled = false
+			cqlSkipVerify = false
+			cqlCACert = ""
+		}
+	}
+
 	data := serverConfigData{
 		SearchURL:        searchURL,
 		SearchCACert:     searchCACert,
@@ -1998,7 +2124,9 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		OrgName:          strings.ToLower(server.Spec.Server.OrgName),
 		DashURL:          dashURL,
 		CQLHosts:         cqlHosts,
-		CQLCACert:        "/etc/axonops/certs/timeseries/ca.crt",
+		CQLCACert:        cqlCACert,
+		CQLSSLEnabled:    cqlSSLEnabled,
+		CQLSkipVerify:    cqlSkipVerify,
 	}
 
 	tmpl, err := template.New("axon-server").Parse(serverConfigTemplate)
@@ -2223,11 +2351,14 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 									{Name: "config", MountPath: "/etc/axonops"},
 									{Name: "logs", MountPath: "/var/log/axonops"},
 									{Name: "data", MountPath: "/var/lib/axonops"},
-									{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true},
+								}
+								// Only mount timeseries-tls if timeseries is internal
+								if !isTimeSeriesExternal(server) {
+									mounts = append(mounts, corev1.VolumeMount{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true})
 								}
 								// Only mount search-tls if search is internal
 								if !isSearchExternal(server) {
-									mounts = append([]corev1.VolumeMount{{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true}}, mounts[3:]...)
+									mounts = append(mounts, corev1.VolumeMount{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true})
 								}
 								return mounts
 							}(),
@@ -2249,7 +2380,10 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 									EmptyDir: &corev1.EmptyDirVolumeSource{},
 								},
 							},
-							{
+						}
+						// Only include timeseries-tls volume if timeseries is internal
+						if !isTimeSeriesExternal(server) {
+							volumes = append(volumes, corev1.Volume{
 								Name: "timeseries-tls",
 								VolumeSource: corev1.VolumeSource{
 									Secret: &corev1.SecretVolumeSource{
@@ -2261,25 +2395,23 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 										},
 									},
 								},
-							},
+							})
 						}
 						// Only include search-tls volume if search is internal
 						if !isSearchExternal(server) {
-							volumes = append([]corev1.Volume{
-								{
-									Name: "search-tls",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											SecretName: searchTLSSecretName,
-											Items: []corev1.KeyToPath{
-												{Key: "ca.crt", Path: "ca.crt"},
-												{Key: "tls.crt", Path: "tls.crt"},
-												{Key: "tls.key", Path: "tls.key"},
-											},
+							volumes = append(volumes, corev1.Volume{
+								Name: "search-tls",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: searchTLSSecretName,
+										Items: []corev1.KeyToPath{
+											{Key: "ca.crt", Path: "ca.crt"},
+											{Key: "tls.crt", Path: "tls.crt"},
+											{Key: "tls.key", Path: "tls.key"},
 										},
 									},
 								},
-							}, volumes[2:]...)
+							})
 						}
 						return volumes
 					}(),
