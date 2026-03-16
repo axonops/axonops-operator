@@ -267,6 +267,11 @@ func (r *AxonOpsMetricAlertReconciler) buildMetricAlertRule(alert *alertsv1alpha
 	}
 
 	// Build expression: metric op value
+	// NOTE: Currently uses WarningValue in the expression. This may need review to ensure
+	// CriticalValue is properly handled. The API payload includes both thresholds separately,
+	// but the expression only references the warning value. Verify with AxonOps API docs
+	// whether this is the intended behavior or if the expression should reference CriticalValue.
+	// See: https://github.com/axonops/axonops-operator/issues/1
 	rule.Expr = fmt.Sprintf("%s %s %g", alert.Spec.Metric, alert.Spec.Operator, alert.Spec.WarningValue)
 
 	// Add annotations if present
