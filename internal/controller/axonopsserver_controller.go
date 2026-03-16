@@ -30,6 +30,9 @@ import (
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -38,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -47,6 +51,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
+	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
 const (
@@ -89,6 +94,9 @@ const (
 
 	// Finalizer name for cleanup
 	axonOpsServerFinalizer = "core.axonops.com/finalizer"
+
+	// App managed-by label value
+	appManagedBy = "axonops-operator"
 )
 
 // AxonOpsServerReconciler reconciles a AxonOpsServer object
@@ -96,6 +104,7 @@ type AxonOpsServerReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
 	ClusterIssuerName string
+	RESTMapper        meta.RESTMapper
 }
 
 // +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsservers,verbs=get;list;watch;create;update;patch;delete
@@ -108,13 +117,123 @@ type AxonOpsServerReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=clusterissuers,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 
-// Reconcile moves the current state of the cluster closer to the desired state.
-func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// resolveIssuerName returns the ClusterIssuer name to reference in Certificate
+// resources. Priority: spec.tls.issuer.name > operator flag (ClusterIssuerName).
+func (r *AxonOpsServerReconciler) resolveIssuerName(server *corev1alpha1.AxonOpsServer) string {
+	if server.Spec.TLS.Issuer.Name != "" {
+		return server.Spec.TLS.Issuer.Name
+	}
+	return r.ClusterIssuerName
+}
+
+// createOrUpdate wraps controllerutil.CreateOrUpdate and records Prometheus metrics.
+func (r *AxonOpsServerReconciler) createOrUpdate(
+	ctx context.Context, obj client.Object, f controllerutil.MutateFn, resourceType string,
+) error {
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, f)
+	if err != nil {
+		return err
+	}
+	switch op {
+	case controllerutil.OperationResultCreated:
+		axonopsmetrics.ResourceCreatedTotal.WithLabelValues(resourceType).Inc()
+	case controllerutil.OperationResultUpdated:
+		axonopsmetrics.ResourceUpdatedTotal.WithLabelValues(resourceType).Inc()
+	}
+	return nil
+}
+
+// isCertManagerAvailable checks if cert-manager Certificate CRD is registered
+// in the cluster by querying the RESTMapper.
+func (r *AxonOpsServerReconciler) isCertManagerAvailable() bool {
+	_, err := r.RESTMapper.RESTMapping(
+		schema.GroupKind{Group: "cert-manager.io", Kind: "Certificate"},
+		"v1",
+	)
+	return err == nil
+}
+
+// ensureClusterIssuer creates or updates the default ClusterIssuer when no
+// custom issuer name is provided via spec.tls.issuer.name.
+// ClusterIssuer is cluster-scoped; no OwnerReference is set (intentional).
+func (r *AxonOpsServerReconciler) ensureClusterIssuer(
+	ctx context.Context,
+	server *corev1alpha1.AxonOpsServer,
+) error {
 	log := logf.FromContext(ctx)
+
+	issuerName := r.ClusterIssuerName
+	clusterIssuer := &certmanagerv1.ClusterIssuer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: issuerName,
+		},
+	}
+
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, clusterIssuer, func() error {
+		if clusterIssuer.Labels == nil {
+			clusterIssuer.Labels = make(map[string]string)
+		}
+		clusterIssuer.Labels["app.kubernetes.io/managed-by"] = appManagedBy
+
+		if server.Spec.TLS.Issuer.CASecretRef != "" {
+			// CA-backed issuer
+			clusterIssuer.Spec = certmanagerv1.IssuerSpec{
+				IssuerConfig: certmanagerv1.IssuerConfig{
+					CA: &certmanagerv1.CAIssuer{
+						SecretName: server.Spec.TLS.Issuer.CASecretRef,
+					},
+				},
+			}
+		} else {
+			// SelfSigned issuer
+			clusterIssuer.Spec = certmanagerv1.IssuerSpec{
+				IssuerConfig: certmanagerv1.IssuerConfig{
+					SelfSigned: &certmanagerv1.SelfSignedIssuer{},
+				},
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to create/update ClusterIssuer %q: %w", issuerName, err)
+	}
+
+	log.Info("ClusterIssuer reconciled", "name", issuerName, "operation", op)
+	return nil
+}
+
+// Reconcile moves the current state of the cluster closer to the desired state.
+func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	log := logf.FromContext(ctx)
+
+	// Start OpenTelemetry span for this reconciliation
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.axonopsserver",
+		trace.WithAttributes())
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+
+	// Record reconciliation duration and count metrics
+	start := time.Now()
+	defer func() {
+		resultStr := "success"
+		if err != nil {
+			resultStr = "error"
+			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
+		}
+		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopsserver", resultStr).Observe(time.Since(start).Seconds())
+		axonopsmetrics.ReconcileTotal.WithLabelValues("axonopsserver", resultStr).Inc()
+	}()
 
 	// Fetch the AxonOpsServer CR
 	server := &corev1alpha1.AxonOpsServer{}
@@ -156,29 +275,107 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
+	// Verify cert-manager CRDs are available
+	if !r.isCertManagerAvailable() {
+		// Re-fetch before status update
+		if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "CertManagerReady",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: server.Generation,
+			Reason:             "CertManagerUnavailable",
+			Message:            "cert-manager CRDs are not installed in the cluster",
+		})
+		server.Status.ObservedGeneration = server.Generation
+		if err := r.Status().Update(ctx, server); err != nil {
+			log.Error(err, "Failed to update status for missing cert-manager CRDs")
+		}
+		log.Error(nil, "cert-manager CRDs not found; requeueing")
+		return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+	}
+
+	// Ensure default ClusterIssuer (only when no custom issuer name is specified)
+	if server.Spec.TLS.Issuer.Name == "" {
+		if err := r.ensureClusterIssuer(ctx, server); err != nil {
+			// Re-fetch before status update
+			if fetchErr := r.Get(ctx, req.NamespacedName, server); fetchErr != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(fetchErr)
+			}
+			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+				Type:               "CertManagerReady",
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: server.Generation,
+				Reason:             "FailedToCreateIssuer",
+				Message:            err.Error(),
+			})
+			server.Status.ObservedGeneration = server.Generation
+			if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+				log.Error(statusErr, "Failed to update status for ClusterIssuer creation failure")
+			}
+			log.Error(err, "Failed to ensure ClusterIssuer")
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+	}
+
 	var timeSeriesSecretName, searchSecretName string
 	var timeSeriesCertSecretName, searchCertSecretName string
 
 	// Ensure TimeSeries authentication secret, certificate, and workload (if component is enabled)
 	if r.isComponentEnabled(server.Spec.TimeSeries) {
-		var err error
-		timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication)
-		if err != nil {
-			log.Error(err, "Failed to ensure TimeSeries authentication secret")
-			return ctrl.Result{}, err
-		}
+		if isTimeSeriesExternal(server) {
+			// Validate authentication credentials for external timeseries
+			auth := server.Spec.TimeSeries.Authentication
+			if auth.SecretRef == "" && auth.Username == "" {
+				// Re-fetch before status update to avoid conflicts
+				if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
+				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+					Type:               "TimeSeriesReady",
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: server.Generation,
+					Reason:             "MissingCredentials",
+					Message:            "External TimeSeries configured but authentication credentials are missing",
+				})
+				server.Status.ObservedGeneration = server.Generation
+				if err := r.Status().Update(ctx, server); err != nil {
+					log.Error(err, "Failed to update status for missing TimeSeries credentials")
+				}
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
 
-		// Create TLS certificate for TimeSeries
-		timeSeriesCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentTimeseries)
-		if err != nil {
-			log.Error(err, "Failed to ensure TimeSeries TLS certificate")
-			return ctrl.Result{}, err
-		}
+			// Clean up any internal TimeSeries resources if they exist
+			if err := r.cleanupInternalTimeseriesResources(ctx, server); err != nil {
+				log.Error(err, "Failed to cleanup internal TimeSeries resources")
+				return ctrl.Result{}, err
+			}
 
-		// Create ServiceAccount, Services, and StatefulSet for TimeSeries
-		if err := r.reconcileTimeseries(ctx, server); err != nil {
-			log.Error(err, "Failed to reconcile TimeSeries workload")
-			return ctrl.Result{}, err
+			// Use the provided SecretRef for external timeseries credentials
+			timeSeriesSecretName = auth.SecretRef
+			log.Info("TimeSeries is configured as external", "hosts", server.Spec.TimeSeries.External.Hosts)
+		} else {
+			// Internal timeseries - existing behavior
+			var err error
+			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication)
+			if err != nil {
+				log.Error(err, "Failed to ensure TimeSeries authentication secret")
+				return ctrl.Result{}, err
+			}
+
+			// Create TLS certificate for TimeSeries
+			timeSeriesCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentTimeseries)
+			if err != nil {
+				log.Error(err, "Failed to ensure TimeSeries TLS certificate")
+				return ctrl.Result{}, err
+			}
+
+			// Create ServiceAccount, Services, and StatefulSet for TimeSeries
+			if err := r.reconcileTimeseries(ctx, server); err != nil {
+				log.Error(err, "Failed to reconcile TimeSeries workload")
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
@@ -267,6 +464,22 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		server.Status.SearchSecretName != searchSecretName ||
 		server.Status.TimeSeriesCertSecretName != timeSeriesCertSecretName ||
 		server.Status.SearchCertSecretName != searchCertSecretName
+
+	// Set TimeSeries mode condition
+	if r.isComponentEnabled(server.Spec.TimeSeries) {
+		timeseriesMode := "Internal"
+		if isTimeSeriesExternal(server) {
+			timeseriesMode = "External"
+		}
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "TimeSeriesMode",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: server.Generation,
+			Reason:             timeseriesMode,
+			Message:            "TimeSeries: " + timeseriesMode,
+		})
+		statusChanged = true
+	}
 
 	// Set Search mode condition
 	if r.isComponentEnabled(server.Spec.Search) {
@@ -432,7 +645,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
+	err = r.createOrUpdate(ctx, secret, func() error {
 		// Set owner reference for garbage collection
 		if err := controllerutil.SetControllerReference(server, secret, r.Scheme); err != nil {
 			return err
@@ -444,7 +657,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		}
 		secret.Labels["app.kubernetes.io/name"] = "axonops"
 		secret.Labels["app.kubernetes.io/component"] = component
-		secret.Labels["app.kubernetes.io/managed-by"] = "axonops-operator"
+		secret.Labels["app.kubernetes.io/managed-by"] = appManagedBy
 
 		// Set secret data with component-specific keys
 		secret.Type = corev1.SecretTypeOpaque
@@ -454,13 +667,13 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		}
 
 		return nil
-	})
+	}, "secret")
 
 	if err != nil {
 		return "", fmt.Errorf("failed to create/update secret: %w", err)
 	}
 
-	log.Info("Secret reconciled", "component", component, "secret", secretName, "operation", op)
+	log.Info("Secret reconciled", "component", component, "secret", secretName)
 	return secretName, nil
 }
 
@@ -519,7 +732,7 @@ func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
+	err = r.createOrUpdate(ctx, secret, func() error {
 		if err := controllerutil.SetControllerReference(server, secret, r.Scheme); err != nil {
 			return err
 		}
@@ -530,13 +743,13 @@ func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
 			"password": []byte(password),
 		}
 		return nil
-	})
+	}, "secret")
 
 	if err != nil {
 		return "", fmt.Errorf("failed to create/update keystore password secret: %w", err)
 	}
 
-	log.Info("Keystore password secret reconciled", "name", secretName, "operation", op)
+	log.Info("Keystore password secret reconciled", "name", secretName)
 	return secretName, nil
 }
 
@@ -571,7 +784,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, cert, func() error {
+	err := r.createOrUpdate(ctx, cert, func() error {
 		// Set owner reference for garbage collection
 		if err := controllerutil.SetControllerReference(server, cert, r.Scheme); err != nil {
 			return err
@@ -583,7 +796,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		}
 		cert.Labels["app.kubernetes.io/name"] = "axonops"
 		cert.Labels["app.kubernetes.io/component"] = component
-		cert.Labels["app.kubernetes.io/managed-by"] = "axonops-operator"
+		cert.Labels["app.kubernetes.io/managed-by"] = appManagedBy
 
 		// Build DNS names - include wildcard for StatefulSet pods
 		serviceName := fmt.Sprintf("%s-%s", server.Name, component)
@@ -601,7 +814,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		cert.Spec = certmanagerv1.CertificateSpec{
 			SecretName: secretName,
 			IssuerRef: cmmeta.IssuerReference{
-				Name: r.ClusterIssuerName,
+				Name: r.resolveIssuerName(server),
 				Kind: "ClusterIssuer",
 			},
 			CommonName: fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, server.Namespace),
@@ -650,13 +863,13 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		}
 
 		return nil
-	})
+	}, "certificate")
 
 	if err != nil {
 		return "", fmt.Errorf("failed to create/update certificate: %w", err)
 	}
 
-	log.Info("Certificate reconciled", "component", component, "certificate", certName, "operation", op)
+	log.Info("Certificate reconciled", "component", component, "certificate", certName)
 	return secretName, nil
 }
 
@@ -684,14 +897,51 @@ func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Con
 			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentSearch), Namespace: server.Namespace}}},
 	}
 
-	for _, resource := range resourcesToDelete {
-		err := r.Delete(ctx, resource.obj)
+	for _, item := range resourcesToDelete {
+		err := r.Delete(ctx, item.obj)
 		if err != nil && !errors.IsNotFound(err) {
-			log.Error(err, "Failed to delete internal resource", "type", resource.name)
+			log.Error(err, "Failed to delete internal resource", "type", item.name)
 			return err
 		}
 		if err == nil {
-			log.Info("Deleted internal Search resource", "type", resource.name)
+			log.Info("Deleted internal Search resource", "type", item.name)
+		}
+	}
+
+	return nil
+}
+
+// cleanupInternalTimeseriesResources deletes internal TimeSeries resources when switching to external timeseries
+func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+
+	// List of resources to delete
+	resourcesToDelete := []struct {
+		name string
+		obj  client.Object
+	}{
+		{name: "TimeSeries StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+	}
+
+	for _, item := range resourcesToDelete {
+		err := r.Delete(ctx, item.obj)
+		if err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete internal resource", "type", item.name)
+			return err
+		}
+		if err == nil {
+			log.Info("Deleted internal TimeSeries resource", "type", item.name)
 		}
 	}
 
@@ -718,6 +968,11 @@ func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 // isSearchExternal checks if the Search component is configured to use external hosts
 func isSearchExternal(server *corev1alpha1.AxonOpsServer) bool {
 	return server.Spec.Search != nil && len(server.Spec.Search.External.Hosts) > 0
+}
+
+// isTimeSeriesExternal checks if the TimeSeries component is configured to use external hosts
+func isTimeSeriesExternal(server *corev1alpha1.AxonOpsServer) bool {
+	return server.Spec.TimeSeries != nil && len(server.Spec.TimeSeries.External.Hosts) > 0
 }
 
 // generateRandomPassword generates a cryptographically secure random password
@@ -790,6 +1045,9 @@ func generateRandomPassword(length int) (string, error) {
 
 // reconcileTimeseries ensures all TimeSeries resources are created/updated
 func (r *AxonOpsServerReconciler) reconcileTimeseries(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.timeseries")
+	defer span.End()
+
 	log := logf.FromContext(ctx)
 
 	// Ensure ServiceAccount
@@ -828,7 +1086,7 @@ func (r *AxonOpsServerReconciler) ensureServiceAccount(ctx context.Context, serv
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, sa, func() error {
+	err := r.createOrUpdate(ctx, sa, func() error {
 		if err := controllerutil.SetControllerReference(server, sa, r.Scheme); err != nil {
 			return err
 		}
@@ -836,13 +1094,13 @@ func (r *AxonOpsServerReconciler) ensureServiceAccount(ctx context.Context, serv
 		sa.Labels = r.buildLabels(server, component)
 		sa.AutomountServiceAccountToken = ptr(true)
 		return nil
-	})
+	}, "serviceaccount")
 
 	if err != nil {
 		return err
 	}
 
-	log.Info("ServiceAccount reconciled", "name", name, "operation", op)
+	log.Info("ServiceAccount reconciled", "name", name)
 	return nil
 }
 
@@ -858,7 +1116,7 @@ func (r *AxonOpsServerReconciler) ensureHeadlessService(ctx context.Context, ser
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
+	err := r.createOrUpdate(ctx, svc, func() error {
 		if err := controllerutil.SetControllerReference(server, svc, r.Scheme); err != nil {
 			return err
 		}
@@ -876,13 +1134,13 @@ func (r *AxonOpsServerReconciler) ensureHeadlessService(ctx context.Context, ser
 			Ports:                    r.getServicePorts(component, true),
 		}
 		return nil
-	})
+	}, "service")
 
 	if err != nil {
 		return err
 	}
 
-	log.Info("Headless Service reconciled", "name", name, "operation", op)
+	log.Info("Headless Service reconciled", "name", name)
 	return nil
 }
 
@@ -898,7 +1156,7 @@ func (r *AxonOpsServerReconciler) ensureService(ctx context.Context, server *cor
 		},
 	}
 
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
+	err := r.createOrUpdate(ctx, svc, func() error {
 		if err := controllerutil.SetControllerReference(server, svc, r.Scheme); err != nil {
 			return err
 		}
@@ -910,13 +1168,13 @@ func (r *AxonOpsServerReconciler) ensureService(ctx context.Context, server *cor
 			Ports:    r.getServicePorts(component, false),
 		}
 		return nil
-	})
+	}, "service")
 
 	if err != nil {
 		return err
 	}
 
-	log.Info("Service reconciled", "name", name, "operation", op)
+	log.Info("Service reconciled", "name", name)
 	return nil
 }
 
@@ -1235,6 +1493,9 @@ func (r *AxonOpsServerReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, ke
 
 // reconcileSearch ensures all Search resources are created/updated
 func (r *AxonOpsServerReconciler) reconcileSearch(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.search")
+	defer span.End()
+
 	log := logf.FromContext(ctx)
 
 	// Ensure ServiceAccount
@@ -1589,6 +1850,9 @@ func (r *AxonOpsServerReconciler) buildSearchEnv(fqdn, headlessSvc, clusterName,
 
 // reconcileServer ensures all Server resources are created/updated
 func (r *AxonOpsServerReconciler) reconcileServer(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.server")
+	defer span.End()
+
 	log := logf.FromContext(ctx)
 
 	// Ensure ServiceAccount
@@ -1742,10 +2006,15 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 		searchURL = server.Spec.Search.External.Hosts[0]
 	}
 
-	timeseriesHeadless := fmt.Sprintf("%s-%s-headless.%s.svc.cluster.local", server.Name, componentTimeseries, server.Namespace)
+	var cqlHosts string
+	if isTimeSeriesExternal(server) && len(server.Spec.TimeSeries.External.Hosts) > 0 {
+		cqlHosts = strings.Join(server.Spec.TimeSeries.External.Hosts, ",")
+	} else {
+		cqlHosts = fmt.Sprintf("%s-%s-headless.%s.svc.cluster.local", server.Name, componentTimeseries, server.Namespace)
+	}
 
 	// Build the axon-server.yml config (credentials are injected via env vars from secrets)
-	configYAML := r.buildServerConfig(server, searchURL, timeseriesHeadless)
+	configYAML := r.buildServerConfig(server, searchURL, cqlHosts)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1784,6 +2053,8 @@ type serverConfigData struct {
 	DashURL          string
 	CQLHosts         string
 	CQLCACert        string
+	CQLSSLEnabled    bool
+	CQLSkipVerify    bool
 }
 
 // serverConfigTemplate is the Go template for axon-server.yml
@@ -1836,9 +2107,11 @@ cql_reconnectionpolicy_maxretries: 10
 cql_retrypolicy_max: 10s
 cql_retrypolicy_min: 2s
 cql_retrypolicy_numretries: 3
-cql_skip_verify: true
-cql_ssl: true
+cql_skip_verify: {{ .CQLSkipVerify }}
+cql_ssl: {{ .CQLSSLEnabled }}
+{{ if .CQLCACert -}}
 cql_ca_cert: {{ .CQLCACert }}
+{{ end -}}
 `
 
 // buildServerConfig generates the axon-server.yml configuration using a Go template.
@@ -1872,6 +2145,31 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		}
 	}
 
+	// Determine timeseries TLS settings based on internal vs external
+	cqlSSLEnabled := true
+	cqlSkipVerify := true
+	cqlCACert := "/etc/axonops/certs/timeseries/ca.crt"
+
+	if isTimeSeriesExternal(server) && server.Spec.TimeSeries != nil {
+		// For external timeseries, respect the TLS configuration
+		tls := server.Spec.TimeSeries.External.TLS
+		if tls.Enabled {
+			cqlSSLEnabled = true
+			cqlSkipVerify = tls.InsecureSkipVerify
+			// Only include ca_cert if not skipping verification
+			if !tls.InsecureSkipVerify {
+				cqlCACert = "/etc/axonops/certs/timeseries/ca.crt"
+			} else {
+				cqlCACert = ""
+			}
+		} else {
+			// External timeseries without TLS
+			cqlSSLEnabled = false
+			cqlSkipVerify = false
+			cqlCACert = ""
+		}
+	}
+
 	data := serverConfigData{
 		SearchURL:        searchURL,
 		SearchCACert:     searchCACert,
@@ -1879,7 +2177,9 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		OrgName:          strings.ToLower(server.Spec.Server.OrgName),
 		DashURL:          dashURL,
 		CQLHosts:         cqlHosts,
-		CQLCACert:        "/etc/axonops/certs/timeseries/ca.crt",
+		CQLCACert:        cqlCACert,
+		CQLSSLEnabled:    cqlSSLEnabled,
+		CQLSkipVerify:    cqlSkipVerify,
 	}
 
 	tmpl, err := template.New("axon-server").Parse(serverConfigTemplate)
@@ -2104,11 +2404,14 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 									{Name: "config", MountPath: "/etc/axonops"},
 									{Name: "logs", MountPath: "/var/log/axonops"},
 									{Name: "data", MountPath: "/var/lib/axonops"},
-									{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true},
+								}
+								// Only mount timeseries-tls if timeseries is internal
+								if !isTimeSeriesExternal(server) {
+									mounts = append(mounts, corev1.VolumeMount{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true})
 								}
 								// Only mount search-tls if search is internal
 								if !isSearchExternal(server) {
-									mounts = append([]corev1.VolumeMount{{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true}}, mounts[3:]...)
+									mounts = append(mounts, corev1.VolumeMount{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true})
 								}
 								return mounts
 							}(),
@@ -2130,7 +2433,10 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 									EmptyDir: &corev1.EmptyDirVolumeSource{},
 								},
 							},
-							{
+						}
+						// Only include timeseries-tls volume if timeseries is internal
+						if !isTimeSeriesExternal(server) {
+							volumes = append(volumes, corev1.Volume{
 								Name: "timeseries-tls",
 								VolumeSource: corev1.VolumeSource{
 									Secret: &corev1.SecretVolumeSource{
@@ -2142,25 +2448,23 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 										},
 									},
 								},
-							},
+							})
 						}
 						// Only include search-tls volume if search is internal
 						if !isSearchExternal(server) {
-							volumes = append([]corev1.Volume{
-								{
-									Name: "search-tls",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											SecretName: searchTLSSecretName,
-											Items: []corev1.KeyToPath{
-												{Key: "ca.crt", Path: "ca.crt"},
-												{Key: "tls.crt", Path: "tls.crt"},
-												{Key: "tls.key", Path: "tls.key"},
-											},
+							volumes = append(volumes, corev1.Volume{
+								Name: "search-tls",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: searchTLSSecretName,
+										Items: []corev1.KeyToPath{
+											{Key: "ca.crt", Path: "ca.crt"},
+											{Key: "tls.crt", Path: "tls.crt"},
+											{Key: "tls.key", Path: "tls.key"},
 										},
 									},
 								},
-							}, volumes[2:]...)
+							})
 						}
 						return volumes
 					}(),
@@ -2216,7 +2520,7 @@ func (r *AxonOpsServerReconciler) buildLabels(server *corev1alpha1.AxonOpsServer
 		"app.kubernetes.io/name":       "axonops",
 		"app.kubernetes.io/instance":   server.Name,
 		"app.kubernetes.io/component":  component,
-		"app.kubernetes.io/managed-by": "axonops-operator",
+		"app.kubernetes.io/managed-by": appManagedBy,
 	}
 }
 
@@ -2231,6 +2535,9 @@ func (r *AxonOpsServerReconciler) buildSelectorLabels(server *corev1alpha1.AxonO
 
 // reconcileDashboard ensures all Dashboard resources are created/updated
 func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.dashboard")
+	defer span.End()
+
 	log := logf.FromContext(ctx)
 
 	// Ensure ServiceAccount

@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: axonops-operator-metrics
+  namespace: axonops-operator-system
+  labels:
+    operator: axonops-operator
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  namespaceSelector:
+    matchNames:
+      - axonops-operator-system
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scheme: http
