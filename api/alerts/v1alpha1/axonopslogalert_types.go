@@ -79,6 +79,10 @@ type AxonOpsLogAlertSpec struct {
 	// +optional
 	Source string `json:"source,omitempty"`
 
+	// Filters apply constraints to the alert based on infrastructure dimensions
+	// +optional
+	Filters *LogAlertFilters `json:"filters,omitempty"`
+
 	// Annotations contains optional alert metadata
 	// +optional
 	Annotations *LogAlertAnnotations `json:"annotations,omitempty"`
@@ -87,6 +91,24 @@ type AxonOpsLogAlertSpec struct {
 	// Note: Use AxonOpsAlertRoute CRD for more granular routing control
 	// +optional
 	Integrations *LogAlertIntegration `json:"integrations,omitempty"`
+}
+
+// LogAlertFilters defines optional constraints for alert matching by infrastructure dimensions
+type LogAlertFilters struct {
+	// DataCenter filters alerts to specific data centers
+	// +optional
+	// +listType=atomic
+	DataCenter []string `json:"dc,omitempty"`
+
+	// Rack filters alerts to specific racks
+	// +optional
+	// +listType=atomic
+	Rack []string `json:"rack,omitempty"`
+
+	// HostID filters alerts to specific hosts
+	// +optional
+	// +listType=atomic
+	HostID []string `json:"hostId,omitempty"`
 }
 
 // LogAlertAnnotations defines optional alert metadata
@@ -157,7 +179,7 @@ type AxonOpsLogAlertStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.spec.clusterName`
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.clusterType`
-// +kubebuilder:printcolumn:name="AlertID",type=string,JSONPath=`.status.syncedAlertId`
+// +kubebuilder:printcolumn:name="AlertID",type=string,JSONPath=`.status.syncedAlertID`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 

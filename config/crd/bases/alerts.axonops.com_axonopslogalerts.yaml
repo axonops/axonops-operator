@@ -21,7 +21,7 @@ spec:
     - jsonPath: .spec.clusterType
       name: Type
       type: string
-    - jsonPath: .status.syncedAlertId
+    - jsonPath: .status.syncedAlertID
       name: AlertID
       type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
@@ -94,6 +94,29 @@ spec:
                   the alert (e.g. 15m, 1h)
                 minLength: 1
                 type: string
+              filters:
+                description: Filters apply constraints to the alert based on infrastructure
+                  dimensions
+                properties:
+                  dc:
+                    description: DataCenter filters alerts to specific data centers
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  hostId:
+                    description: HostID filters alerts to specific hosts
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  rack:
+                    description: Rack filters alerts to specific racks
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
               integrations:
                 description: |-
                   Integrations specifies how to route alert notifications

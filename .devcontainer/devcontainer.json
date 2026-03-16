@@ -1,27 +1,32 @@
 {
   "name": "Kubebuilder DevContainer",
-  "image": "golang:1.25",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.25-bookworm", 
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "moby": false,
-      "dockerDefaultAddressPool": "base=172.30.0.0/16,size=24"
+      "version": "latest",
+      "moby": true
     },
-    "ghcr.io/devcontainers/features/git:1": {},
-    "ghcr.io/devcontainers/features/common-utils:2": {
-      "upgradePackages": true
-    }
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {}
   },
 
+  // Required for DinD to run the inner daemon
   "runArgs": ["--privileged", "--init"],
+  "mounts": [
+    // Optional: Only if you want to persist Docker data between container rebuilds
+    "source=dind-var-lib-docker,target=/var/lib/docker,type=volume",
+    "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,type=bind,readonly",
+    "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/node/.claude/.credentials.json,type=bind,readonly"
+  ],
 
   "customizations": {
     "vscode": {
-      "settings": {
-        "terminal.integrated.shell.linux": "/bin/bash"
-      },
+      "settings": {},
       "extensions": [
         "ms-kubernetes-tools.vscode-kubernetes-tools",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "golang.Go"
       ]
     }
   },
@@ -30,6 +35,8 @@
     "GO111MODULE": "on"
   },
 
-  "onCreateCommand": "bash .devcontainer/post-install.sh"
+  "onCreateCommand": "bash .devcontainer/post-install.sh",
+  
+  // Ensures you aren't stuck with root-only file permissions later
+  "remoteUser": "vscode"
 }
-

@@ -21,7 +21,7 @@ spec:
     - jsonPath: .spec.clusterType
       name: Type
       type: string
-    - jsonPath: .status.syncedAlertId
+    - jsonPath: .status.syncedAlertID
       name: AlertID
       type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status

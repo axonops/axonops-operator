@@ -251,6 +251,20 @@ func (r *AxonOpsLogAlertReconciler) buildLogAlertRule(alert *alertsv1alpha1.Axon
 		}
 	}
 
+	// Add filters if present (data center, rack, host)
+	if alert.Spec.Filters != nil {
+		filters := alert.Spec.Filters
+		if len(filters.DataCenter) > 0 {
+			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "dc", Value: filters.DataCenter})
+		}
+		if len(filters.Rack) > 0 {
+			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "rack", Value: filters.Rack})
+		}
+		if len(filters.HostID) > 0 {
+			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "host_id", Value: filters.HostID})
+		}
+	}
+
 	// Note: Integrations are intentionally omitted from API payload (same as metric alerts)
 
 	return rule
@@ -262,30 +276,31 @@ func buildLogEventsExpr(content, level, source, logType string) string {
 	var parts []string
 
 	if content != "" {
-		// Escape quotes in content
-		escaped := strings.ReplaceAll(content, `"`, `\"`)
+		// Escape backslashes first, then quotes to properly handle special characters
+		escaped := strings.ReplaceAll(content, `\`, `\\`)
+		escaped = strings.ReplaceAll(escaped, `"`, `\"`)
 		parts = append(parts, fmt.Sprintf(`message="%s"`, escaped))
 	}
 
 	if level != "" {
-		// Convert comma-separated values to pipe-separated for the expr
-		levelValues := strings.ReplaceAll(level, ",", "|")
-		parts = append(parts, fmt.Sprintf(`level="%s"`, levelValues))
+		parts = append(parts, fmt.Sprintf(`level="%s"`, commaSeparatedToPipe(level)))
 	}
 
 	if source != "" {
-		// Convert comma-separated values to pipe-separated for the expr
-		sourceValues := strings.ReplaceAll(source, ",", "|")
-		parts = append(parts, fmt.Sprintf(`source="%s"`, sourceValues))
+		parts = append(parts, fmt.Sprintf(`source="%s"`, commaSeparatedToPipe(source)))
 	}
 
 	if logType != "" {
-		// Convert comma-separated values to pipe-separated for the expr
-		typeValues := strings.ReplaceAll(logType, ",", "|")
-		parts = append(parts, fmt.Sprintf(`type="%s"`, typeValues))
+		parts = append(parts, fmt.Sprintf(`type="%s"`, commaSeparatedToPipe(logType)))
 	}
 
 	return fmt.Sprintf("events{%s}", strings.Join(parts, ","))
+}
+
+// commaSeparatedToPipe converts comma-separated values to pipe-separated format
+// for use in log event expressions (e.g., "error,warning" -> "error|warning")
+func commaSeparatedToPipe(s string) string {
+	return strings.ReplaceAll(s, ",", "|")
 }
 
 // SetupWithManager sets up the controller with the Manager.

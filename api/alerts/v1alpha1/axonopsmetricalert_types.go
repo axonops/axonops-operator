@@ -222,7 +222,7 @@ type AxonOpsMetricAlertStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.spec.clusterName`
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.clusterType`
-// +kubebuilder:printcolumn:name="AlertID",type=string,JSONPath=`.status.syncedAlertId`
+// +kubebuilder:printcolumn:name="AlertID",type=string,JSONPath=`.status.syncedAlertID`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
