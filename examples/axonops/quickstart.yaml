@@ -1,0 +1,120 @@
+# quickstart.yaml - Minimal AxonOps deployment for getting started
+# This example demonstrates a basic single-node AxonOps setup suitable for development/testing.
+# All components run with single replicas and basic configuration.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: axonops
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-credentials
+  namespace: axonops
+type: Opaque
+stringData:
+  api_key: "your-api-key-here"
+  token_type: "Bearer"
+
+---
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  name: server
+  namespace: axonops
+spec:
+  server:
+    orgName: "MyOrganization"
+    repository:
+      image: "ghcr.io/axonops/axon-server"
+      tag: "2.0.19"
+
+  timeSeries:
+    repository:
+      image: "ghcr.io/axonops/axondb-timeseries"
+      tag: "5.0.6-1.1.0"
+    storage:
+      size: "10Gi"
+
+  search:
+    repository:
+      image: "ghcr.io/axonops/axondb-search"
+      tag: "6.15.0"
+    storage:
+      size: "5Gi"
+
+  dashboard:
+    repository:
+      image: "registry.axonops.com/axonops-public/axonops-docker/axon-dash"
+      tag: "2.0.28"
+    replicas: 1
+    ingress:
+      enabled: true
+      hosts:
+        - "axonops.local"
+      annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: "/"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: high-read-latency
+  namespace: axonops
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cluster
+  clusterType: cassandra
+  name: high-read-latency
+  operator: ">"
+  warningValue: 50
+  criticalValue: 100
+  duration: 15m
+  dashboard: "Cassandra Overview"
+  chart: "Read Latency"
+  metric: "cassandra_client_read_latency"
+  annotations:
+    summary: "Cassandra read latency is high"
+    description: "Read p99 latency exceeded threshold"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsLogAlert
+metadata:
+  name: error-log-alert
+  namespace: axonops
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cluster
+  clusterType: cassandra
+  name: cassandra-errors
+  operator: ">="
+  warningValue: 1
+  criticalValue: 5
+  duration: 10m
+  content: "ERROR"
+  level: "error"
+  source: "/var/log/cassandra/system.log"
+  annotations:
+    summary: "Cassandra errors detected"
+    description: "Multiple ERROR entries in system log"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: cassandra-native-check
+  namespace: axonops
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cluster
+  clusterType: cassandra
+  name: cassandra-native-port
+  tcp: "cassandra-node-0.cassandra-headless.default.svc.cluster.local:9042"
+  interval: "30s"
+  timeout: "5s"
+  supportedAgentTypes:
+    - "base"

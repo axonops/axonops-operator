@@ -1,0 +1,426 @@
+# complex.yaml - Advanced multi-cluster AxonOps deployment with full feature set
+# This example demonstrates advanced setup with Gateway API, multiple data centers,
+# comprehensive monitoring, and all optional features enabled.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: axonops-enterprise
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-api-credentials
+  namespace: axonops-enterprise
+type: Opaque
+stringData:
+  api_key: "sk-enterprise-prod-xxxxxxxxxxxx"
+  token_type: "Bearer"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-licensing
+  namespace: axonops-enterprise
+type: Opaque
+stringData:
+  license_key: "your-enterprise-license-key"
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-issuer
+spec:
+  vault:
+    server: https://vault.example.com:8200
+    path: pki/sign/kubernetes
+    auth:
+      kubernetes:
+        role: cert-issuer
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: istio
+spec:
+  controllerName: istio.io/gateway-controller
+
+---
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  name: axonops-global
+  namespace: axonops-enterprise
+  labels:
+    environment: production
+    region: us-east
+spec:
+  server:
+    orgName: "Enterprise AxonOps Hub"
+    repository:
+      image: "ghcr.io/axonops/axon-server"
+      tag: "2.0.19"
+    replicas: 5
+    resources:
+      requests:
+        cpu: "4"
+        memory: "8Gi"
+      limits:
+        cpu: "8"
+        memory: "16Gi"
+    storage:
+      size: "500Gi"
+      storageClassName: "premium-ssd"
+    # TLS certificate management
+    tlsCertificate:
+      issuerName: "vault-issuer"
+      issuerKind: "ClusterIssuer"
+      commonName: "axonops-api.example.com"
+      dnsNames:
+        - "axonops-api.example.com"
+        - "agent.axonops.example.com"
+
+    # Agent Gateway (istio)
+    agentGateway:
+      enabled: true
+      gatewayClassName: "istio"
+      hostname: "agent.axonops.example.com"
+      port: 1888
+      annotations:
+        cert-manager.io/cluster-issuer: "vault-issuer"
+        istio.io/v1alpha3: "VirtualService"
+      labels:
+        app.kubernetes.io/component: "agent-gateway"
+
+    # API Gateway (istio) with advanced routing
+    apiGateway:
+      enabled: true
+      gatewayClassName: "istio"
+      hostname: "api.axonops.example.com"
+      port: 443
+      annotations:
+        cert-manager.io/cluster-issuer: "vault-issuer"
+        istio.io/timeout: "30s"
+      labels:
+        app.kubernetes.io/component: "api-gateway"
+
+  timeSeries:
+    repository:
+      image: "ghcr.io/axonops/axondb-timeseries"
+      tag: "5.0.6-1.1.0"
+      pullPolicy: "IfNotPresent"
+    replicas: 5
+    resources:
+      requests:
+        cpu: "8"
+        memory: "16Gi"
+      limits:
+        cpu: "16"
+        memory: "32Gi"
+    storage:
+      size: "1Ti"
+      storageClassName: "premium-ssd"
+    # JVM Tuning for large deployments
+    jvmHeapSize: "16g"
+
+  search:
+    repository:
+      image: "ghcr.io/axonops/axondb-search"
+      tag: "6.15.0"
+      pullPolicy: "IfNotPresent"
+    replicas: 3
+    resources:
+      requests:
+        cpu: "4"
+        memory: "8Gi"
+      limits:
+        cpu: "8"
+        memory: "16Gi"
+    storage:
+      size: "500Gi"
+      storageClassName: "premium-ssd"
+
+  dashboard:
+    replicas: 3
+    repository:
+      image: "registry.axonops.com/axonops-public/axonops-docker/axon-dash"
+      tag: "2.0.28"
+      pullPolicy: "IfNotPresent"
+    resources:
+      requests:
+        cpu: "1"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    # Gateway API for dashboard (istio)
+    gateway:
+      enabled: true
+      gatewayClassName: "istio"
+      hostname: "dashboard.axonops.example.com"
+      port: 443
+      annotations:
+        cert-manager.io/cluster-issuer: "vault-issuer"
+        istio.io/v1alpha3: "VirtualService"
+      labels:
+        app.kubernetes.io/component: "dashboard-gateway"
+
+---
+# Multi-cluster monitoring example for Cassandra
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-gc-pause-time
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-gc-pause-time-critical
+  operator: ">"
+  warningValue: 100
+  criticalValue: 500
+  duration: 2m
+  dashboard: "Cassandra GC"
+  chart: "GC Pause Time"
+  annotations:
+    summary: "Cassandra GC pause time is excessive"
+    description: "GC pause time on {{ $labels.host_id }} in {{ $labels.rack }} exceeded threshold"
+    widgetUrl: "https://dashboard.axonops.example.com/dashboards/cassandra-gc"
+  filters:
+    dataCenter:
+      - "us-east-1a"
+      - "us-east-1b"
+      - "us-east-1c"
+    rack:
+      - "A"
+      - "B"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-heap-usage-critical
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-heap-usage
+  operator: ">"
+  warningValue: 75
+  criticalValue: 90
+  duration: 5m
+  dashboard: "Cassandra Memory"
+  chart: "Heap Usage"
+  filters:
+    scope:
+      - "heap"
+    consistency:
+      - "LOCAL_ONE"
+      - "LOCAL_QUORUM"
+
+---
+# Kafka cluster monitoring
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: kafka-under-replicated-partitions
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: kafka-prod
+  clusterType: kafka
+  name: kafka-under-replicated-partitions
+  operator: ">"
+  warningValue: 0
+  criticalValue: 5
+  duration: 5m
+  dashboard: "Kafka Health"
+  chart: "Under Replicated Partitions"
+  filters:
+    topic:
+      - "events"
+      - "transactions"
+      - "logs"
+
+---
+# Comprehensive logging alerts
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsLogAlert
+metadata:
+  name: cassandra-critical-errors
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-critical-errors
+  operator: ">="
+  warningValue: 1
+  criticalValue: 10
+  duration: 5m
+  content: "ERROR|FATAL|CRITICAL"
+  level: "error"
+  source: "/var/log/cassandra/system.log"
+  annotations:
+    summary: "Cassandra critical errors detected"
+    description: "Critical errors found in system log at {{ $labels.host_id }}"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsLogAlert
+metadata:
+  name: cassandra-disk-warnings
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-disk-warnings
+  operator: ">="
+  warningValue: 1
+  criticalValue: 5
+  duration: 10m
+  content: "Disk"
+  level: "warn,error"
+  source: "/var/log/cassandra/system.log"
+  annotations:
+    summary: "Cassandra disk-related warnings"
+
+---
+# Network connectivity health checks
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: cassandra-native-port-check
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-native-port
+  tcp: "cassandra-0.cassandra-headless.default.svc.cluster.local:9042"
+  interval: "15s"
+  timeout: "3s"
+  readonly: false
+  supportedAgentTypes:
+    - "base"
+    - "premium"
+    - "enterprise"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: cassandra-internode-check
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-internode-port
+  tcp: "cassandra-0.cassandra-headless.default.svc.cluster.local:7000"
+  interval: "30s"
+  timeout: "5s"
+  readonly: true
+  supportedAgentTypes:
+    - "base"
+    - "premium"
+
+---
+# HTTP health checks for Cassandra JMX
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckHTTP
+metadata:
+  name: cassandra-jmx-endpoint
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-jmx-health
+  http: "http://cassandra-0.cassandra-headless.default.svc.cluster.local:7199/jolokia/version"
+  method: "GET"
+  interval: "60s"
+  timeout: "10s"
+  readonly: true
+  supportedAgentTypes:
+    - "premium"
+    - "enterprise"
+
+---
+# Shell-based custom health checks
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckShell
+metadata:
+  name: cassandra-custom-validation
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-custom-check
+  shell: |
+    #!/bin/bash
+    # Check if Cassandra token ring is healthy
+    nodetool status 2>/dev/null | grep -c "UN" > /tmp/up_nodes
+    UP_NODES=$(cat /tmp/up_nodes)
+    if [ "$UP_NODES" -ge 3 ]; then
+      exit 0  # Success
+    else
+      exit 1  # Failure
+    fi
+  interval: "120s"
+  timeout: "15s"
+  readonly: true
+  supportedAgentTypes:
+    - "enterprise"
+
+---
+# Alert routing with multiple integrations
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAlertRoute
+metadata:
+  name: cassandra-enterprise-routing
+  namespace: axonops-enterprise
+spec:
+  connectionRef: "axonops-api-credentials"
+  clusterName: cassandra-us-east
+  clusterType: cassandra
+  name: cassandra-intelligent-routing
+  integrations:
+    - type: "pagerduty"
+      routing:
+        - "cassandra-on-call"
+        - "database-team"
+    - type: "slack"
+      routing:
+        - "cassandra-alerts"
+        - "critical-alerts"
+    - type: "opsgenie"
+      routing:
+        - "cassandra-team"
+  # Critical alerts escalate to on-call engineer
+  criticalOverrides:
+    - type: "pagerduty"
+      routing:
+        - "on-call-engineer"
+    - type: "slack"
+      routing:
+        - "crit-incidents"
+  # Warning alerts go to team channel
+  warningOverrides:
+    - type: "slack"
+      routing:
+        - "cassandra-team-warnings"
+  # Info alerts go to metrics channel
+  infoOverrides:
+    - type: "slack"
+      routing:
+        - "cassandra-metrics"

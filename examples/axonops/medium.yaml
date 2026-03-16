@@ -1,0 +1,269 @@
+# medium.yaml - Production-ready AxonOps deployment with HA setup
+# This example demonstrates a scalable deployment suitable for production environments
+# with multiple replicas, persistent storage, and TLS support.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: axonops-prod
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-credentials
+  namespace: axonops-prod
+type: Opaque
+stringData:
+  api_key: "your-production-api-key-here"
+  token_type: "Bearer"
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: ops@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  name: axonops
+  namespace: axonops-prod
+spec:
+  server:
+    orgName: "ACME Corporation"
+    repository:
+      image: "ghcr.io/axonops/axon-server"
+      tag: "2.0.19"
+    replicas: 3
+    resources:
+      requests:
+        cpu: "2"
+        memory: "4Gi"
+      limits:
+        cpu: "4"
+        memory: "8Gi"
+    storage:
+      size: "100Gi"
+      storageClassName: "fast-ssd"
+    # Expose server API via Ingress with TLS
+    apiIngress:
+      enabled: true
+      annotations:
+        cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        nginx.ingress.kubernetes.io/rate-limit: "100"
+      hosts:
+        - "api.axonops.example.com"
+      tls:
+        - secretName: axonops-api-tls
+          hosts:
+            - "api.axonops.example.com"
+    # Expose agent port via Ingress
+    agentIngress:
+      enabled: true
+      hosts:
+        - "agent.axonops.example.com"
+
+  timeSeries:
+    repository:
+      image: "ghcr.io/axonops/axondb-timeseries"
+      tag: "5.0.6-1.1.0"
+    replicas: 3
+    resources:
+      requests:
+        cpu: "4"
+        memory: "8Gi"
+      limits:
+        cpu: "8"
+        memory: "16Gi"
+    storage:
+      size: "500Gi"
+      storageClassName: "fast-ssd"
+    # Custom heap size for TimeSeries
+    jvmHeapSize: "8g"
+
+  search:
+    repository:
+      image: "ghcr.io/axonops/axondb-search"
+      tag: "6.15.0"
+    replicas: 2
+    resources:
+      requests:
+        cpu: "2"
+        memory: "4Gi"
+      limits:
+        cpu: "4"
+        memory: "8Gi"
+    storage:
+      size: "250Gi"
+      storageClassName: "fast-ssd"
+
+  dashboard:
+    repository:
+      image: "registry.axonops.com/axonops-public/axonops-docker/axon-dash"
+      tag: "2.0.28"
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+      hosts:
+        - "dashboard.axonops.example.com"
+      tls:
+        - secretName: axonops-dashboard-tls
+          hosts:
+            - "dashboard.axonops.example.com"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-read-latency
+  namespace: axonops-prod
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: cassandra-read-latency-high
+  operator: ">"
+  warningValue: 50
+  criticalValue: 100
+  duration: 5m
+  dashboard: "Cassandra Overview"
+  chart: "Read Latency"
+  annotations:
+    summary: "Cassandra read latency is high"
+    description: "Read p99 latency on {{ $labels.host_id }} exceeded threshold"
+  filters:
+    dataCenter:
+      - "us-east-1a"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: cassandra-write-latency
+  namespace: axonops-prod
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: cassandra-write-latency-high
+  operator: ">"
+  warningValue: 30
+  criticalValue: 50
+  duration: 5m
+  dashboard: "Cassandra Overview"
+  chart: "Write Latency"
+  annotations:
+    summary: "Cassandra write latency is high"
+    description: "Write p99 latency exceeded threshold"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsLogAlert
+metadata:
+  name: cassandra-compaction-errors
+  namespace: axonops-prod
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: cassandra-compaction-errors
+  operator: ">="
+  warningValue: 1
+  criticalValue: 5
+  duration: 10m
+  content: "Compaction"
+  level: "error"
+  source: "/var/log/cassandra/system.log"
+  annotations:
+    summary: "Cassandra compaction errors detected"
+    description: "Multiple compaction errors in system log"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckTCP
+metadata:
+  name: cassandra-native-healthcheck
+  namespace: axonops-prod
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: cassandra-native-port-check
+  tcp: "cassandra-0.cassandra-headless.default.svc.cluster.local:9042"
+  interval: "30s"
+  timeout: "5s"
+  readonly: false
+  supportedAgentTypes:
+    - "base"
+    - "premium"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsHealthcheckHTTP
+metadata:
+  name: cassandra-jmx-healthcheck
+  namespace: axonops-prod
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: cassandra-jmx-check
+  http: "http://cassandra-0.cassandra-headless.default.svc.cluster.local:7199/jolokia/version"
+  method: "GET"
+  interval: "60s"
+  timeout: "10s"
+  readonly: true
+  supportedAgentTypes:
+    - "base"
+
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAlertRoute
+metadata:
+  name: cassandra-alerts-routing
+  namespace: axonops-prod
+spec:
+  connectionRef: "axonops-credentials"
+  clusterName: production-cassandra
+  clusterType: cassandra
+  name: cassandra-alert-routing
+  integrations:
+    - type: "pagerduty"
+      routing:
+        - "high-priority"
+    - type: "slack"
+      routing:
+        - "ops-alerts"
+  # Critical alerts route to on-call
+  criticalOverrides:
+    - type: "pagerduty"
+      routing:
+        - "on-call"
+  # Warning alerts route to team channel
+  warningOverrides:
+    - type: "slack"
+      routing:
+        - "cassandra-team"
