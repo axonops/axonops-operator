@@ -67,6 +67,83 @@ None currently.
 - **Ingress + Gateway**: both `Ingress` and `GatewayConfig` structs are supported on Dashboard, Server Agent, and Server API endpoints; they are independent and can be enabled together or separately
 - **No webhooks** scaffolded yet (add later if needed for validation)
 
+---
+
+## Development Workflow
+
+### Feature Request Process
+
+When requesting a new feature, follow this structured workflow:
+
+**Phase 1: GitHub Issue**
+- Create a GitHub issue with clear title and description
+- Include problem statement and proposed solution
+- Add appropriate labels (`feature`, `bug`, `enhancement`, etc.)
+- Note the issue number (e.g., #42)
+
+**Phase 2: Planning Session**
+- Use `EnterPlanMode` to design the implementation
+- Explore codebase impact and affected files
+- Identify dependencies and potential risks
+- Get approval on the approach before coding
+
+**Phase 3: Feature Branch**
+- Create branch with format: `<type>/<issue-number>-<slug>`
+- Examples: `feature/42-webhook-support`, `fix/15-namespace-leak`, `docs/20-api-docs`
+- Command: `git checkout -b feature/42-webhook-support`
+
+**Phase 4: Implementation**
+- Follow the approved plan from EnterPlanMode
+- Keep commits focused with clear messages
+- Run quality checks: `make fmt && make vet && make lint && make test`
+- All tests must pass before submitting PR
+
+**Phase 5: Commit & PR**
+- Use conventional commit format with issue reference:
+  ```
+  feat: add webhook support for alert notifications
+
+  - Implement HTTPServer for webhook endpoint
+  - Add WebhookConfig CRD for routing
+  - Support authentication via API keys
+
+  Closes #42
+  ```
+- Create PR with title describing the change
+- Body should include `Closes #<issue-number>` to auto-link
+- Ensure CI checks pass
+
+**Phase 6: Merge & Deploy**
+- Get approval from maintainers
+- Merge to main branch
+- GitHub issue closes automatically
+
+### Branch Naming Convention
+
+| Type | Format | Example |
+|---|---|---|
+| Feature | `feature/<number>-<slug>` | `feature/42-webhook-support` |
+| Bug Fix | `fix/<number>-<slug>` | `fix/15-namespace-leak` |
+| Documentation | `docs/<number>-<slug>` | `docs/20-api-docs` |
+| Chore | `chore/<number>-<slug>` | `chore/8-upgrade-deps` |
+
+### Workflow Example
+
+```
+1. User: "Add webhook support for alerts"
+2. Create GitHub issue #42
+3. Launch EnterPlanMode for design approval
+4. git checkout -b feature/42-webhook-support
+5. Implement per approved plan
+6. make fmt && make vet && make lint && make test
+7. git commit -m "feat: add webhook support..." Closes #42
+8. Create PR, wait for CI + review
+9. Merge to main
+10. GitHub issue #42 auto-closes
+```
+
+---
+
 ## Dependencies & Integration Points
 
 - **AxonOps REST API** (`/api/v1/alert-rules/...`, `/api/v1/dashboardtemplate/...`, `/api/v1/integrations/...`, `/api/v1/healthchecks/...`): all alert CRD controllers call this API
