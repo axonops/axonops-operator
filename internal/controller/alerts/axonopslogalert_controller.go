@@ -265,7 +265,9 @@ func (r *AxonOpsLogAlertReconciler) buildLogAlertRule(alert *alertsv1alpha1.Axon
 		}
 	}
 
-	// Note: Integrations are intentionally omitted from API payload (same as metric alerts)
+	// Note: Integrations are intentionally omitted from API payload.
+	// Alert routing should be configured via the AxonOpsAlertRoute CRD instead,
+	// which provides a cleaner separation of concerns and matches Kubernetes patterns.
 
 	return rule
 }

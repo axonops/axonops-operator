@@ -88,7 +88,9 @@ type AxonOpsLogAlertSpec struct {
 	Annotations *LogAlertAnnotations `json:"annotations,omitempty"`
 
 	// Integrations specifies how to route alert notifications
-	// Note: Use AxonOpsAlertRoute CRD for more granular routing control
+	// DEPRECATED: This field is not implemented and is ignored by the controller.
+	// Use the AxonOpsAlertRoute CRD instead for alert routing and notification configuration.
+	// This field is retained for potential future use but should not be configured.
 	// +optional
 	Integrations *LogAlertIntegration `json:"integrations,omitempty"`
 }

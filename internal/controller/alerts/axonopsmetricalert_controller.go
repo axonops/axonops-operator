@@ -279,9 +279,9 @@ func (r *AxonOpsMetricAlertReconciler) buildMetricAlertRule(alert *alertsv1alpha
 	}
 
 	// Note: Integrations are intentionally omitted from API payload.
-	// The AxonOps API expects a different structure for integrations
-	// that doesn't align with the current CR spec.
-	// This can be enhanced in the future once the API contract is clarified.
+	// Alert routing should be configured via the AxonOpsAlertRoute CRD instead,
+	// which provides a cleaner separation of concerns and matches Kubernetes patterns.
+	// The inline Integrations field is deprecated and may be removed in a future version.
 
 	// Add filters if present (data-driven approach for maintainability)
 	if alert.Spec.Filters != nil {
