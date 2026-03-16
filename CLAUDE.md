@@ -52,11 +52,19 @@ Kubernetes operator that manages the AxonOps observability stack. It aims to rep
    - Status: Not Started
    - Notes: Change `Enabled` to `*bool` with proper defaulting webhook or validation
 
+### Planned Features
+
+8. [NOT STARTED] Issue #27 (FEATURE): Add Helm chart for operator installation
+   - Status: Not Started
+   - Target: Phase 5 of roadmap
+   - BDD File: `helm-chart-installation.feature` (15 scenarios)
+   - Notes: Use `kubebuilder edit --plugins=helm/v2-alpha` to scaffold chart with configurable values, RBAC, and webhook support
+
 ### Testing & Validation
 
-8. [COMPLETED] BDD Feature Files (11 total)
+9. [COMPLETED] BDD Feature Files (12 total)
    - Status: Completed
-   - Files: internal-deployment.feature, authentication-lifecycle.feature, component-lifecycle.feature, ingress-gateway.feature, axonops-connection.feature, alert-metric-alert.feature, alert-log-alert.feature, alert-route.feature, healthcheck-http.feature, healthcheck-tcp.feature, healthcheck-shell.feature
+   - Files: internal-deployment.feature, authentication-lifecycle.feature, component-lifecycle.feature, ingress-gateway.feature, axonops-connection.feature, alert-metric-alert.feature, alert-log-alert.feature, alert-route.feature, healthcheck-http.feature, healthcheck-tcp.feature, healthcheck-shell.feature, helm-chart-installation.feature
    - Committed with: `docs: add BDD feature files for all implemented features`
 
 9. [IN PROGRESS] End-to-end testing of AxonOpsServer controller
@@ -308,7 +316,10 @@ kubectl apply -k config/samples/   # Apply sample CRs
    - Defaulting webhook for `Enabled` bool fields (Issue #26)
    - Validation webhooks for enum fields (clusterType, operator, integrationType)
 
-3. **Phase 5**: Helm chart for the operator itself (`kubebuilder edit --plugins=helm/v2-alpha`)
+3. **Phase 5**: Helm chart for the operator itself (Issue #27)
+   - Generate scaffolding with `kubebuilder edit --plugins=helm/v2-alpha`
+   - Configure values.yaml for image, replicas, resource limits, log level
+   - Document installation, configuration, and upgrade procedures
 
 4. **Phase 6**: Enhanced cert-manager integration for AxonOpsServer TLS
    - Optional cert-manager integration (already optional, needs testing)
