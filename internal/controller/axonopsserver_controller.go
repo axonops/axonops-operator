@@ -948,43 +948,6 @@ func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context
 	return nil
 }
 
-// cleanupInternalTimeseriesResources deletes internal TimeSeries resources when switching to external timeseries
-func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
-	log := logf.FromContext(ctx)
-
-	// List of resources to delete
-	resourcesToDelete := []struct {
-		name string
-		obj  client.Object
-	}{
-		{name: "TimeSeries StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-	}
-
-	for _, item := range resourcesToDelete {
-		err := r.Delete(ctx, item.obj)
-		if err != nil && !errors.IsNotFound(err) {
-			log.Error(err, "Failed to delete internal resource", "type", item.name)
-			return err
-		}
-		if err == nil {
-			log.Info("Deleted internal TimeSeries resource", "type", item.name)
-		}
-	}
-
-	return nil
-}
-
 // A component is enabled if it's not nil and its Enabled field is true (default).
 func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 	if component == nil {

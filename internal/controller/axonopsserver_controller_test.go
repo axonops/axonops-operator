@@ -137,8 +137,10 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 			By("Reconciling the external search resource")
 			controllerReconciler := &AxonOpsServerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				ClusterIssuerName: "axonops-selfsigned",
+				RESTMapper:        k8sClient.RESTMapper(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -199,8 +201,10 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 			By("Reconciling the resource with missing Search credentials")
 			controllerReconciler := &AxonOpsServerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				ClusterIssuerName: "axonops-selfsigned",
+				RESTMapper:        k8sClient.RESTMapper(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -271,8 +275,10 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 			By("Reconciling the resource")
 			controllerReconciler := &AxonOpsServerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				ClusterIssuerName: "axonops-selfsigned",
+				RESTMapper:        k8sClient.RESTMapper(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -354,8 +360,10 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 			By("Reconciling the external timeseries resource")
 			controllerReconciler := &AxonOpsServerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				ClusterIssuerName: "axonops-selfsigned",
+				RESTMapper:        k8sClient.RESTMapper(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -416,8 +424,10 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 			By("Reconciling the resource with missing TimeSeries credentials")
 			controllerReconciler := &AxonOpsServerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				ClusterIssuerName: "axonops-selfsigned",
+				RESTMapper:        k8sClient.RESTMapper(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -488,8 +498,10 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 			By("Reconciling the resource")
 			controllerReconciler := &AxonOpsServerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				ClusterIssuerName: "axonops-selfsigned",
+				RESTMapper:        k8sClient.RESTMapper(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
