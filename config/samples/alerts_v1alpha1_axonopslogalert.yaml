@@ -1,20 +1,31 @@
 apiVersion: alerts.axonops.com/v1alpha1
 kind: AxonOpsLogAlert
 metadata:
-  name: tombstone-error-log
-  namespace: default
+  labels:
+    app.kubernetes.io/name: axonops
+    app.kubernetes.io/instance: default
+    app.kubernetes.io/component: alerting
+  name: axonopslogalert-sample
 spec:
   connectionRef: production
   clusterName: prod-cassandra
   clusterType: cassandra
-  name: tombstone-error-log
+  name: tombstone-error-alert
   operator: ">="
   warningValue: 1
   criticalValue: 5
   duration: 15m
+  # Log-specific fields (all optional)
   level: "error,warning"
   content: "TombstoneOverwhelmingException"
   source: "/var/log/cassandra/system.log"
+  # Annotations
   annotations:
-    summary: "Cassandra tombstone exceptions detected"
-    description: "TombstoneOverwhelmingException errors detected in system logs"
+    summary: "High number of tombstone errors detected"
+    description: "Alert fires when TombstoneOverwhelmingException appears in logs"
+  # Integrations (optional)
+  integrations:
+    type: "slack"
+    routing:
+      - "#alerts"
+    overrideError: true

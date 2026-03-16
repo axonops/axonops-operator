@@ -20,6 +20,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
 // AxonOpsLogAlertSpec defines the desired state of AxonOpsLogAlert
 type AxonOpsLogAlertSpec struct {
 	// ConnectionRef is the name of an AxonOpsConnection in the same namespace.
@@ -47,11 +50,11 @@ type AxonOpsLogAlertSpec struct {
 	// +kubebuilder:validation:Enum=>;>=;=;!=;<=;<
 	Operator string `json:"operator"`
 
-	// WarningValue is the warning threshold (e.g., count of log events)
+	// WarningValue is the warning threshold
 	// +kubebuilder:validation:Required
 	WarningValue float64 `json:"warningValue"`
 
-	// CriticalValue is the critical threshold (e.g., count of log events)
+	// CriticalValue is the critical threshold
 	// +kubebuilder:validation:Required
 	CriticalValue float64 `json:"criticalValue"`
 
@@ -60,19 +63,19 @@ type AxonOpsLogAlertSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Duration string `json:"duration"`
 
-	// Content is the log message content/phrase to match (optional)
+	// Content is the message or phrase to match in logs
 	// +optional
 	Content string `json:"content,omitempty"`
 
-	// Level is the log level filter (e.g. "error,warning", comma-separated for multiple)
+	// Level specifies log levels to match (comma-separated: error, warning, info, debug)
 	// +optional
 	Level string `json:"level,omitempty"`
 
-	// LogType is the type of log to monitor (e.g. "system")
+	// LogType specifies the type of logs to match (e.g., system, application)
 	// +optional
 	LogType string `json:"logType,omitempty"`
 
-	// Source is the log source/file path to monitor (e.g. "/var/log/cassandra/system.log")
+	// Source specifies the log file source path (e.g., /var/log/cassandra/system.log)
 	// +optional
 	Source string `json:"source,omitempty"`
 
@@ -95,10 +98,6 @@ type LogAlertAnnotations struct {
 	// Description is a longer description of the alert
 	// +optional
 	Description string `json:"description,omitempty"`
-
-	// WidgetURL is a URL to the dashboard widget
-	// +optional
-	WidgetURL string `json:"widgetUrl,omitempty"`
 }
 
 // LogAlertIntegration defines alert notification routing

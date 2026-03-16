@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	logFinalizerName = "alerts.axonops.com/log-alert-finalizer"
-	logCondTypeReady = "Ready"
+	logAlertFinalizerName = "alerts.axonops.com/log-alert-finalizer"
+	logAlertCondTypeReady = "Ready"
 )
 
 // AxonOpsLogAlertReconciler reconciles a AxonOpsLogAlert object
@@ -69,10 +69,9 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return r.handleDeletion(ctx, alert)
 	}
 
-	// Add finalizer if not present — return immediately so the watch triggers a fresh
-	// reconcile with an up-to-date ResourceVersion, avoiding status update conflicts.
-	if !controllerutil.ContainsFinalizer(alert, logFinalizerName) {
-		controllerutil.AddFinalizer(alert, logFinalizerName)
+	// Add finalizer if not present
+	if !controllerutil.ContainsFinalizer(alert, logAlertFinalizerName) {
+		controllerutil.AddFinalizer(alert, logAlertFinalizerName)
 		if err := r.Update(ctx, alert); err != nil {
 			log.Error(err, "Failed to add finalizer")
 			return ctrl.Result{}, err
@@ -80,7 +79,7 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	// Resolve AxonOps API client from connection or environment
+	// Resolve AxonOps API client from connection
 	apiClient, err := ResolveAPIClient(ctx, r.Client, alert.Namespace, alert.Spec.ConnectionRef)
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
@@ -99,22 +98,13 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// Check if alert is already synced with observed generation matching
-	// This avoids unnecessary API calls on every reconciliation
-	readyCond := meta.FindStatusCondition(alert.Status.Conditions, logCondTypeReady)
+	readyCond := meta.FindStatusCondition(alert.Status.Conditions, logAlertCondTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		alert.Status.ObservedGeneration == alert.Generation &&
 		alert.Status.SyncedAlertID != "" {
-		log.Info("Alert already synced and spec unchanged, skipping API call",
-			"syncedID", alert.Status.SyncedAlertID, "generation", alert.Generation)
+		log.Info("Alert already synced and spec unchanged, skipping API call")
 		return ctrl.Result{}, nil
 	}
-	log.Info("Alert needs sync - checking conditions",
-		"readyCondExists", readyCond != nil,
-		"readyCondTrue", readyCond != nil && readyCond.Status == metav1.ConditionTrue,
-		"genMatch", alert.Status.ObservedGeneration == alert.Generation,
-		"hasSyncedID", alert.Status.SyncedAlertID != "",
-		"observedGen", alert.Status.ObservedGeneration,
-		"currentGen", alert.Generation)
 
 	// Set Progressing condition
 	meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
@@ -125,15 +115,11 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		Message:            "Syncing alert rule with AxonOps",
 	})
 
-	// Build MetricAlertRule from spec (reuse same API payload structure)
+	// Build LogAlertRule from spec (log alerts use same API as metric alerts)
 	rule := r.buildLogAlertRule(alert)
-	log.Info("About to sync log alert with AxonOps", "alertName", alert.Spec.Name, "ruleID", rule.ID, "expr", rule.Expr)
 
 	// Create or update the alert in AxonOps
 	result, err := apiClient.CreateOrUpdateMetricAlertRule(ctx, alert.Spec.ClusterType, alert.Spec.ClusterName, rule)
-	if err == nil {
-		log.Info("Successfully synced log alert, got ID from API", "returnedID", result.ID)
-	}
 	if err != nil {
 		log.Error(err, "Failed to create/update alert rule")
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
@@ -155,9 +141,7 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	// Re-fetch the CR to get the latest ResourceVersion before updating status.
-	// Without this, a conflict error would cause a requeue where SyncedAlertID is
-	// still empty, triggering yet another API create call and producing duplicates.
+	// Re-fetch the CR to get the latest ResourceVersion before updating status
 	syncedID := result.ID
 	syncedGeneration := alert.Generation
 	if err := r.Get(ctx, req.NamespacedName, alert); err != nil {
@@ -171,7 +155,7 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Set Ready condition
 	meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-		Type:               logCondTypeReady,
+		Type:               logAlertCondTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
 		Reason:             "Synced",
@@ -196,7 +180,7 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 func (r *AxonOpsLogAlertReconciler) handleDeletion(ctx context.Context, alert *alertsv1alpha1.AxonOpsLogAlert) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	if !controllerutil.ContainsFinalizer(alert, logFinalizerName) {
+	if !controllerutil.ContainsFinalizer(alert, logAlertFinalizerName) {
 		return ctrl.Result{}, nil
 	}
 
@@ -230,7 +214,7 @@ func (r *AxonOpsLogAlertReconciler) handleDeletion(ctx context.Context, alert *a
 	}
 
 	// Remove the finalizer
-	controllerutil.RemoveFinalizer(alert, logFinalizerName)
+	controllerutil.RemoveFinalizer(alert, logAlertFinalizerName)
 	if err := r.Update(ctx, alert); err != nil {
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{}, err
@@ -241,7 +225,7 @@ func (r *AxonOpsLogAlertReconciler) handleDeletion(ctx context.Context, alert *a
 }
 
 // buildLogAlertRule constructs a MetricAlertRule from an AxonOpsLogAlert CR
-// Log alerts use the same API payload structure but with events{} expression
+// Log alerts use the same API endpoint as metric alerts, but with different expr syntax
 func (r *AxonOpsLogAlertReconciler) buildLogAlertRule(alert *alertsv1alpha1.AxonOpsLogAlert) axonops.MetricAlertRule {
 	rule := axonops.MetricAlertRule{
 		Alert:         alert.Spec.Name,
@@ -256,7 +240,7 @@ func (r *AxonOpsLogAlertReconciler) buildLogAlertRule(alert *alertsv1alpha1.Axon
 		rule.ID = alert.Status.SyncedAlertID
 	}
 
-	// Build events{} expression for log alerts
+	// Build log events expression
 	rule.Expr = buildLogEventsExpr(alert.Spec.Content, alert.Spec.Level, alert.Spec.Source, alert.Spec.LogType)
 
 	// Add annotations if present
@@ -264,44 +248,41 @@ func (r *AxonOpsLogAlertReconciler) buildLogAlertRule(alert *alertsv1alpha1.Axon
 		rule.Annotations = axonops.MetricAlertAnnotations{
 			Summary:     alert.Spec.Annotations.Summary,
 			Description: alert.Spec.Annotations.Description,
-			WidgetUrl:   alert.Spec.Annotations.WidgetURL,
 		}
 	}
 
-	// Note: Integrations are intentionally omitted from API payload.
-	// The AxonOps API expects a different structure for integrations
-	// that doesn't align with the current CR spec.
-	// This can be enhanced in the future once the API contract is clarified.
+	// Note: Integrations are intentionally omitted from API payload (same as metric alerts)
 
 	return rule
 }
 
-// buildLogEventsExpr builds an events{...} expression for log alert rules
-// Converts comma-separated values to pipe-separated within event fields
+// buildLogEventsExpr constructs a log events expression from log alert filters
+// Format: events{message="content",level="error|warning",source="path",type="logType"}
 func buildLogEventsExpr(content, level, source, logType string) string {
 	var parts []string
 
 	if content != "" {
+		// Escape quotes in content
 		escaped := strings.ReplaceAll(content, `"`, `\"`)
 		parts = append(parts, fmt.Sprintf(`message="%s"`, escaped))
 	}
 
 	if level != "" {
-		// Convert comma-separated to pipe-separated
-		levelExpr := strings.ReplaceAll(level, ",", "|")
-		parts = append(parts, fmt.Sprintf(`level="%s"`, levelExpr))
+		// Convert comma-separated values to pipe-separated for the expr
+		levelValues := strings.ReplaceAll(level, ",", "|")
+		parts = append(parts, fmt.Sprintf(`level="%s"`, levelValues))
 	}
 
 	if source != "" {
-		// Convert comma-separated to pipe-separated
-		sourceExpr := strings.ReplaceAll(source, ",", "|")
-		parts = append(parts, fmt.Sprintf(`source="%s"`, sourceExpr))
+		// Convert comma-separated values to pipe-separated for the expr
+		sourceValues := strings.ReplaceAll(source, ",", "|")
+		parts = append(parts, fmt.Sprintf(`source="%s"`, sourceValues))
 	}
 
 	if logType != "" {
-		// Convert comma-separated to pipe-separated
-		typeExpr := strings.ReplaceAll(logType, ",", "|")
-		parts = append(parts, fmt.Sprintf(`type="%s"`, typeExpr))
+		// Convert comma-separated values to pipe-separated for the expr
+		typeValues := strings.ReplaceAll(logType, ",", "|")
+		parts = append(parts, fmt.Sprintf(`type="%s"`, typeValues))
 	}
 
 	return fmt.Sprintf("events{%s}", strings.Join(parts, ","))
