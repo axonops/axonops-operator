@@ -214,7 +214,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Delete(ctx, searchSecret)).To(Succeed())
 		})
 
-		It("should set condition when external Search credentials are missing", func() {
+		It("should auto-generate credentials when external Search has no auth configured", func() {
 			const resourceName = "external-search-no-auth"
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
@@ -236,7 +236,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 								Hosts: []string{"https://opensearch.example.com:9200"},
 							},
 							Authentication: corev1alpha1.AxonAuthentication{
-								// No SecretRef or Username - missing credentials
+								// No SecretRef or Username - credentials will be auto-generated
 							},
 						},
 					},
@@ -257,16 +257,20 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Verifying that SearchReady condition indicates missing credentials")
-			updatedResource := &corev1alpha1.AxonOpsServer{}
-			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedResource)).To(Succeed())
-			cond := meta.FindStatusCondition(updatedResource.Status.Conditions, "SearchReady")
-			Expect(cond).NotTo(BeNil())
-			Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-			Expect(cond.Reason).To(Equal("MissingCredentials"))
+			By("Verifying that a managed auth secret was created with auto-generated credentials")
+			managedSecret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName + "-search-auth",
+				Namespace: "default",
+			}, managedSecret)).To(Succeed())
+			Expect(managedSecret.Data).To(HaveKey("AXONOPS_SEARCH_USER"))
+			Expect(managedSecret.Data).To(HaveKey("AXONOPS_SEARCH_PASSWORD"))
+			Expect(string(managedSecret.Data["AXONOPS_SEARCH_USER"])).NotTo(BeEmpty())
+			Expect(string(managedSecret.Data["AXONOPS_SEARCH_PASSWORD"])).NotTo(BeEmpty())
 
 			By("Cleanup")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, managedSecret)).To(Succeed())
 		})
 
 		It("should exclude search-tls volume when Search is external", func() {
@@ -437,7 +441,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Delete(ctx, timeseriesSecret)).To(Succeed())
 		})
 
-		It("should set condition when external TimeSeries credentials are missing", func() {
+		It("should auto-generate credentials when external TimeSeries has no auth configured", func() {
 			const resourceName = "external-timeseries-no-auth"
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
@@ -459,7 +463,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 								Hosts: []string{"cassandra-node1.example.com:9042"},
 							},
 							Authentication: corev1alpha1.AxonAuthentication{
-								// No SecretRef or Username - missing credentials
+								// No SecretRef or Username - credentials will be auto-generated
 							},
 						},
 					},
@@ -480,16 +484,20 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Verifying that TimeSeriesReady condition indicates missing credentials")
-			updatedResource := &corev1alpha1.AxonOpsServer{}
-			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedResource)).To(Succeed())
-			cond := meta.FindStatusCondition(updatedResource.Status.Conditions, "TimeSeriesReady")
-			Expect(cond).NotTo(BeNil())
-			Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-			Expect(cond.Reason).To(Equal("MissingCredentials"))
+			By("Verifying that a managed auth secret was created with auto-generated credentials")
+			managedSecret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName + "-timeseries-auth",
+				Namespace: "default",
+			}, managedSecret)).To(Succeed())
+			Expect(managedSecret.Data).To(HaveKey("AXONOPS_DB_USER"))
+			Expect(managedSecret.Data).To(HaveKey("AXONOPS_DB_PASSWORD"))
+			Expect(string(managedSecret.Data["AXONOPS_DB_USER"])).NotTo(BeEmpty())
+			Expect(string(managedSecret.Data["AXONOPS_DB_PASSWORD"])).NotTo(BeEmpty())
 
 			By("Cleanup")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, managedSecret)).To(Succeed())
 		})
 
 		It("should exclude timeseries-tls volume when TimeSeries is external", func() {

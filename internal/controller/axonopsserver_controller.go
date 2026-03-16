@@ -346,35 +346,22 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// Ensure TimeSeries authentication secret, certificate, and workload (if component is enabled)
 	if r.isComponentEnabled(server.Spec.TimeSeries) {
 		if isTimeSeriesExternal(server) {
-			// Validate authentication credentials for external timeseries
-			auth := server.Spec.TimeSeries.Authentication
-			if auth.SecretRef == "" && (auth.Username == "" || auth.Password == "") {
-				// Re-fetch before status update to avoid conflicts
-				if err := r.Get(ctx, req.NamespacedName, server); err != nil {
-					return ctrl.Result{}, client.IgnoreNotFound(err)
-				}
-				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-					Type:               "TimeSeriesReady",
-					Status:             metav1.ConditionFalse,
-					ObservedGeneration: server.Generation,
-					Reason:             "MissingCredentials",
-					Message:            "External TimeSeries requires either authentication.secretRef or both username and password",
-				})
-				server.Status.ObservedGeneration = server.Generation
-				if err := r.Status().Update(ctx, server); err != nil {
-					log.Error(err, "Failed to update status for missing TimeSeries credentials")
-				}
-				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-			}
-
 			// Clean up any internal TimeSeries resources if they exist
 			if err := r.cleanupInternalTimeseriesResources(ctx, server); err != nil {
 				log.Error(err, "Failed to cleanup internal TimeSeries resources")
 				return ctrl.Result{}, err
 			}
 
-			// Use the provided SecretRef for external timeseries credentials
-			timeSeriesSecretName = auth.SecretRef
+			// Ensure authentication secret for external TimeSeries.
+			// ensureAuthenticationSecret handles all cases: SecretRef (validates it),
+			// inline username/password (creates a managed Secret), and no credentials
+			// (auto-generates into a managed Secret).
+			var err error
+			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication)
+			if err != nil {
+				log.Error(err, "Failed to ensure external TimeSeries authentication secret")
+				return ctrl.Result{}, err
+			}
 			log.Info("TimeSeries is configured as external", "hosts", server.Spec.TimeSeries.External.Hosts)
 		} else {
 			// Internal timeseries - existing behavior
@@ -398,40 +385,33 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return ctrl.Result{}, err
 			}
 		}
+	} else {
+		// TimeSeries disabled — clean up any existing resources
+		if err := r.cleanupInternalTimeseriesResources(ctx, server); err != nil {
+			log.Error(err, "Failed to cleanup disabled TimeSeries resources")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Ensure Search authentication secret, certificate, and workload (if component is enabled)
 	if r.isComponentEnabled(server.Spec.Search) {
 		if isSearchExternal(server) {
-			// Validate authentication credentials for external search
-			auth := server.Spec.Search.Authentication
-			if auth.SecretRef == "" && (auth.Username == "" || auth.Password == "") {
-				// Re-fetch before status update to avoid conflicts
-				if err := r.Get(ctx, req.NamespacedName, server); err != nil {
-					return ctrl.Result{}, client.IgnoreNotFound(err)
-				}
-				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-					Type:               "SearchReady",
-					Status:             metav1.ConditionFalse,
-					ObservedGeneration: server.Generation,
-					Reason:             "MissingCredentials",
-					Message:            "External Search requires either authentication.secretRef or both username and password",
-				})
-				server.Status.ObservedGeneration = server.Generation
-				if err := r.Status().Update(ctx, server); err != nil {
-					log.Error(err, "Failed to update status for missing Search credentials")
-				}
-				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-			}
-
 			// Clean up any internal Search resources if they exist
 			if err := r.cleanupInternalSearchResources(ctx, server); err != nil {
 				log.Error(err, "Failed to cleanup internal Search resources")
 				return ctrl.Result{}, err
 			}
 
-			// Use the provided SecretRef for external search credentials
-			searchSecretName = auth.SecretRef
+			// Ensure authentication secret for external Search.
+			// ensureAuthenticationSecret handles all cases: SecretRef (validates it),
+			// inline username/password (creates a managed Secret), and no credentials
+			// (auto-generates into a managed Secret).
+			var err error
+			searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication)
+			if err != nil {
+				log.Error(err, "Failed to ensure external Search authentication secret")
+				return ctrl.Result{}, err
+			}
 			log.Info("Search is configured as external", "hosts", server.Spec.Search.External.Hosts)
 		} else {
 			// Internal search - existing behavior
@@ -455,6 +435,12 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return ctrl.Result{}, err
 			}
 		}
+	} else {
+		// Search disabled — clean up any existing resources
+		if err := r.cleanupInternalSearchResources(ctx, server); err != nil {
+			log.Error(err, "Failed to cleanup disabled Search resources")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Ensure Server workload (if component is enabled)
@@ -464,6 +450,12 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			log.Error(err, "Failed to reconcile Server workload")
 			return ctrl.Result{}, err
 		}
+	} else {
+		// Server disabled — clean up any existing resources
+		if err := r.cleanupServerResources(ctx, server); err != nil {
+			log.Error(err, "Failed to cleanup disabled Server resources")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Ensure Dashboard workload (if component is enabled)
@@ -471,6 +463,12 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// Create ServiceAccount, Service, ConfigMap, and Deployment for Dashboard
 		if err := r.reconcileDashboard(ctx, server); err != nil {
 			log.Error(err, "Failed to reconcile Dashboard workload")
+			return ctrl.Result{}, err
+		}
+	} else {
+		// Dashboard disabled — clean up any existing resources
+		if err := r.cleanupDashboardResources(ctx, server); err != nil {
+			log.Error(err, "Failed to cleanup disabled Dashboard resources")
 			return ctrl.Result{}, err
 		}
 	}
@@ -969,6 +967,74 @@ func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context
 	return nil
 }
 
+// cleanupServerResources deletes all Server resources when the component is disabled
+func (r *AxonOpsServerReconciler) cleanupServerResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+
+	resourcesToDelete := []struct {
+		name string
+		obj  client.Object
+	}{
+		{name: "Server StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}}},
+		{name: "Server headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentServer), Namespace: server.Namespace}}},
+		{name: "Server agent Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-agent", server.Name, componentServer), Namespace: server.Namespace}}},
+		{name: "Server API Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-api", server.Name, componentServer), Namespace: server.Namespace}}},
+		{name: "Server config Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}}},
+		{name: "Server ServiceAccount", obj: &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}}},
+	}
+
+	for _, item := range resourcesToDelete {
+		err := r.Delete(ctx, item.obj)
+		if err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete Server resource", "type", item.name)
+			return err
+		}
+		if err == nil {
+			log.Info("Deleted Server resource", "type", item.name)
+		}
+	}
+
+	return nil
+}
+
+// cleanupDashboardResources deletes all Dashboard resources when the component is disabled
+func (r *AxonOpsServerReconciler) cleanupDashboardResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+
+	resourcesToDelete := []struct {
+		name string
+		obj  client.Object
+	}{
+		{name: "Dashboard Deployment", obj: &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}}},
+		{name: "Dashboard Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}}},
+		{name: "Dashboard ConfigMap", obj: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}}},
+		{name: "Dashboard ServiceAccount", obj: &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}}},
+	}
+
+	for _, item := range resourcesToDelete {
+		err := r.Delete(ctx, item.obj)
+		if err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete Dashboard resource", "type", item.name)
+			return err
+		}
+		if err == nil {
+			log.Info("Deleted Dashboard resource", "type", item.name)
+		}
+	}
+
+	return nil
+}
+
 // A component is enabled if it's not nil and its Enabled field is true (default).
 func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 	if component == nil {
@@ -1285,7 +1351,11 @@ func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Contex
 			Namespace: server.Namespace,
 		},
 	}
-	orgName := strings.ToLower(server.Spec.Server.OrgName)
+	// Use OrgName from Server spec if available, otherwise fall back to CR name
+	orgName := strings.ToLower(server.Name)
+	if server.Spec.Server != nil && server.Spec.Server.OrgName != "" {
+		orgName = strings.ToLower(server.Spec.Server.OrgName)
+	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, sts, func() error {
 		if err := controllerutil.SetControllerReference(server, sts, r.Scheme); err != nil {
@@ -2035,7 +2105,10 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 	}
 
 	// Build the axon-server.yml config (credentials are injected via env vars from secrets)
-	configYAML := r.buildServerConfig(server, searchURL, cqlHosts)
+	configYAML, err := r.buildServerConfig(server, searchURL, cqlHosts)
+	if err != nil {
+		return fmt.Errorf("failed to build server config: %w", err)
+	}
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2139,7 +2212,7 @@ cql_ca_cert: {{ .CQLCACert }}
 
 // buildServerConfig generates the axon-server.yml configuration using a Go template.
 // Credentials are passed via environment variables from mounted secrets.
-func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOpsServer, searchURL, cqlHosts string) string {
+func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOpsServer, searchURL, cqlHosts string) (string, error) {
 	// Build dashboard URL from external hosts if available
 	dashURL := fmt.Sprintf("https://%s-%s", server.Name, componentDashboard)
 	if server.Spec.Dashboard != nil && len(server.Spec.Dashboard.External.Hosts) > 0 {
@@ -2209,16 +2282,15 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 
 	tmpl, err := template.New("axon-server").Parse(serverConfigTemplate)
 	if err != nil {
-		// This should never happen with a valid template
-		return fmt.Sprintf("# Template parse error: %v", err)
+		return "", fmt.Errorf("failed to parse server config template: %w", err)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return fmt.Sprintf("# Template execute error: %v", err)
+		return "", fmt.Errorf("failed to execute server config template: %w", err)
 	}
 
-	return buf.String()
+	return buf.String(), nil
 }
 
 // buildServerEnv builds environment variables for the server container
