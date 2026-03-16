@@ -22,6 +22,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// IssuerConfig configures the cert-manager ClusterIssuer for TLS.
+type IssuerConfig struct {
+	// Name is the name of an existing ClusterIssuer to use.
+	// When set, the controller will NOT create a default ClusterIssuer.
+	// Mutually exclusive with CASecretRef.
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// CASecretRef is the name of a Secret containing a CA key-pair
+	// (fields "tls.crt" and "tls.key") to use as the CA for a CA-backed
+	// ClusterIssuer. When set, the controller creates a CA-type ClusterIssuer
+	// instead of a SelfSigned one.
+	// The secret must exist in the operator's namespace.
+	// Mutually exclusive with Name.
+	// +optional
+	CASecretRef string `json:"caSecretRef,omitempty"`
+}
+
+// AxonOpsTLSConfig configures cert-manager TLS for the AxonOpsServer.
+type AxonOpsTLSConfig struct {
+	// Issuer configures the ClusterIssuer used to sign TLS certificates.
+	// If not specified, a default SelfSigned ClusterIssuer named
+	// "axonops-selfsigned" is created and used.
+	// +optional
+	Issuer IssuerConfig `json:"issuer,omitempty"`
+}
+
 // AxonOpsServerSpec defines the desired state of AxonOpsServer
 // All components are enabled by default. Set component.enabled=false to disable.
 type AxonOpsServerSpec struct {
@@ -40,6 +67,10 @@ type AxonOpsServerSpec struct {
 	// Dashboard configures the axon-dash component
 	// +optional
 	Dashboard *AxonDashboardComponent `json:"dashboard,omitempty"`
+
+	// TLS configures cert-manager TLS certificate issuance for internal components.
+	// +optional
+	TLS AxonOpsTLSConfig `json:"tls,omitempty"`
 }
 
 // AxonOpsServerStatus defines the observed state of AxonOpsServer.

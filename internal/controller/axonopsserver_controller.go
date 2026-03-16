@@ -34,9 +34,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -88,6 +90,9 @@ const (
 
 	// Finalizer name for cleanup
 	axonOpsServerFinalizer = "core.axonops.com/finalizer"
+
+	// Default ClusterIssuer name for cert-manager TLS
+	defaultClusterIssuerName = "axonops-selfsigned"
 )
 
 // AxonOpsServerReconciler reconciles a AxonOpsServer object
@@ -95,6 +100,7 @@ type AxonOpsServerReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
 	ClusterIssuerName string
+	RESTMapper        meta.RESTMapper
 }
 
 // +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsservers,verbs=get;list;watch;create;update;patch;delete
@@ -107,9 +113,79 @@ type AxonOpsServerReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=clusterissuers,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
+
+// resolveIssuerName returns the ClusterIssuer name to reference in Certificate
+// resources. Priority: spec.tls.issuer.name > operator flag (ClusterIssuerName).
+func (r *AxonOpsServerReconciler) resolveIssuerName(server *corev1alpha1.AxonOpsServer) string {
+	if server.Spec.TLS.Issuer.Name != "" {
+		return server.Spec.TLS.Issuer.Name
+	}
+	return r.ClusterIssuerName
+}
+
+// isCertManagerAvailable checks if cert-manager Certificate CRD is registered
+// in the cluster by querying the RESTMapper.
+func (r *AxonOpsServerReconciler) isCertManagerAvailable() bool {
+	_, err := r.RESTMapper.RESTMapping(
+		schema.GroupKind{Group: "cert-manager.io", Kind: "Certificate"},
+		"v1",
+	)
+	return err == nil
+}
+
+// ensureClusterIssuer creates or updates the default ClusterIssuer when no
+// custom issuer name is provided via spec.tls.issuer.name.
+// ClusterIssuer is cluster-scoped; no OwnerReference is set (intentional).
+func (r *AxonOpsServerReconciler) ensureClusterIssuer(
+	ctx context.Context,
+	server *corev1alpha1.AxonOpsServer,
+) error {
+	log := logf.FromContext(ctx)
+
+	issuerName := r.ClusterIssuerName
+	clusterIssuer := &certmanagerv1.ClusterIssuer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: issuerName,
+		},
+	}
+
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, clusterIssuer, func() error {
+		if clusterIssuer.Labels == nil {
+			clusterIssuer.Labels = make(map[string]string)
+		}
+		clusterIssuer.Labels["app.kubernetes.io/managed-by"] = "axonops-operator"
+
+		if server.Spec.TLS.Issuer.CASecretRef != "" {
+			// CA-backed issuer
+			clusterIssuer.Spec = certmanagerv1.IssuerSpec{
+				IssuerConfig: certmanagerv1.IssuerConfig{
+					CA: &certmanagerv1.CAIssuer{
+						SecretName: server.Spec.TLS.Issuer.CASecretRef,
+					},
+				},
+			}
+		} else {
+			// SelfSigned issuer
+			clusterIssuer.Spec = certmanagerv1.IssuerSpec{
+				IssuerConfig: certmanagerv1.IssuerConfig{
+					SelfSigned: &certmanagerv1.SelfSignedIssuer{},
+				},
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to create/update ClusterIssuer %q: %w", issuerName, err)
+	}
+
+	log.Info("ClusterIssuer reconciled", "name", issuerName, "operation", op)
+	return nil
+}
 
 // Reconcile moves the current state of the cluster closer to the desired state.
 func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -152,6 +228,50 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// Re-fetch after update
 		if err := r.Get(ctx, req.NamespacedName, server); err != nil {
 			return ctrl.Result{}, err
+		}
+	}
+
+	// Verify cert-manager CRDs are available
+	if !r.isCertManagerAvailable() {
+		// Re-fetch before status update
+		if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "CertManagerReady",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: server.Generation,
+			Reason:             "CertManagerUnavailable",
+			Message:            "cert-manager CRDs are not installed in the cluster",
+		})
+		server.Status.ObservedGeneration = server.Generation
+		if err := r.Status().Update(ctx, server); err != nil {
+			log.Error(err, "Failed to update status for missing cert-manager CRDs")
+		}
+		log.Error(nil, "cert-manager CRDs not found; requeueing")
+		return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+	}
+
+	// Ensure default ClusterIssuer (only when no custom issuer name is specified)
+	if server.Spec.TLS.Issuer.Name == "" {
+		if err := r.ensureClusterIssuer(ctx, server); err != nil {
+			// Re-fetch before status update
+			if fetchErr := r.Get(ctx, req.NamespacedName, server); fetchErr != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(fetchErr)
+			}
+			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+				Type:               "CertManagerReady",
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: server.Generation,
+				Reason:             "FailedToCreateIssuer",
+				Message:            err.Error(),
+			})
+			server.Status.ObservedGeneration = server.Generation
+			if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+				log.Error(statusErr, "Failed to update status for ClusterIssuer creation failure")
+			}
+			log.Error(err, "Failed to ensure ClusterIssuer")
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 	}
 
@@ -550,7 +670,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		cert.Spec = certmanagerv1.CertificateSpec{
 			SecretName: secretName,
 			IssuerRef: cmmeta.IssuerReference{
-				Name: r.ClusterIssuerName,
+				Name: r.resolveIssuerName(server),
 				Kind: "ClusterIssuer",
 			},
 			CommonName: fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, server.Namespace),
