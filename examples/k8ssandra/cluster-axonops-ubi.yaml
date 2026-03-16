@@ -1,0 +1,55 @@
+apiVersion: k8ssandra.io/v1alpha1
+kind: K8ssandraCluster
+metadata:
+  name: ${K8SSANDRA_CLUSTER_NAME}
+  namespace: ${K8SSANDRA_NAMESPACE}
+spec:
+  cassandra:
+    serverVersion: "${CASSANDRA_VERSION}"
+    serverImage: ${IMAGE_NAME}
+    softPodAntiAffinity: true
+    resources:
+      limits:
+        cpu: ${CPU_LIMIT}
+        memory: ${MEMORY_LIMIT}
+      requests:
+        cpu: ${CPU_REQUEST}
+        memory: ${MEMORY_REQUEST}
+    datacenters:
+      - metadata:
+          name: ${CASSANDRA_DC_NAME}
+        size: ${CASSANDRA_DC_SIZE}
+        containers:
+          - name: cassandra
+            env:
+              - name: AXON_AGENT_KEY
+                value: "${AXON_AGENT_KEY}"
+              - name: AXON_AGENT_ORG
+                value: "${AXON_AGENT_ORG}"
+              - name: AXON_AGENT_SERVER_HOST
+                value: "${AXON_AGENT_SERVER_HOST}"
+              - name: AXON_AGENT_SERVER_PORT
+                value: "${AXON_AGENT_SERVER_PORT}"
+        config:
+          jvmOptions:
+            heap_initial_size: ${HEAP_SIZE}
+            heap_max_size: ${HEAP_SIZE}
+        storageConfig:
+          cassandraDataVolumeClaimSpec:
+            storageClassName: ${STORAGE_CLASS}
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: ${STORAGE_SIZE}
+        extraVolumes:
+          pvcs:
+            - name: axonops-data
+              mountPath: /var/lib/axonops
+              pvcSpec:
+                storageClassName: ${STORAGE_CLASS}
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 512Mi

@@ -1,0 +1,47 @@
+apiVersion: k8ssandra.io/v1alpha1
+kind: K8ssandraCluster
+metadata:
+  name: axonops-k8ssandra-5
+  namespace: k8ssandra-operator
+spec:
+  cassandra:
+    serverVersion: "5.0.6"
+    serverImage: ghcr.io/axonops/k8ssandra/cassandra:5.0.6
+    datacenters:
+      - metadata:
+          name: dc1
+        size: 1
+        containers:
+          - name: cassandra
+            env:
+              - name: AXON_AGENT_KEY
+                value: "not-used"
+              - name: AXON_AGENT_ORG
+                value: "axonops"
+              - name: AXON_AGENT_SERVER_HOST
+                value: "server-dashboard"
+              - name: AXON_AGENT_SERVER_PORT
+                value: "3000"
+        config:
+          jvmOptions:
+            heap_initial_size: 1G
+            heap_max_size: 1G
+        storageConfig:
+          cassandraDataVolumeClaimSpec:
+            storageClassName: 
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+        extraVolumes:
+          pvcs:
+            - name: axonops-data
+              mountPath: /var/lib/axonops
+              pvcSpec:
+                storageClassName: 
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 512Mi

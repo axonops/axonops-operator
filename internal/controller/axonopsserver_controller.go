@@ -148,6 +148,24 @@ func (r *AxonOpsServerReconciler) createOrUpdate(
 	return nil
 }
 
+// needsInternalResources checks if the AxonOpsServer requires any internal database
+// or internal workload components. Returns true if cert-manager is needed.
+func needsInternalResources(server *corev1alpha1.AxonOpsServer) bool {
+	// Check TimeSeries: internal if enabled and not external
+	if server.Spec.TimeSeries != nil && server.Spec.TimeSeries.Enabled {
+		if !isTimeSeriesExternal(server) {
+			return true // Internal TimeSeries needs TLS certs
+		}
+	}
+	// Check Search: internal if enabled and not external
+	if server.Spec.Search != nil && server.Spec.Search.Enabled {
+		if !isSearchExternal(server) {
+			return true // Internal Search needs TLS certs
+		}
+	}
+	return false
+}
+
 // isCertManagerAvailable checks if cert-manager Certificate CRD is registered
 // in the cluster by querying the RESTMapper.
 func (r *AxonOpsServerReconciler) isCertManagerAvailable() bool {
@@ -276,47 +294,49 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	// Verify cert-manager CRDs are available
-	if !r.isCertManagerAvailable() {
-		// Re-fetch before status update
-		if err := r.Get(ctx, req.NamespacedName, server); err != nil {
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-			Type:               "CertManagerReady",
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: server.Generation,
-			Reason:             "CertManagerUnavailable",
-			Message:            "cert-manager CRDs are not installed in the cluster",
-		})
-		server.Status.ObservedGeneration = server.Generation
-		if err := r.Status().Update(ctx, server); err != nil {
-			log.Error(err, "Failed to update status for missing cert-manager CRDs")
-		}
-		log.Error(nil, "cert-manager CRDs not found; requeueing")
-		return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
-	}
-
-	// Ensure default ClusterIssuer (only when no custom issuer name is specified)
-	if server.Spec.TLS.Issuer.Name == "" {
-		if err := r.ensureClusterIssuer(ctx, server); err != nil {
+	// Verify cert-manager CRDs are available (only needed for internal database/workload resources)
+	if needsInternalResources(server) {
+		if !r.isCertManagerAvailable() {
 			// Re-fetch before status update
-			if fetchErr := r.Get(ctx, req.NamespacedName, server); fetchErr != nil {
-				return ctrl.Result{}, client.IgnoreNotFound(fetchErr)
+			if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
 			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
 				Type:               "CertManagerReady",
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: server.Generation,
-				Reason:             "FailedToCreateIssuer",
-				Message:            err.Error(),
+				Reason:             "CertManagerUnavailable",
+				Message:            "cert-manager CRDs are not installed in the cluster",
 			})
 			server.Status.ObservedGeneration = server.Generation
-			if statusErr := r.Status().Update(ctx, server); statusErr != nil {
-				log.Error(statusErr, "Failed to update status for ClusterIssuer creation failure")
+			if err := r.Status().Update(ctx, server); err != nil {
+				log.Error(err, "Failed to update status for missing cert-manager CRDs")
 			}
-			log.Error(err, "Failed to ensure ClusterIssuer")
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			log.Error(nil, "cert-manager CRDs not found; requeueing")
+			return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+		}
+
+		// Ensure default ClusterIssuer (only when no custom issuer name is specified)
+		if server.Spec.TLS.Issuer.Name == "" {
+			if err := r.ensureClusterIssuer(ctx, server); err != nil {
+				// Re-fetch before status update
+				if fetchErr := r.Get(ctx, req.NamespacedName, server); fetchErr != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(fetchErr)
+				}
+				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+					Type:               "CertManagerReady",
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: server.Generation,
+					Reason:             "FailedToCreateIssuer",
+					Message:            err.Error(),
+				})
+				server.Status.ObservedGeneration = server.Generation
+				if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+					log.Error(statusErr, "Failed to update status for ClusterIssuer creation failure")
+				}
+				log.Error(err, "Failed to ensure ClusterIssuer")
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
 		}
 	}
 
