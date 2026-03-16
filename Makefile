@@ -263,7 +263,7 @@ HELM_NAMESPACE ?= axonops-operator-system
 ## Name of the Helm release
 HELM_RELEASE ?= axonops-operator
 ## Path to the Helm chart directory
-HELM_CHART_DIR ?= dist/chart
+HELM_CHART_DIR ?= charts/axonops-operator
 ## Additional arguments to pass to helm commands
 HELM_EXTRA_ARGS ?=
 
