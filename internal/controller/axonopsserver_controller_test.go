@@ -303,4 +303,221 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Delete(ctx, searchSecret)).To(Succeed())
 		})
 	})
+
+	Context("External TimeSeries support", func() {
+		It("should not create internal TimeSeries StatefulSet when external hosts are configured", func() {
+			const resourceName = "external-timeseries-test"
+			ctx := context.Background()
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			// Create a timeseries auth secret for external timeseries
+			timeseriesSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "external-timeseries-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"AXONOPS_DB_USER":     []byte("axonops"),
+					"AXONOPS_DB_PASSWORD": []byte("cassandra123"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, timeseriesSecret)).To(Succeed())
+
+			// Create AxonOpsServer with external timeseries configured
+			resource := &corev1alpha1.AxonOpsServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: corev1alpha1.AxonOpsServerSpec{
+					TimeSeries: &corev1alpha1.AxonDbComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: true,
+							External: corev1alpha1.AxonExternalConfig{
+								Hosts: []string{"cassandra-node1.example.com:9042", "cassandra-node2.example.com:9042"},
+								TLS: corev1alpha1.AxonTLSConfig{
+									Enabled:            false,
+									InsecureSkipVerify: false,
+								},
+							},
+							Authentication: corev1alpha1.AxonAuthentication{
+								SecretRef: "external-timeseries-secret",
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("Reconciling the external timeseries resource")
+			controllerReconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that no internal TimeSeries StatefulSet was created")
+			timeseriesSts := &appsv1.StatefulSet{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName + "-timeseries",
+				Namespace: "default",
+			}, timeseriesSts)
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+
+			By("Verifying that the status condition reflects TimeSeries: External")
+			updatedResource := &corev1alpha1.AxonOpsServer{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedResource)).To(Succeed())
+			cond := meta.FindStatusCondition(updatedResource.Status.Conditions, "TimeSeriesMode")
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+			Expect(cond.Reason).To(Equal("External"))
+
+			By("Cleanup")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, timeseriesSecret)).To(Succeed())
+		})
+
+		It("should set condition when external TimeSeries credentials are missing", func() {
+			const resourceName = "external-timeseries-no-auth"
+			ctx := context.Background()
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			// Create AxonOpsServer with external timeseries but no credentials
+			resource := &corev1alpha1.AxonOpsServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: corev1alpha1.AxonOpsServerSpec{
+					TimeSeries: &corev1alpha1.AxonDbComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: true,
+							External: corev1alpha1.AxonExternalConfig{
+								Hosts: []string{"cassandra-node1.example.com:9042"},
+							},
+							Authentication: corev1alpha1.AxonAuthentication{
+								// No SecretRef or Username - missing credentials
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("Reconciling the resource with missing TimeSeries credentials")
+			controllerReconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that TimeSeriesReady condition indicates missing credentials")
+			updatedResource := &corev1alpha1.AxonOpsServer{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedResource)).To(Succeed())
+			cond := meta.FindStatusCondition(updatedResource.Status.Conditions, "TimeSeriesReady")
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+			Expect(cond.Reason).To(Equal("MissingCredentials"))
+
+			By("Cleanup")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+
+		It("should exclude timeseries-tls volume when TimeSeries is external", func() {
+			const resourceName = "external-timeseries-no-tls"
+			ctx := context.Background()
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			// Create a timeseries auth secret
+			timeseriesSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "timeseries-cred-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"AXONOPS_DB_USER":     []byte("axonops"),
+					"AXONOPS_DB_PASSWORD": []byte("cassandra123"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, timeseriesSecret)).To(Succeed())
+
+			// Create AxonOpsServer with external timeseries and minimal server config
+			resource := &corev1alpha1.AxonOpsServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: corev1alpha1.AxonOpsServerSpec{
+					TimeSeries: &corev1alpha1.AxonDbComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: true,
+							External: corev1alpha1.AxonExternalConfig{
+								Hosts: []string{"cassandra-node1.example.com:9042"},
+							},
+							Authentication: corev1alpha1.AxonAuthentication{
+								SecretRef: "timeseries-cred-secret",
+							},
+						},
+					},
+					Server: &corev1alpha1.AxonServerComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: true,
+						},
+						OrgName: "test-org",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("Reconciling the resource")
+			controllerReconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that Server StatefulSet has no timeseries-tls volume")
+			serverSts := &appsv1.StatefulSet{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName + "-server",
+				Namespace: "default",
+			}, serverSts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that timeseries-tls volume is not present
+			for _, vol := range serverSts.Spec.Template.Spec.Volumes {
+				Expect(vol.Name).NotTo(Equal("timeseries-tls"))
+			}
+
+			// Check that timeseries-tls volume mount is not present
+			for _, mount := range serverSts.Spec.Template.Spec.Containers[0].VolumeMounts {
+				Expect(mount.Name).NotTo(Equal("timeseries-tls"))
+			}
+
+			By("Cleanup")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, timeseriesSecret)).To(Succeed())
+		})
+	})
 })
