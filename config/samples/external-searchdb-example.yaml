@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: external-search-credentials
+  namespace: default
+type: Opaque
+stringData:
+  AXONOPS_SEARCH_USER: admin
+  AXONOPS_SEARCH_PASSWORD: "your-secure-password-here"
+---
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  name: axonops-server
+  namespace: default
+spec:
+  # Configure external OpenSearch/Elasticsearch
+  search:
+    enabled: true
+    external:
+      hosts:
+        - "https://opensearch.example.com:9200"
+      tls:
+        enabled: true
+        insecureSkipVerify: false
+    authentication:
+      # Use an existing secret with credentials
+      secretRef: external-search-credentials
+
+  # Server configuration
+  server:
+    enabled: true
+    orgName: "my-organization"
+    repository:
+      image: "registry.axonops.com/axonops-public/axonops-docker/axon-server"
+      tag: "2.0.27"
+
+  # Dashboard configuration
+  dashboard:
+    enabled: true
+    replicas: 1
+    repository:
+      image: "registry.axonops.com/axonops-public/axonops-docker/axon-dash"
+      tag: "2.0.28"
