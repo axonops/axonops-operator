@@ -95,8 +95,8 @@ const (
 	// Finalizer name for cleanup
 	axonOpsServerFinalizer = "core.axonops.com/finalizer"
 
-	// Default ClusterIssuer name for cert-manager TLS
-	defaultClusterIssuerName = "axonops-selfsigned"
+	// App managed-by label value
+	appManagedBy = "axonops-operator"
 )
 
 // AxonOpsServerReconciler reconciles a AxonOpsServer object
@@ -178,7 +178,7 @@ func (r *AxonOpsServerReconciler) ensureClusterIssuer(
 		if clusterIssuer.Labels == nil {
 			clusterIssuer.Labels = make(map[string]string)
 		}
-		clusterIssuer.Labels["app.kubernetes.io/managed-by"] = "axonops-operator"
+		clusterIssuer.Labels["app.kubernetes.io/managed-by"] = appManagedBy
 
 		if server.Spec.TLS.Issuer.CASecretRef != "" {
 			// CA-backed issuer
@@ -657,7 +657,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		}
 		secret.Labels["app.kubernetes.io/name"] = "axonops"
 		secret.Labels["app.kubernetes.io/component"] = component
-		secret.Labels["app.kubernetes.io/managed-by"] = "axonops-operator"
+		secret.Labels["app.kubernetes.io/managed-by"] = appManagedBy
 
 		// Set secret data with component-specific keys
 		secret.Type = corev1.SecretTypeOpaque
@@ -796,7 +796,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		}
 		cert.Labels["app.kubernetes.io/name"] = "axonops"
 		cert.Labels["app.kubernetes.io/component"] = component
-		cert.Labels["app.kubernetes.io/managed-by"] = "axonops-operator"
+		cert.Labels["app.kubernetes.io/managed-by"] = appManagedBy
 
 		// Build DNS names - include wildcard for StatefulSet pods
 		serviceName := fmt.Sprintf("%s-%s", server.Name, component)
@@ -897,14 +897,51 @@ func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Con
 			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentSearch), Namespace: server.Namespace}}},
 	}
 
-	for _, resource := range resourcesToDelete {
-		err := r.Delete(ctx, resource.obj)
+	for _, item := range resourcesToDelete {
+		err := r.Delete(ctx, item.obj)
 		if err != nil && !errors.IsNotFound(err) {
-			log.Error(err, "Failed to delete internal resource", "type", resource.name)
+			log.Error(err, "Failed to delete internal resource", "type", item.name)
 			return err
 		}
 		if err == nil {
-			log.Info("Deleted internal Search resource", "type", resource.name)
+			log.Info("Deleted internal Search resource", "type", item.name)
+		}
+	}
+
+	return nil
+}
+
+// cleanupInternalTimeseriesResources deletes internal TimeSeries resources when switching to external timeseries
+func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+
+	// List of resources to delete
+	resourcesToDelete := []struct {
+		name string
+		obj  client.Object
+	}{
+		{name: "TimeSeries StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+	}
+
+	for _, item := range resourcesToDelete {
+		err := r.Delete(ctx, item.obj)
+		if err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete internal resource", "type", item.name)
+			return err
+		}
+		if err == nil {
+			log.Info("Deleted internal TimeSeries resource", "type", item.name)
 		}
 	}
 
@@ -2520,7 +2557,7 @@ func (r *AxonOpsServerReconciler) buildLabels(server *corev1alpha1.AxonOpsServer
 		"app.kubernetes.io/name":       "axonops",
 		"app.kubernetes.io/instance":   server.Name,
 		"app.kubernetes.io/component":  component,
-		"app.kubernetes.io/managed-by": "axonops-operator",
+		"app.kubernetes.io/managed-by": appManagedBy,
 	}
 }
 
