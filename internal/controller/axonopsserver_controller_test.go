@@ -69,8 +69,10 @@ var _ = Describe("AxonOpsServer Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &AxonOpsServerReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				ClusterIssuerName: "axonops-selfsigned",
+				RESTMapper:        k8sClient.RESTMapper(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
