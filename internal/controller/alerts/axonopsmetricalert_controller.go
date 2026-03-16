@@ -283,38 +283,25 @@ func (r *AxonOpsMetricAlertReconciler) buildMetricAlertRule(alert *alertsv1alpha
 	// that doesn't align with the current CR spec.
 	// This can be enhanced in the future once the API contract is clarified.
 
-	// Add filters if present
+	// Add filters if present (data-driven approach for maintainability)
 	if alert.Spec.Filters != nil {
 		filters := alert.Spec.Filters
-		if len(filters.DataCenter) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "dc", Value: filters.DataCenter})
+		filterMap := map[string][]string{
+			"dc":          filters.DataCenter,
+			"rack":        filters.Rack,
+			"host_id":     filters.HostID,
+			"scope":       filters.Scope,
+			"keyspace":    filters.Keyspace,
+			"percentile":  filters.Percentile,
+			"consistency": filters.Consistency,
+			"topic":       filters.Topic,
+			"group_id":    filters.GroupID,
+			"group_by":    filters.GroupBy,
 		}
-		if len(filters.Rack) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "rack", Value: filters.Rack})
-		}
-		if len(filters.HostID) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "host_id", Value: filters.HostID})
-		}
-		if len(filters.Scope) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "scope", Value: filters.Scope})
-		}
-		if len(filters.Keyspace) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "keyspace", Value: filters.Keyspace})
-		}
-		if len(filters.Percentile) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "percentile", Value: filters.Percentile})
-		}
-		if len(filters.Consistency) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "consistency", Value: filters.Consistency})
-		}
-		if len(filters.Topic) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "topic", Value: filters.Topic})
-		}
-		if len(filters.GroupID) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "group_id", Value: filters.GroupID})
-		}
-		if len(filters.GroupBy) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "group_by", Value: filters.GroupBy})
+		for name, values := range filterMap {
+			if len(values) > 0 {
+				rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: name, Value: values})
+			}
 		}
 	}
 
