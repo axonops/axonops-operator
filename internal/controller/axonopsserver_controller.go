@@ -34,6 +34,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -183,24 +184,58 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Ensure Search authentication secret, certificate, and workload (if component is enabled)
 	if r.isComponentEnabled(server.Spec.Search) {
-		var err error
-		searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication)
-		if err != nil {
-			log.Error(err, "Failed to ensure Search authentication secret")
-			return ctrl.Result{}, err
-		}
+		if isSearchExternal(server) {
+			// Validate authentication credentials for external search
+			auth := server.Spec.Search.Authentication
+			if auth.SecretRef == "" && auth.Username == "" {
+				// Re-fetch before status update to avoid conflicts
+				if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
+				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+					Type:               "SearchReady",
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: server.Generation,
+					Reason:             "MissingCredentials",
+					Message:            "External Search configured but authentication credentials are missing",
+				})
+				server.Status.ObservedGeneration = server.Generation
+				if err := r.Status().Update(ctx, server); err != nil {
+					log.Error(err, "Failed to update status for missing Search credentials")
+				}
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
 
-		// Create TLS certificate for Search
-		searchCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentSearch)
-		if err != nil {
-			log.Error(err, "Failed to ensure Search TLS certificate")
-			return ctrl.Result{}, err
-		}
+			// Clean up any internal Search resources if they exist
+			if err := r.cleanupInternalSearchResources(ctx, server); err != nil {
+				log.Error(err, "Failed to cleanup internal Search resources")
+				return ctrl.Result{}, err
+			}
 
-		// Create ServiceAccount, Services, and StatefulSet for Search
-		if err := r.reconcileSearch(ctx, server); err != nil {
-			log.Error(err, "Failed to reconcile Search workload")
-			return ctrl.Result{}, err
+			// Use the provided SecretRef for external search credentials
+			searchSecretName = auth.SecretRef
+			log.Info("Search is configured as external", "hosts", server.Spec.Search.External.Hosts)
+		} else {
+			// Internal search - existing behavior
+			var err error
+			searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication)
+			if err != nil {
+				log.Error(err, "Failed to ensure Search authentication secret")
+				return ctrl.Result{}, err
+			}
+
+			// Create TLS certificate for Search
+			searchCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentSearch)
+			if err != nil {
+				log.Error(err, "Failed to ensure Search TLS certificate")
+				return ctrl.Result{}, err
+			}
+
+			// Create ServiceAccount, Services, and StatefulSet for Search
+			if err := r.reconcileSearch(ctx, server); err != nil {
+				log.Error(err, "Failed to reconcile Search workload")
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
@@ -227,11 +262,27 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Update status with secret names
+	// Update status with secret names and conditions
 	statusChanged := server.Status.TimeSeriesSecretName != timeSeriesSecretName ||
 		server.Status.SearchSecretName != searchSecretName ||
 		server.Status.TimeSeriesCertSecretName != timeSeriesCertSecretName ||
 		server.Status.SearchCertSecretName != searchCertSecretName
+
+	// Set Search mode condition
+	if r.isComponentEnabled(server.Spec.Search) {
+		searchMode := "Internal"
+		if isSearchExternal(server) {
+			searchMode = "External"
+		}
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "SearchMode",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: server.Generation,
+			Reason:             searchMode,
+			Message:            "Search: " + searchMode,
+		})
+		statusChanged = true
+	}
 
 	if statusChanged {
 		server.Status.TimeSeriesSecretName = timeSeriesSecretName
@@ -610,6 +661,43 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 }
 
 // isComponentEnabled checks if a component is enabled.
+// cleanupInternalSearchResources deletes internal Search resources when switching to external search
+func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+
+	// List of resources to delete
+	resourcesToDelete := []struct {
+		name string
+		obj  client.Object
+	}{
+		{name: "Search StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentSearch), Namespace: server.Namespace}}},
+		{name: "Search headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentSearch), Namespace: server.Namespace}}},
+		{name: "Search ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentSearch), Namespace: server.Namespace}}},
+		{name: "Search auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-auth", server.Name, componentSearch), Namespace: server.Namespace}}},
+		{name: "Search keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentSearch), Namespace: server.Namespace}}},
+		{name: "Search TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentSearch), Namespace: server.Namespace}}},
+	}
+
+	for _, resource := range resourcesToDelete {
+		err := r.Delete(ctx, resource.obj)
+		if err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete internal resource", "type", resource.name)
+			return err
+		}
+		if err == nil {
+			log.Info("Deleted internal Search resource", "type", resource.name)
+		}
+	}
+
+	return nil
+}
+
 // A component is enabled if it's not nil and its Enabled field is true (default).
 func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 	if component == nil {
@@ -625,6 +713,11 @@ func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 	default:
 		return false
 	}
+}
+
+// isSearchExternal checks if the Search component is configured to use external hosts
+func isSearchExternal(server *corev1alpha1.AxonOpsServer) bool {
+	return server.Spec.Search != nil && len(server.Spec.Search.External.Hosts) > 0
 }
 
 // generateRandomPassword generates a cryptographically secure random password
@@ -1645,6 +1738,10 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 
 	// Build service URLs for search and timeseries
 	searchURL := fmt.Sprintf("https://%s-%s:9200", server.Name, componentSearch)
+	if isSearchExternal(server) && len(server.Spec.Search.External.Hosts) > 0 {
+		searchURL = server.Spec.Search.External.Hosts[0]
+	}
+
 	timeseriesHeadless := fmt.Sprintf("%s-%s-headless.%s.svc.cluster.local", server.Name, componentTimeseries, server.Namespace)
 
 	// Build the axon-server.yml config (credentials are injected via env vars from secrets)
@@ -1680,12 +1777,13 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 
 // serverConfigData holds the data for the axon-server.yml template
 type serverConfigData struct {
-	SearchURL    string
-	SearchCACert string
-	OrgName      string
-	DashURL      string
-	CQLHosts     string
-	CQLCACert    string
+	SearchURL        string
+	SearchCACert     string
+	SearchSkipVerify bool
+	OrgName          string
+	DashURL          string
+	CQLHosts         string
+	CQLCACert        string
 }
 
 // serverConfigTemplate is the Go template for axon-server.yml
@@ -1697,7 +1795,7 @@ host: 0.0.0.0
 search_db:
   hosts:
     - {{ .SearchURL }}
-  skip_verify: true
+  skip_verify: {{ .SearchSkipVerify }}
   ca_cert: {{ .SearchCACert }}
 
 org_name: {{ .OrgName }}
@@ -1752,13 +1850,36 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		dashURL = fmt.Sprintf("https://%s", server.Spec.Dashboard.External.Hosts[0])
 	}
 
+	// Determine search TLS settings based on internal vs external
+	searchSkipVerify := true
+	searchCACert := "/etc/axonops/certs/search/ca.crt"
+
+	if isSearchExternal(server) && server.Spec.Search != nil {
+		// For external search, respect the TLS configuration
+		tls := server.Spec.Search.External.TLS
+		if tls.Enabled {
+			searchSkipVerify = tls.InsecureSkipVerify
+			// Only include ca_cert if not skipping verification
+			if !tls.InsecureSkipVerify {
+				searchCACert = "/etc/axonops/certs/search/ca.crt"
+			} else {
+				searchCACert = ""
+			}
+		} else {
+			// External search without TLS
+			searchSkipVerify = false
+			searchCACert = ""
+		}
+	}
+
 	data := serverConfigData{
-		SearchURL:    searchURL,
-		SearchCACert: "/etc/axonops/certs/search/ca.crt",
-		OrgName:      strings.ToLower(server.Spec.Server.OrgName),
-		DashURL:      dashURL,
-		CQLHosts:     cqlHosts,
-		CQLCACert:    "/etc/axonops/certs/timeseries/ca.crt",
+		SearchURL:        searchURL,
+		SearchCACert:     searchCACert,
+		SearchSkipVerify: searchSkipVerify,
+		OrgName:          strings.ToLower(server.Spec.Server.OrgName),
+		DashURL:          dashURL,
+		CQLHosts:         cqlHosts,
+		CQLCACert:        "/etc/axonops/certs/timeseries/ca.crt",
 	}
 
 	tmpl, err := template.New("axon-server").Parse(serverConfigTemplate)
@@ -1978,57 +2099,71 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 								FailureThreshold:    3,
 							},
 							Resources: srv.Resources,
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "config", MountPath: "/etc/axonops"},
-								{Name: "logs", MountPath: "/var/log/axonops"},
-								{Name: "data", MountPath: "/var/lib/axonops"},
-								{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true},
-								{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true},
-							},
+							VolumeMounts: func() []corev1.VolumeMount {
+								mounts := []corev1.VolumeMount{
+									{Name: "config", MountPath: "/etc/axonops"},
+									{Name: "logs", MountPath: "/var/log/axonops"},
+									{Name: "data", MountPath: "/var/lib/axonops"},
+									{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true},
+								}
+								// Only mount search-tls if search is internal
+								if !isSearchExternal(server) {
+									mounts = append([]corev1.VolumeMount{{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true}}, mounts[3:]...)
+								}
+								return mounts
+							}(),
 						},
 					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "config",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: configSecretName,
-								},
-							},
-						},
-						{
-							Name: "logs",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-						{
-							Name: "search-tls",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: searchTLSSecretName,
-									Items: []corev1.KeyToPath{
-										{Key: "ca.crt", Path: "ca.crt"},
-										{Key: "tls.crt", Path: "tls.crt"},
-										{Key: "tls.key", Path: "tls.key"},
+					Volumes: func() []corev1.Volume {
+						volumes := []corev1.Volume{
+							{
+								Name: "config",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: configSecretName,
 									},
 								},
 							},
-						},
-						{
-							Name: "timeseries-tls",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: timeseriesTLSSecretName,
-									Items: []corev1.KeyToPath{
-										{Key: "ca.crt", Path: "ca.crt"},
-										{Key: "tls.crt", Path: "tls.crt"},
-										{Key: "tls.key", Path: "tls.key"},
+							{
+								Name: "logs",
+								VolumeSource: corev1.VolumeSource{
+									EmptyDir: &corev1.EmptyDirVolumeSource{},
+								},
+							},
+							{
+								Name: "timeseries-tls",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: timeseriesTLSSecretName,
+										Items: []corev1.KeyToPath{
+											{Key: "ca.crt", Path: "ca.crt"},
+											{Key: "tls.crt", Path: "tls.crt"},
+											{Key: "tls.key", Path: "tls.key"},
+										},
 									},
 								},
 							},
-						},
-					},
+						}
+						// Only include search-tls volume if search is internal
+						if !isSearchExternal(server) {
+							volumes = append([]corev1.Volume{
+								{
+									Name: "search-tls",
+									VolumeSource: corev1.VolumeSource{
+										Secret: &corev1.SecretVolumeSource{
+											SecretName: searchTLSSecretName,
+											Items: []corev1.KeyToPath{
+												{Key: "ca.crt", Path: "ca.crt"},
+												{Key: "tls.crt", Path: "tls.crt"},
+												{Key: "tls.key", Path: "tls.key"},
+											},
+										},
+									},
+								},
+							}, volumes[2:]...)
+						}
+						return volumes
+					}(),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
