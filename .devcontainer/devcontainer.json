@@ -1,6 +1,14 @@
 {
   "name": "Kubebuilder DevContainer",
-  "image": "mcr.microsoft.com/devcontainers/go:1-1.25-bookworm", 
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "TZ": "${localEnv:TZ:Europe/London}",
+      "CLAUDE_CODE_VERSION": "latest",
+      "GIT_DELTA_VERSION": "0.18.2",
+      "ZSH_IN_DOCKER_VERSION": "1.2.0"
+    }
+  },
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest",
@@ -16,8 +24,7 @@
     "source=dind-var-lib-docker,target=/var/lib/docker,type=volume",
     "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
     "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
-    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,type=bind,readonly",
-    "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/node/.claude/.credentials.json,type=bind,readonly"
+    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,type=bind,readonly"
   ],
 
   "customizations": {
@@ -38,5 +45,5 @@
   "onCreateCommand": "bash .devcontainer/post-install.sh",
   
   // Ensures you aren't stuck with root-only file permissions later
-  "remoteUser": "vscode"
+  "remoteUser": "node"
 }
