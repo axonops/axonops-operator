@@ -2629,8 +2629,12 @@ func (r *AxonOpsServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&networkingv1.Ingress{}).
-		Owns(&gatewayv1.Gateway{}).
-		Owns(&gatewayv1.HTTPRoute{}).
+		// Gateway API resources (Gateway, HTTPRoute) are owned but not watched.
+		// They are created with owner references, enabling garbage collection.
+		// We don't watch them because Gateway API CRDs may not be installed
+		// in the cluster. The controller still creates/updates them when needed;
+		// users configure Gateway support via spec.server.dashboard.external.gateway
+		// and spec.server.agent.external.gateway fields in the AxonOpsServer CR.
 		Owns(&certmanagerv1.Certificate{}).
 		Named("axonopsserver").
 		Complete(r)
