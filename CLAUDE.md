@@ -10,26 +10,85 @@ Kubernetes operator that manages the AxonOps observability stack. It aims to rep
 
 ## Current Status
 - **Last Updated**: 2026-03-16
-- **Current Phase**: Development — Phase 3 (testing & validation) active
-- **Health**: Green — all CRD controllers implemented, compiled, and all unit tests passing (7/7 AxonOpsServer tests)
+- **Current Phase**: Development — Phase 3 (testing & validation) with code review findings
+- **Health**: Green — all CRD controllers implemented and compiled; identified 7 bugs in code review (#20-#26)
 
 ## Active Tasks
 
-1. [COMPLETED] Fix test environment to handle external database support without cert-manager
+### Code Review Findings (Priority Bugs)
+
+1. [NOT STARTED] Issue #20 (HIGH): External username/password path sets empty secret name
+   - Location: `internal/controller/axonopsserver_controller.go:376,433`
+   - Status: Not Started
+   - Notes: External auth path not implemented; either document as unsupported or implement managed Secret creation
+
+2. [NOT STARTED] Issue #21 (HIGH): Nil pointer dereference when TimeSeries/Search enabled without Server
+   - Location: `internal/controller/axonopsserver_controller.go:1288`
+   - Status: Not Started
+   - Notes: Missing nil-guard on `server.Spec.Server.OrgName`; add default orgName or return error
+
+3. [NOT STARTED] Issue #22 (MEDIUM): Template errors in buildServerConfig produce silent broken config
+   - Location: `internal/controller/axonopsserver_controller.go:2211–2219`
+   - Status: Not Started
+   - Notes: Function returns string instead of error; needs signature change and error propagation
+
+4. [NOT STARTED] Issue #23 (MEDIUM): Disabled components leave orphaned Kubernetes resources
+   - Location: `internal/controller/axonopsserver_controller.go:347,404,461,470`
+   - Status: Not Started
+   - Notes: Need cleanup helpers for StatefulSets, Services, Secrets, TLS Certs when component disabled
+
+5. [NOT STARTED] Issue #24 (MEDIUM): Ingress and Gateway resources never cleaned up when disabled
+   - Location: `internal/controller/axonopsserver_controller.go` — `reconcileServer`, `reconcileDashboard`
+   - Status: Not Started
+   - Notes: Implement `cleanupIngress` and `cleanupGateway` helpers
+
+6. [NOT STARTED] Issue #25 (MEDIUM): PVCs not deleted when switching to external database
+   - Location: `internal/controller/axonopsserver_controller.go:899–970`
+   - Status: Not Started
+   - Notes: After StatefulSet deletion, enumerate and delete PVCs with pattern `data-<name>-<component>-<ordinal>`
+
+7. [NOT STARTED] Issue #26 (LOW): Enabled bool with default=true defaults to false at runtime
+   - Location: `api/v1alpha1/axonopsserver_types.go:293`
+   - Status: Not Started
+   - Notes: Change `Enabled` to `*bool` with proper defaulting webhook or validation
+
+### Testing & Validation
+
+8. [COMPLETED] BDD Feature Files (11 total)
    - Status: Completed
-   - Completion: All unit tests for external database configurations now pass (Phase 1 & Phase 2)
-   - Solution: Made cert-manager optional via refactored needsInternalResources() check; tests use mockRESTMapper
-2. [IN PROGRESS] End-to-end testing of AxonOpsServer controller
+   - Files: internal-deployment.feature, authentication-lifecycle.feature, component-lifecycle.feature, ingress-gateway.feature, axonops-connection.feature, alert-metric-alert.feature, alert-log-alert.feature, alert-route.feature, healthcheck-http.feature, healthcheck-tcp.feature, healthcheck-shell.feature
+   - Committed with: `docs: add BDD feature files for all implemented features`
+
+9. [IN PROGRESS] End-to-end testing of AxonOpsServer controller
    - Status: In Progress
    - Notes: Against a real Kind cluster; verify StatefulSets, Ingress, and Gateway resources for internal and external modes
-3. [NOT STARTED] Unit tests for alert controllers (LogAlert, AlertRoute, Healthchecks)
-   - Status: Not Started
-   - Notes: AxonOpsMetricAlert has tests; remaining alert controllers need test coverage
-4. [NOT STARTED] Webhooks for CRD validation
-   - Status: Not Started
-   - Notes: Useful for field validation (e.g., operator enum, clusterType enum)
+
+10. [NOT STARTED] Unit tests for alert controllers (LogAlert, AlertRoute, Healthchecks)
+    - Status: Not Started
+    - Notes: AxonOpsMetricAlert has tests; remaining alert controllers need test coverage
+
+11. [NOT STARTED] Webhooks for CRD validation
+    - Status: Not Started
+    - Notes: Useful for field validation (e.g., operator enum, clusterType enum)
 
 ## Recent Progress
+- **Comprehensive Code Review Completed (2026-03-16)**:
+  - Identified 7 actionable bugs across AxonOpsServer controller (#20-#26)
+  - Created GitHub issues with detailed descriptions and fix scope
+  - Issues span: credential handling, nil pointer dereference, template error handling, resource cleanup, component disable transitions, PVC cleanup, and bool default handling
+- **BDD Feature Files Written (11 total)**:
+  - `internal-deployment.feature` — Full 4-component deployment happy path
+  - `authentication-lifecycle.feature` — SecretRef, inline credentials, auto-generated passwords
+  - `component-lifecycle.feature` — Enable/disable with resource cleanup
+  - `ingress-gateway.feature` — Ingress and Gateway API configurations
+  - `axonops-connection.feature` — AxonOpsConnection lifecycle
+  - `alert-metric-alert.feature` — AxonOpsMetricAlert CRUD with API sync
+  - `alert-log-alert.feature` — AxonOpsLogAlert CRUD with event patterns
+  - `alert-route.feature` — AxonOpsAlertRoute integration routing
+  - `healthcheck-http.feature` — HTTP healthcheck lifecycle
+  - `healthcheck-tcp.feature` — TCP healthcheck lifecycle
+  - `healthcheck-shell.feature` — Shell script healthcheck lifecycle
+  - Committed: `docs: add BDD feature files for all implemented features`
 - **AxonOpsServer controller fully implemented** (2,636 lines):
   - TimeSeries StatefulSet with auth secrets (`AXONOPS_DB_USER`, `AXONOPS_DB_PASSWORD`)
   - Search StatefulSet with auth secrets (`AXONOPS_SEARCH_USER`, `AXONOPS_SEARCH_PASSWORD`)
@@ -42,7 +101,7 @@ Kubernetes operator that manages the AxonOps observability stack. It aims to rep
   - TLS keystore password secrets and self-signed certificate lifecycle
 - **All six alert CRDs fully implemented**:
   - `AxonOpsMetricAlert` — metric threshold alerts (controller + tests + sample)
-  - `AxonOpsLogAlert` — log pattern alerts (controller + sample, reuses metric alert API endpoint with events{...} syntax)
+  - `AxonOpsLogAlert` — log pattern alerts (controller + sample)
   - `AxonOpsAlertRoute` — alert routing/notification channels (controller + sample)
   - `AxonOpsHealthcheckHTTP` — HTTP healthcheck alerts (controller + sample)
   - `AxonOpsHealthcheckShell` — Shell script healthchecks (controller + sample)
@@ -52,7 +111,18 @@ Kubernetes operator that manages the AxonOps observability stack. It aims to rep
 - Sample YAMLs for all CRDs under `config/samples/`
 
 ## Blockers & Issues
-None currently.
+
+### Code Review Identified Bugs (GitHub Issues #20-#26)
+7 bugs identified during comprehensive code review:
+- **#20 (HIGH)**: External credential path stores empty secret name
+- **#21 (HIGH)**: Nil pointer dereference when components enabled without Server
+- **#22 (MEDIUM)**: Template errors produce silent broken config
+- **#23 (MEDIUM)**: Disabled components leave orphaned resources
+- **#24 (MEDIUM)**: Ingress/Gateway not cleaned up when disabled
+- **#25 (MEDIUM)**: PVCs not deleted on mode switch to external DB
+- **#26 (LOW)**: Bool default=true defaults to false at runtime
+
+See "Active Tasks" section above for details and fix scope for each issue.
 
 ---
 
@@ -206,6 +276,17 @@ kubectl apply -k config/samples/   # Apply sample CRs
 ```
 
 ## Known Limitations & Tech Debt
+
+### Critical Bugs (See Issues #20-#26)
+- **#20**: External database credential path doesn't properly create managed Secrets
+- **#21**: Nil pointer dereference when database components enabled without Server component
+- **#22**: Template rendering errors swallowed silently; broken config stored as valid Secret
+- **#23**: Disabling components doesn't clean up existing StatefulSets, Services, Secrets
+- **#24**: Disabling Ingress/Gateway doesn't delete existing resources
+- **#25**: PVCs not cleaned up when switching to external database mode
+- **#26**: `Enabled bool` fields default to `false` at runtime despite `default=true` marker
+
+### Other Limitations
 - Alert controllers other than `AxonOpsMetricAlert` do not have unit tests yet (wired and compiling, awaiting test coverage)
 - TLS certificates use self-signed certificates via cert-manager; cert-manager is optional (only required for internal database/workload components)
 - No webhooks for field validation (e.g., `clusterType` enum enforcement, `operator` enum enforcement)
@@ -216,14 +297,24 @@ kubectl apply -k config/samples/   # Apply sample CRs
 
 ## Next Steps & Roadmap
 
-1. **Phase 3** (in progress): Testing & hardening
-   - ✅ Unit tests for AxonOpsServer external database configurations (all 7 tests passing)
+1. **Phase 3 (active)**: Fix identified bugs and improve test coverage
+   - Fix 7 identified bugs (Issues #20-#26) following planned fix scope
    - E2E tests for `AxonOpsServer` against a Kind cluster (real cluster scenarios)
    - Unit tests for remaining alert controllers (LogAlert, AlertRoute, Healthchecks)
    - Validate Ingress and Gateway API resources end-to-end
+   - Write step definitions for BDD feature files (Godog or similar integration)
+
 2. **Phase 4**: Webhooks for validation and defaulting
+   - Defaulting webhook for `Enabled` bool fields (Issue #26)
+   - Validation webhooks for enum fields (clusterType, operator, integrationType)
+
 3. **Phase 5**: Helm chart for the operator itself (`kubebuilder edit --plugins=helm/v2-alpha`)
-4. **Phase 6**: Enhanced cert-manager integration for AxonOpsServer TLS (e.g., cert renewal, custom CA issuers)
+
+4. **Phase 6**: Enhanced cert-manager integration for AxonOpsServer TLS
+   - Optional cert-manager integration (already optional, needs testing)
+   - Certificate renewal and rotation lifecycle
+   - Custom CA issuer support
+
 5. **Phase 7**: Additional Terraform provider resources if needed
 
 ## Reference: Terraform Provider Equivalents
