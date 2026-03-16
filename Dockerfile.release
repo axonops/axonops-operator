@@ -1,8 +1,0 @@
-# Release Dockerfile — uses pre-built binaries from CI instead of compiling
-# inside the container, avoiding slow QEMU emulation for cross-platform builds.
-FROM gcr.io/distroless/static:nonroot
-ARG TARGETARCH
-WORKDIR /
-COPY manager-linux-${TARGETARCH} manager
-USER 65532:65532
-ENTRYPOINT ["/manager"]
