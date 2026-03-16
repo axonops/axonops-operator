@@ -209,6 +209,7 @@ func (r *AxonOpsServerReconciler) ensureClusterIssuer(
 }
 
 // Reconcile moves the current state of the cluster closer to the desired state.
+// nolint:gocyclo
 func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
 	log := logf.FromContext(ctx)
 
@@ -327,7 +328,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if isTimeSeriesExternal(server) {
 			// Validate authentication credentials for external timeseries
 			auth := server.Spec.TimeSeries.Authentication
-			if auth.SecretRef == "" && auth.Username == "" {
+			if auth.SecretRef == "" && (auth.Username == "" || auth.Password == "") {
 				// Re-fetch before status update to avoid conflicts
 				if err := r.Get(ctx, req.NamespacedName, server); err != nil {
 					return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -337,7 +338,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: server.Generation,
 					Reason:             "MissingCredentials",
-					Message:            "External TimeSeries configured but authentication credentials are missing",
+					Message:            "External TimeSeries requires either authentication.secretRef or both username and password",
 				})
 				server.Status.ObservedGeneration = server.Generation
 				if err := r.Status().Update(ctx, server); err != nil {
@@ -384,7 +385,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if isSearchExternal(server) {
 			// Validate authentication credentials for external search
 			auth := server.Spec.Search.Authentication
-			if auth.SecretRef == "" && auth.Username == "" {
+			if auth.SecretRef == "" && (auth.Username == "" || auth.Password == "") {
 				// Re-fetch before status update to avoid conflicts
 				if err := r.Get(ctx, req.NamespacedName, server); err != nil {
 					return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -394,7 +395,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: server.Generation,
 					Reason:             "MissingCredentials",
-					Message:            "External Search configured but authentication credentials are missing",
+					Message:            "External Search requires either authentication.secretRef or both username and password",
 				})
 				server.Status.ObservedGeneration = server.Generation
 				if err := r.Status().Update(ctx, server); err != nil {
@@ -2067,7 +2068,9 @@ search_db:
   hosts:
     - {{ .SearchURL }}
   skip_verify: {{ .SearchSkipVerify }}
+  {{ if .SearchCACert -}}
   ca_cert: {{ .SearchCACert }}
+  {{ end -}}
 
 org_name: {{ .OrgName }}
 
@@ -2124,7 +2127,8 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 	}
 
 	// Determine search TLS settings based on internal vs external
-	searchSkipVerify := true
+	// Default to secure communication for internal connections
+	searchSkipVerify := false
 	searchCACert := "/etc/axonops/certs/search/ca.crt"
 
 	if isSearchExternal(server) && server.Spec.Search != nil {
@@ -2146,8 +2150,9 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 	}
 
 	// Determine timeseries TLS settings based on internal vs external
+	// Default to secure communication for internal connections
 	cqlSSLEnabled := true
-	cqlSkipVerify := true
+	cqlSkipVerify := false
 	cqlCACert := "/etc/axonops/certs/timeseries/ca.crt"
 
 	if isTimeSeriesExternal(server) && server.Spec.TimeSeries != nil {
