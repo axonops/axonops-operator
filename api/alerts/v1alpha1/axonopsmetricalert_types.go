@@ -84,7 +84,9 @@ type AxonOpsMetricAlertSpec struct {
 	Annotations *MetricAlertAnnotations `json:"annotations,omitempty"`
 
 	// Integrations specifies how to route alert notifications
-	// Note: Use AxonOpsAlertRoute CRD for more granular routing control
+	// DEPRECATED: This field is not implemented and is ignored by the controller.
+	// Use the AxonOpsAlertRoute CRD instead for alert routing and notification configuration.
+	// This field is retained for potential future use but should not be configured.
 	// +optional
 	Integrations *MetricAlertIntegration `json:"integrations,omitempty"`
 
@@ -222,7 +224,7 @@ type AxonOpsMetricAlertStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.spec.clusterName`
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.clusterType`
-// +kubebuilder:printcolumn:name="AlertID",type=string,JSONPath=`.status.syncedAlertId`
+// +kubebuilder:printcolumn:name="AlertID",type=string,JSONPath=`.status.syncedAlertID`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 

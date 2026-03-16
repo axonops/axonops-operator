@@ -21,7 +21,7 @@ spec:
     - jsonPath: .spec.clusterType
       name: Type
       type: string
-    - jsonPath: .status.syncedAlertId
+    - jsonPath: .status.syncedAlertID
       name: AlertID
       type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
@@ -176,7 +176,9 @@ spec:
               integrations:
                 description: |-
                   Integrations specifies how to route alert notifications
-                  Note: Use AxonOpsAlertRoute CRD for more granular routing control
+                  DEPRECATED: This field is not implemented and is ignored by the controller.
+                  Use the AxonOpsAlertRoute CRD instead for alert routing and notification configuration.
+                  This field is retained for potential future use but should not be configured.
                 properties:
                   overrideError:
                     description: OverrideError determines if the integration overrides

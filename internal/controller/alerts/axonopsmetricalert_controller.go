@@ -267,6 +267,11 @@ func (r *AxonOpsMetricAlertReconciler) buildMetricAlertRule(alert *alertsv1alpha
 	}
 
 	// Build expression: metric op value
+	// NOTE: Currently uses WarningValue in the expression. This may need review to ensure
+	// CriticalValue is properly handled. The API payload includes both thresholds separately,
+	// but the expression only references the warning value. Verify with AxonOps API docs
+	// whether this is the intended behavior or if the expression should reference CriticalValue.
+	// See: https://github.com/axonops/axonops-operator/issues/1
 	rule.Expr = fmt.Sprintf("%s %s %g", alert.Spec.Metric, alert.Spec.Operator, alert.Spec.WarningValue)
 
 	// Add annotations if present
@@ -279,42 +284,29 @@ func (r *AxonOpsMetricAlertReconciler) buildMetricAlertRule(alert *alertsv1alpha
 	}
 
 	// Note: Integrations are intentionally omitted from API payload.
-	// The AxonOps API expects a different structure for integrations
-	// that doesn't align with the current CR spec.
-	// This can be enhanced in the future once the API contract is clarified.
+	// Alert routing should be configured via the AxonOpsAlertRoute CRD instead,
+	// which provides a cleaner separation of concerns and matches Kubernetes patterns.
+	// The inline Integrations field is deprecated and may be removed in a future version.
 
-	// Add filters if present
+	// Add filters if present (data-driven approach for maintainability)
 	if alert.Spec.Filters != nil {
 		filters := alert.Spec.Filters
-		if len(filters.DataCenter) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "dc", Value: filters.DataCenter})
+		filterMap := map[string][]string{
+			"dc":          filters.DataCenter,
+			"rack":        filters.Rack,
+			"host_id":     filters.HostID,
+			"scope":       filters.Scope,
+			"keyspace":    filters.Keyspace,
+			"percentile":  filters.Percentile,
+			"consistency": filters.Consistency,
+			"topic":       filters.Topic,
+			"group_id":    filters.GroupID,
+			"group_by":    filters.GroupBy,
 		}
-		if len(filters.Rack) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "rack", Value: filters.Rack})
-		}
-		if len(filters.HostID) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "host_id", Value: filters.HostID})
-		}
-		if len(filters.Scope) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "scope", Value: filters.Scope})
-		}
-		if len(filters.Keyspace) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "keyspace", Value: filters.Keyspace})
-		}
-		if len(filters.Percentile) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "percentile", Value: filters.Percentile})
-		}
-		if len(filters.Consistency) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "consistency", Value: filters.Consistency})
-		}
-		if len(filters.Topic) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "topic", Value: filters.Topic})
-		}
-		if len(filters.GroupID) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "group_id", Value: filters.GroupID})
-		}
-		if len(filters.GroupBy) > 0 {
-			rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: "group_by", Value: filters.GroupBy})
+		for name, values := range filterMap {
+			if len(values) > 0 {
+				rule.Filters = append(rule.Filters, axonops.MetricAlertFilter{Name: name, Value: values})
+			}
 		}
 	}
 
