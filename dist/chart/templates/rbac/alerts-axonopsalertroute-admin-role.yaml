@@ -1,0 +1,24 @@
+{{- if .Values.rbacHelpers.enable }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "axonops-operator.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: {{ include "axonops-operator.resourceName" (dict "suffix" "alerts-axonopsalertroute-admin-role" "context" $) }}
+rules:
+- apiGroups:
+  - alerts.axonops.com
+  resources:
+  - axonopsalertroutes
+  verbs:
+  - '*'
+- apiGroups:
+  - alerts.axonops.com
+  resources:
+  - axonopsalertroutes/status
+  verbs:
+  - get
+{{- end }}
