@@ -92,6 +92,14 @@ When requesting a new feature, follow this structured workflow:
 - Examples: `feature/42-webhook-support`, `fix/15-namespace-leak`, `docs/20-api-docs`
 - Command: `git checkout -b feature/42-webhook-support`
 
+**Phase 3.5: BDD Test Specification (required before implementation)**
+- Before writing any implementation code, write BDD test files under `test/bdd/`
+- Each GitHub issue with BDD scenarios must have a corresponding `.feature` file (Gherkin format)
+- File naming: `test/bdd/<feature-slug>.feature` (e.g., `test/bdd/external-timeseries.feature`, `test/bdd/external-searchdb.feature`)
+- The `.feature` file must contain all Gherkin scenarios from the GitHub issue
+- Commit the BDD test files to the feature branch before starting implementation
+- This ensures acceptance criteria are codified and reviewable before code is written
+
 **Phase 4: Implementation**
 - Follow the approved plan from EnterPlanMode
 - Keep commits focused with clear messages
