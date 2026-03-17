@@ -32,8 +32,8 @@ jobs:
       - name: Prepare axonops-operator
         run: |
           go mod tidy
-          make docker-build IMG=controller:latest
-          kind load docker-image controller:latest
+          make docker-build IMG=axonops-operator:test
+          kind load docker-image axonops-operator:test
 
       - name: Install Helm
         run: make install-helm
@@ -53,7 +53,7 @@ jobs:
 
       - name: Deploy manager via Helm
         run: |
-          make helm-deploy IMG=axonops-operator:v0.1.0
+          make helm-deploy IMG=axonops-operator:test
 
       - name: Check Helm release status
         run: |
