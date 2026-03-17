@@ -2593,7 +2593,7 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 
 	// Append extra config if provided
 	if server.Spec.Server.Config != nil && server.Spec.Server.Config.Raw != nil {
-		var extraConfig map[string]interface{}
+		var extraConfig map[string]any
 		if err := json.Unmarshal(server.Spec.Server.Config.Raw, &extraConfig); err != nil {
 			return "", fmt.Errorf("failed to unmarshal extra config: %w", err)
 		}
