@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
+	"os"
 	"slices"
 	"strings"
 	"text/template"
@@ -2569,6 +2570,11 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 		labels := r.buildLabels(server, componentServer)
 		selectorLabels := r.buildSelectorLabels(server, componentServer)
 
+		serverCmd := []string{"/usr/share/axonops/axon-server", "-o", "stdout"}
+		if isDebug := os.Getenv("DEBUG"); isDebug == "true" {
+			serverCmd = append(serverCmd, "-v", "1")
+		}
+
 		sts.Labels = labels
 		sts.Spec = appsv1.StatefulSetSpec{
 			Replicas:    ptr(int32(1)),
@@ -2606,7 +2612,7 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 							Name:            "axon-server",
 							Image:           fmt.Sprintf("%s:%s", image, tag),
 							ImagePullPolicy: pullPolicy,
-							Command:         []string{"/usr/share/axonops/axon-server", "-o", "stdout"},
+							Command:         serverCmd,
 							SecurityContext: &corev1.SecurityContext{
 								ReadOnlyRootFilesystem: ptr(false),
 								RunAsNonRoot:           ptr(true),
