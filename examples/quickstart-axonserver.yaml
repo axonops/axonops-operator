@@ -12,10 +12,4 @@ spec:
 
   timeSeries: {}
   search: {}
-
-  dashboard:
-    gateway:
-      enabled: true
-      gatewayClassName: "eg"
-      hostname: "dash.127.0.0.1.nip.io"
-      port: 443
+  dashboard: {}
