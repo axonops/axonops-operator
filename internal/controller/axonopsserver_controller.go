@@ -2225,6 +2225,11 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 	var cqlHosts string
 	if isTimeSeriesExternal(server) && len(server.Spec.TimeSeries.External.Hosts) > 0 {
 		cqlHosts = strings.Join(server.Spec.TimeSeries.External.Hosts, ",")
+		dc := server.Spec.TimeSeries.External.DataCenter
+		if dc == "" {
+			dc = "(none)"
+		}
+		log.Info("Using external TimeSeries", "hosts", cqlHosts, "dataCenter", dc)
 	} else {
 		cqlHosts = fmt.Sprintf("%s-%s-headless.%s.svc.cluster.local", server.Name, componentTimeseries, server.Namespace)
 	}
