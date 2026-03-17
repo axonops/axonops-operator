@@ -45,8 +45,7 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 **Install the CRDs and run the operator locally (development):**
 
 ```bash
-helm upgrade --install -n axonops-operator-system \
-  --create-namespace \
+helm upgrade --install -n axonops-operator-system axonops-operator --create-namespace \
   oci://ghcr.io/axonops/charts/axonops-operator:0.0.2
 ```
 
