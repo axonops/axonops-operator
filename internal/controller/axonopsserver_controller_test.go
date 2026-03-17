@@ -585,4 +585,277 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Delete(ctx, timeseriesSecret)).To(Succeed())
 		})
 	})
+
+	Context("Startup dependency ordering", func() {
+		It("should report isStatefulSetReady=false when StatefulSet does not exist", func() {
+			ctx := context.Background()
+			reconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			ready, err := reconciler.isStatefulSetReady(ctx, "default", "nonexistent-sts")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeFalse())
+		})
+
+		It("should report isStatefulSetReady=false when StatefulSet has no ready replicas", func() {
+			ctx := context.Background()
+			reconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Create a StatefulSet with 1 replica but 0 ready
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "sts-not-ready",
+					Namespace: "default",
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: ptr(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{Name: "c", Image: "busybox"}},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, sts)).To(Succeed())
+
+			ready, err := reconciler.isStatefulSetReady(ctx, "default", "sts-not-ready")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeFalse())
+
+			Expect(k8sClient.Delete(ctx, sts)).To(Succeed())
+		})
+
+		It("should report isStatefulSetReady=true when all replicas are ready", func() {
+			ctx := context.Background()
+			reconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			// Create a StatefulSet
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "sts-ready",
+					Namespace: "default",
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: ptr(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "test-ready"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test-ready"}},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{Name: "c", Image: "busybox"}},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, sts)).To(Succeed())
+
+			// Patch status to simulate ready replicas
+			sts.Status.ReadyReplicas = 1
+			sts.Status.Replicas = 1
+			Expect(k8sClient.Status().Update(ctx, sts)).To(Succeed())
+
+			ready, err := reconciler.isStatefulSetReady(ctx, "default", "sts-ready")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeTrue())
+
+			Expect(k8sClient.Delete(ctx, sts)).To(Succeed())
+		})
+
+		It("should treat disabled components as ready", func() {
+			ctx := context.Background()
+			reconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			server := &corev1alpha1.AxonOpsServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "dep-test", Namespace: "default"},
+				Spec:       corev1alpha1.AxonOpsServerSpec{
+					// TimeSeries and Search are nil (disabled)
+				},
+			}
+
+			tsReady, tsReason := reconciler.isComponentReady(ctx, server, componentTimeseries)
+			Expect(tsReady).To(BeTrue())
+			Expect(tsReason).To(BeEmpty())
+
+			searchReady, searchReason := reconciler.isComponentReady(ctx, server, componentSearch)
+			Expect(searchReady).To(BeTrue())
+			Expect(searchReason).To(BeEmpty())
+
+			serverReady, serverReason := reconciler.isComponentReady(ctx, server, componentServer)
+			Expect(serverReady).To(BeTrue())
+			Expect(serverReason).To(BeEmpty())
+		})
+
+		It("should treat external components as ready", func() {
+			ctx := context.Background()
+			reconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			server := &corev1alpha1.AxonOpsServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "dep-external-test", Namespace: "default"},
+				Spec: corev1alpha1.AxonOpsServerSpec{
+					TimeSeries: &corev1alpha1.AxonDbComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: ptr(true),
+							External: corev1alpha1.AxonExternalConfig{
+								Hosts: []string{"cassandra:9042"},
+							},
+						},
+					},
+					Search: &corev1alpha1.AxonDbComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: ptr(true),
+							External: corev1alpha1.AxonExternalConfig{
+								Hosts: []string{"https://elastic:9200"},
+							},
+						},
+					},
+				},
+			}
+
+			tsReady, _ := reconciler.isComponentReady(ctx, server, componentTimeseries)
+			Expect(tsReady).To(BeTrue())
+
+			searchReady, _ := reconciler.isComponentReady(ctx, server, componentSearch)
+			Expect(searchReady).To(BeTrue())
+		})
+
+		It("should report internal component as not ready when StatefulSet does not exist", func() {
+			ctx := context.Background()
+			reconciler := &AxonOpsServerReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			server := &corev1alpha1.AxonOpsServer{
+				ObjectMeta: metav1.ObjectMeta{Name: "dep-internal-test", Namespace: "default"},
+				Spec: corev1alpha1.AxonOpsServerSpec{
+					TimeSeries: &corev1alpha1.AxonDbComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: ptr(true),
+							// No external hosts = internal
+						},
+					},
+				},
+			}
+
+			ready, reason := reconciler.isComponentReady(ctx, server, componentTimeseries)
+			Expect(ready).To(BeFalse())
+			Expect(reason).To(ContainSubstring("Waiting for timeseries to become ready"))
+		})
+
+		// Note: full reconcile integration test for internal database blocking requires
+		// cert-manager CRDs (not available in envtest). The gate logic is validated by
+		// the isComponentReady/isStatefulSetReady unit tests above and by the
+		// "should allow Server creation when databases are external" integration test below.
+		// E2E tests against a Kind cluster with cert-manager will cover the full scenario.
+
+		It("should allow Server creation when databases are external", func() {
+			const resourceName = "dep-external-pass-test"
+			ctx := context.Background()
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			// Create auth secrets for external components
+			tsSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "dep-ts-secret", Namespace: "default"},
+				Data: map[string][]byte{
+					"AXONOPS_DB_USER":     []byte("user"),
+					"AXONOPS_DB_PASSWORD": []byte("pass"),
+				},
+			}
+			searchSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "dep-search-secret", Namespace: "default"},
+				Data: map[string][]byte{
+					"AXONOPS_SEARCH_USER":     []byte("user"),
+					"AXONOPS_SEARCH_PASSWORD": []byte("pass"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, tsSecret)).To(Succeed())
+			Expect(k8sClient.Create(ctx, searchSecret)).To(Succeed())
+
+			resource := &corev1alpha1.AxonOpsServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: corev1alpha1.AxonOpsServerSpec{
+					TimeSeries: &corev1alpha1.AxonDbComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: ptr(true),
+							External: corev1alpha1.AxonExternalConfig{
+								Hosts: []string{"cassandra:9042"},
+							},
+							Authentication: corev1alpha1.AxonAuthentication{
+								SecretRef: "dep-ts-secret",
+							},
+						},
+					},
+					Search: &corev1alpha1.AxonDbComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: ptr(true),
+							External: corev1alpha1.AxonExternalConfig{
+								Hosts: []string{"https://elastic:9200"},
+							},
+							Authentication: corev1alpha1.AxonAuthentication{
+								SecretRef: "dep-search-secret",
+							},
+						},
+					},
+					Server: &corev1alpha1.AxonServerComponent{
+						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
+							Enabled: ptr(true),
+						},
+						OrgName: "test-org",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("Reconciling — external databases should be considered ready")
+			controllerReconciler := &AxonOpsServerReconciler{
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				ClusterIssuerName: "axonops-selfsigned",
+				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying Server StatefulSet WAS created (gate passed)")
+			serverSts := &appsv1.StatefulSet{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName + "-server",
+				Namespace: "default",
+			}, serverSts)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Cleanup")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, tsSecret)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, searchSecret)).To(Succeed())
+		})
+	})
 })

@@ -455,6 +455,36 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
+	// Gate: Server waits for TimeSeries and Search to be ready
+	if r.isComponentEnabled(server.Spec.Server) {
+		tsReady, tsReason := r.isComponentReady(ctx, server, componentTimeseries)
+		searchReady, searchReason := r.isComponentReady(ctx, server, componentSearch)
+
+		if !tsReady || !searchReady {
+			var messages []string
+			if !tsReady {
+				messages = append(messages, tsReason)
+			}
+			if !searchReady {
+				messages = append(messages, searchReason)
+			}
+			message := strings.Join(messages, "; ")
+
+			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+				Type:               "ServerReady",
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: server.Generation,
+				Reason:             "WaitingForDatabases",
+				Message:            message,
+			})
+			if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+				log.Error(statusErr, "Failed to update status for database dependency wait")
+			}
+			log.Info("Server waiting for database dependencies", "timeseriesReady", tsReady, "searchReady", searchReady)
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+
 	// Ensure Server workload (if component is enabled)
 	if r.isComponentEnabled(server.Spec.Server) {
 		// Create ServiceAccount, Services, Config Secret, and StatefulSet for Server
@@ -462,11 +492,37 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			log.Error(err, "Failed to reconcile Server workload")
 			return ctrl.Result{}, err
 		}
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "ServerReady",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: server.Generation,
+			Reason:             "Reconciled",
+			Message:            "Server component reconciled successfully",
+		})
 	} else {
 		// Server disabled — clean up any existing resources
 		if err := r.cleanupServerResources(ctx, server); err != nil {
 			log.Error(err, "Failed to cleanup disabled Server resources")
 			return ctrl.Result{}, err
+		}
+	}
+
+	// Gate: Dashboard waits for Server to be ready
+	if r.isComponentEnabled(server.Spec.Dashboard) {
+		serverReady, serverReason := r.isComponentReady(ctx, server, componentServer)
+		if !serverReady {
+			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+				Type:               "DashboardReady",
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: server.Generation,
+				Reason:             "WaitingForServer",
+				Message:            serverReason,
+			})
+			if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+				log.Error(statusErr, "Failed to update status for dashboard dependency wait")
+			}
+			log.Info("Dashboard waiting for Server to be ready")
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 		}
 	}
 
@@ -477,6 +533,13 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			log.Error(err, "Failed to reconcile Dashboard workload")
 			return ctrl.Result{}, err
 		}
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "DashboardReady",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: server.Generation,
+			Reason:             "Reconciled",
+			Message:            "Dashboard component reconciled successfully",
+		})
 	} else {
 		// Dashboard disabled — clean up any existing resources
 		if err := r.cleanupDashboardResources(ctx, server); err != nil {
@@ -1159,6 +1222,61 @@ func (r *AxonOpsServerReconciler) cleanupDashboardResources(ctx context.Context,
 	}
 
 	return nil
+}
+
+// isStatefulSetReady checks whether a StatefulSet has all its replicas ready.
+// Returns false (not error) if the StatefulSet does not exist yet.
+func (r *AxonOpsServerReconciler) isStatefulSetReady(ctx context.Context, namespace, name string) (bool, error) {
+	sts := &appsv1.StatefulSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, sts)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if sts.Spec.Replicas == nil || *sts.Spec.Replicas == 0 {
+		return false, nil
+	}
+	return sts.Status.ReadyReplicas == *sts.Spec.Replicas, nil
+}
+
+// isComponentReady checks whether a component's workload is ready.
+// Disabled and external components are always considered ready.
+// Internal components require their StatefulSet to have all replicas ready.
+func (r *AxonOpsServerReconciler) isComponentReady(ctx context.Context, server *corev1alpha1.AxonOpsServer, component string) (bool, string) {
+	switch component {
+	case componentTimeseries:
+		if !r.isComponentEnabled(server.Spec.TimeSeries) {
+			return true, ""
+		}
+		if isTimeSeriesExternal(server) {
+			return true, ""
+		}
+	case componentSearch:
+		if !r.isComponentEnabled(server.Spec.Search) {
+			return true, ""
+		}
+		if isSearchExternal(server) {
+			return true, ""
+		}
+	case componentServer:
+		if !r.isComponentEnabled(server.Spec.Server) {
+			return true, ""
+		}
+	default:
+		return true, ""
+	}
+
+	stsName := fmt.Sprintf("%s-%s", server.Name, component)
+	ready, err := r.isStatefulSetReady(ctx, server.Namespace, stsName)
+	if err != nil {
+		return false, fmt.Sprintf("Failed to check %s readiness: %v", component, err)
+	}
+	if !ready {
+		return false, fmt.Sprintf("Waiting for %s to become ready", component)
+	}
+	return true, ""
 }
 
 // A component is enabled if it's not nil and its Enabled field is true (default).
