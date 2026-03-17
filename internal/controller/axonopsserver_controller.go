@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math/big"
@@ -54,6 +55,7 @@ import (
 
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -2469,7 +2471,22 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		return "", fmt.Errorf("failed to execute server config template: %w", err)
 	}
 
-	return buf.String(), nil
+	result := buf.String()
+
+	// Append extra config if provided
+	if server.Spec.Server.Config != nil && server.Spec.Server.Config.Raw != nil {
+		var extraConfig map[string]interface{}
+		if err := json.Unmarshal(server.Spec.Server.Config.Raw, &extraConfig); err != nil {
+			return "", fmt.Errorf("failed to unmarshal extra config: %w", err)
+		}
+		extraYAML, err := yaml.Marshal(extraConfig)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal extra config to YAML: %w", err)
+		}
+		result += "\n" + string(extraYAML)
+	}
+
+	return result, nil
 }
 
 // buildServerEnv builds environment variables for the server container

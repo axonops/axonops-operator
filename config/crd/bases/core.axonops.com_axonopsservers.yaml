@@ -294,6 +294,13 @@ spec:
                           a random username will be generated.
                         type: string
                     type: object
+                  config:
+                    description: |-
+                      Config provides additional settings to append to the axon-server configuration.
+                      Any valid axon-server YAML configuration can be specified here and will be
+                      merged into the generated config.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   enabled:
                     default: true
                     description: |-

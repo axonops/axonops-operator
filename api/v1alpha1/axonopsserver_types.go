@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // IssuerConfig configures the cert-manager ClusterIssuer for TLS.
@@ -399,6 +400,14 @@ type AxonServerComponent struct {
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	ApiGateway GatewayConfig `json:"apiGateway,omitempty"`
+
+	// Config provides additional settings to append to the axon-server configuration.
+	// Any valid axon-server YAML configuration can be specified here and will be
+	// merged into the generated config.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:XPreserveUnknownFields
+	Config *runtime.RawExtension `json:"config,omitempty"`
 }
 
 type License struct {
