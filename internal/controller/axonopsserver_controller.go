@@ -152,13 +152,13 @@ func (r *AxonOpsServerReconciler) createOrUpdate(
 // or internal workload components. Returns true if cert-manager is needed.
 func needsInternalResources(server *corev1alpha1.AxonOpsServer) bool {
 	// Check TimeSeries: internal if enabled and not external
-	if server.Spec.TimeSeries != nil && server.Spec.TimeSeries.Enabled {
+	if server.Spec.TimeSeries != nil && (server.Spec.TimeSeries.Enabled == nil || *server.Spec.TimeSeries.Enabled) {
 		if !isTimeSeriesExternal(server) {
 			return true // Internal TimeSeries needs TLS certs
 		}
 	}
 	// Check Search: internal if enabled and not external
-	if server.Spec.Search != nil && server.Spec.Search.Enabled {
+	if server.Spec.Search != nil && (server.Spec.Search.Enabled == nil || *server.Spec.Search.Enabled) {
 		if !isSearchExternal(server) {
 			return true // Internal Search needs TLS certs
 		}
@@ -1036,17 +1036,18 @@ func (r *AxonOpsServerReconciler) cleanupDashboardResources(ctx context.Context,
 }
 
 // A component is enabled if it's not nil and its Enabled field is true (default).
+// A nil Enabled pointer is treated as true (enabled by default).
 func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 	if component == nil {
 		return false
 	}
 	switch c := component.(type) {
 	case *corev1alpha1.AxonDbComponent:
-		return c != nil && c.Enabled
+		return c != nil && (c.Enabled == nil || *c.Enabled)
 	case *corev1alpha1.AxonServerComponent:
-		return c != nil && c.Enabled
+		return c != nil && (c.Enabled == nil || *c.Enabled)
 	case *corev1alpha1.AxonDashboardComponent:
-		return c != nil && c.Enabled
+		return c != nil && (c.Enabled == nil || *c.Enabled)
 	default:
 		return false
 	}
