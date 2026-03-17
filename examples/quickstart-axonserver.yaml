@@ -1,22 +1,21 @@
 apiVersion: core.axonops.com/v1alpha1
 kind: AxonOpsServer
 metadata:
-  name: server
+  name: serg
   namespace: default
 spec:
   server:
-    orgName: "AxonOps"
+    orgName: "axonops"
+    repository:
+      image: europe-docker.pkg.dev/axonops-public/axonops-docker-dev/axon-server
+      tag: 2.0.27-asb4338searchdbtlscacert-1-arm64
+
   timeSeries: {}
   search: {}
-  dashboard:
-    ingress:
-      enabled: true
-      annotations:
-        cert-manager.io/cluster-issuer: "selfsigned-cluster-issuer"
-      hosts:
-        - "dash.192.168.1.197.nip.io"
-      tls:
-        - secretName: server-tls
-          hosts:
-            - "dash.192.168.1.197.nip.io"
 
+  dashboard:
+    gateway:
+      enabled: true
+      gatewayClassName: "eg"
+      hostname: "dash.127.0.0.1.nip.io"
+      port: 443

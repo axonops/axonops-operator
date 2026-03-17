@@ -821,12 +821,18 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 		serviceName := fmt.Sprintf("%s-%s", server.Name, component)
 		headlessServiceName := fmt.Sprintf("%s-%s-headless", server.Name, component)
 		dnsNames := []string{
+			// ClusterIP service DNS names
 			serviceName,
 			fmt.Sprintf("%s.%s", serviceName, server.Namespace),
 			fmt.Sprintf("%s.%s.svc", serviceName, server.Namespace),
 			fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, server.Namespace),
-			fmt.Sprintf("*.%s.%s.svc.cluster.local", serviceName, server.Namespace),
+			// Headless service DNS names (all forms)
+			headlessServiceName,
+			fmt.Sprintf("%s.%s", headlessServiceName, server.Namespace),
+			fmt.Sprintf("%s.%s.svc", headlessServiceName, server.Namespace),
 			fmt.Sprintf("%s.%s.svc.cluster.local", headlessServiceName, server.Namespace),
+			// Wildcard for StatefulSet pod DNS: <pod>.<headless>.<ns>.svc.cluster.local
+			fmt.Sprintf("*.%s.%s.svc.cluster.local", headlessServiceName, server.Namespace),
 		}
 
 		// Configure the certificate spec
@@ -2143,17 +2149,22 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 type serverConfigData struct {
 	SearchURL        string
 	SearchCACert     string
+	SearchCert       string
+	SearchKey        string
 	SearchSkipVerify bool
 	OrgName          string
 	DashURL          string
 	CQLHosts         string
 	CQLCACert        string
+	CQLKey           string
+	CQLCert          string
 	CQLSSLEnabled    bool
 	CQLSkipVerify    bool
 }
 
 // serverConfigTemplate is the Go template for axon-server.yml
 // Credentials are handled via environment variables from mounted secrets
+// FIXME: skip_verify should be set to false. It needs ticket ASB-4338 merged first
 const serverConfigTemplate = `agents_port: 1888
 api_port: 8080
 host: 0.0.0.0
@@ -2163,7 +2174,13 @@ search_db:
     - {{ .SearchURL }}
   skip_verify: {{ .SearchSkipVerify }}
   {{ if .SearchCACert -}}
-  ca_cert: {{ .SearchCACert }}
+  ca_file: {{ .SearchCACert }}
+  {{ end -}}
+  {{ if .SearchCert -}}
+  cert_file: {{ .SearchCert }}
+  {{ end -}}
+  {{ if .SearchKey -}}
+  key_file: {{ .SearchKey }}
   {{ end -}}
 
 org_name: {{ .OrgName }}
@@ -2207,7 +2224,13 @@ cql_retrypolicy_numretries: 3
 cql_skip_verify: {{ .CQLSkipVerify }}
 cql_ssl: {{ .CQLSSLEnabled }}
 {{ if .CQLCACert -}}
-cql_ca_cert: {{ .CQLCACert }}
+cql_ca_file: {{ .CQLCACert }}
+{{ end -}}
+{{ if .CQLKey -}}
+cql_key_file: {{ .CQLKey }}
+{{ end -}}
+{{ if .CQLCert -}}
+cql_cert_file: {{ .CQLCert }}
 {{ end -}}
 `
 
@@ -2222,8 +2245,10 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 
 	// Determine search TLS settings based on internal vs external
 	// Default to secure communication for internal connections
-	searchSkipVerify := false
+	searchSkipVerify := true
 	searchCACert := "/etc/axonops/certs/search/ca.crt"
+	searchKey := "/etc/axonops/certs/search/tls.key"
+	searchCert := "/etc/axonops/certs/search/tls.crt"
 
 	if isSearchExternal(server) && server.Spec.Search != nil {
 		// For external search, respect the TLS configuration
@@ -2246,8 +2271,10 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 	// Determine timeseries TLS settings based on internal vs external
 	// Default to secure communication for internal connections
 	cqlSSLEnabled := true
-	cqlSkipVerify := false
+	cqlSkipVerify := true
 	cqlCACert := "/etc/axonops/certs/timeseries/ca.crt"
+	cqlKey := "/etc/axonops/certs/timeseries/tls.key"
+	cqlCert := "/etc/axonops/certs/timeseries/tls.crt"
 
 	if isTimeSeriesExternal(server) && server.Spec.TimeSeries != nil {
 		// For external timeseries, respect the TLS configuration
@@ -2255,17 +2282,23 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		if tls.Enabled {
 			cqlSSLEnabled = true
 			cqlSkipVerify = tls.InsecureSkipVerify
-			// Only include ca_cert if not skipping verification
+			// Only include cert paths if not skipping verification
 			if !tls.InsecureSkipVerify {
 				cqlCACert = "/etc/axonops/certs/timeseries/ca.crt"
+				cqlKey = "/etc/axonops/certs/timeseries/tls.key"
+				cqlCert = "/etc/axonops/certs/timeseries/tls.crt"
 			} else {
 				cqlCACert = ""
+				cqlKey = ""
+				cqlCert = ""
 			}
 		} else {
 			// External timeseries without TLS
 			cqlSSLEnabled = false
 			cqlSkipVerify = false
 			cqlCACert = ""
+			cqlKey = ""
+			cqlCert = ""
 		}
 	}
 
@@ -2273,10 +2306,14 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		SearchURL:        searchURL,
 		SearchCACert:     searchCACert,
 		SearchSkipVerify: searchSkipVerify,
+		SearchCert:       searchCert,
+		SearchKey:        searchKey,
 		OrgName:          strings.ToLower(server.Spec.Server.OrgName),
 		DashURL:          dashURL,
 		CQLHosts:         cqlHosts,
 		CQLCACert:        cqlCACert,
+		CQLKey:           cqlKey,
+		CQLCert:          cqlCert,
 		CQLSSLEnabled:    cqlSSLEnabled,
 		CQLSkipVerify:    cqlSkipVerify,
 	}
