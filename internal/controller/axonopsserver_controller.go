@@ -36,6 +36,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -121,6 +122,7 @@ type AxonOpsServerReconciler struct {
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 
 // resolveIssuerName returns the ClusterIssuer name to reference in Certificate
 // resources. Priority: spec.tls.issuer.name > operator flag (ClusterIssuerName).
@@ -271,6 +273,13 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return ctrl.Result{}, err
 			}
 
+			// Clean up credential secrets that don't have owner references (Retain mode).
+			// With Delete mode, owner references handle cascade deletion automatically.
+			if err := r.cleanupCredentialSecretsOnDelete(ctx, server); err != nil {
+				log.Error(err, "Failed to cleanup credential secrets")
+				return ctrl.Result{}, err
+			}
+
 			// Remove finalizer
 			controllerutil.RemoveFinalizer(server, axonOpsServerFinalizer)
 			if err := r.Update(ctx, server); err != nil {
@@ -357,7 +366,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			// inline username/password (creates a managed Secret), and no credentials
 			// (auto-generates into a managed Secret).
 			var err error
-			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication)
+			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication, server.Spec.TimeSeries.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure external TimeSeries authentication secret")
 				return ctrl.Result{}, err
@@ -366,14 +375,14 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		} else {
 			// Internal timeseries - existing behavior
 			var err error
-			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication)
+			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication, server.Spec.TimeSeries.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure TimeSeries authentication secret")
 				return ctrl.Result{}, err
 			}
 
 			// Create TLS certificate for TimeSeries
-			timeSeriesCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentTimeseries)
+			timeSeriesCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentTimeseries, server.Spec.TimeSeries.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure TimeSeries TLS certificate")
 				return ctrl.Result{}, err
@@ -407,7 +416,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			// inline username/password (creates a managed Secret), and no credentials
 			// (auto-generates into a managed Secret).
 			var err error
-			searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication)
+			searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication, server.Spec.Search.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure external Search authentication secret")
 				return ctrl.Result{}, err
@@ -416,14 +425,14 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		} else {
 			// Internal search - existing behavior
 			var err error
-			searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication)
+			searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication, server.Spec.Search.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure Search authentication secret")
 				return ctrl.Result{}, err
 			}
 
 			// Create TLS certificate for Search
-			searchCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentSearch)
+			searchCertSecretName, err = r.ensureTLSCertificate(ctx, server, componentSearch, server.Spec.Search.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure Search TLS certificate")
 				return ctrl.Result{}, err
@@ -574,6 +583,62 @@ func (r *AxonOpsServerReconciler) cleanupTLSSecrets(ctx context.Context, server 
 	return nil
 }
 
+// cleanupCredentialSecretsOnDelete deletes credential secrets that should not be retained
+// when the AxonOpsServer CR is being deleted. Secrets without owner references (Retain mode)
+// won't be cascade-deleted, so we explicitly delete them only if retention is not wanted.
+func (r *AxonOpsServerReconciler) cleanupCredentialSecretsOnDelete(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+	log := logf.FromContext(ctx)
+
+	type componentInfo struct {
+		name          string
+		storageConfig corev1.PersistentVolumeClaimSpec
+	}
+
+	var components []componentInfo
+	if server.Spec.TimeSeries != nil {
+		components = append(components, componentInfo{
+			name:          componentTimeseries,
+			storageConfig: server.Spec.TimeSeries.StorageConfig,
+		})
+	}
+	if server.Spec.Search != nil {
+		components = append(components, componentInfo{
+			name:          componentSearch,
+			storageConfig: server.Spec.Search.StorageConfig,
+		})
+	}
+
+	for _, comp := range components {
+		if r.shouldRetainCredentials(ctx, comp.storageConfig) {
+			log.Info("Retaining credential secrets for reuse with existing PVCs", "component", comp.name)
+			continue
+		}
+
+		// Delete auth and keystore secrets explicitly (they may lack owner refs if
+		// the retention policy changed from Retain to Delete between reconciles)
+		secretNames := []string{
+			fmt.Sprintf("%s-%s-auth", server.Name, comp.name),
+			fmt.Sprintf("%s-%s-keystore-password", server.Name, comp.name),
+		}
+		for _, name := range secretNames {
+			secret := &corev1.Secret{}
+			err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: server.Namespace}, secret)
+			if errors.IsNotFound(err) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("failed to get secret %s: %w", name, err)
+			}
+			if err := r.Delete(ctx, secret); err != nil && !errors.IsNotFound(err) {
+				return fmt.Errorf("failed to delete secret %s: %w", name, err)
+			}
+			log.Info("Deleted credential secret", "name", name)
+		}
+	}
+
+	return nil
+}
+
 // ensureAuthenticationSecret ensures a Secret exists for the component's authentication.
 // Returns the name of the secret being used.
 //
@@ -586,6 +651,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 	server *corev1alpha1.AxonOpsServer,
 	component string,
 	auth corev1alpha1.AxonAuthentication,
+	storageConfig corev1.PersistentVolumeClaimSpec,
 ) (string, error) {
 	log := logf.FromContext(ctx)
 
@@ -664,19 +730,21 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		},
 	}
 
+	retain := r.shouldRetainCredentials(ctx, storageConfig)
+
 	err = r.createOrUpdate(ctx, secret, func() error {
-		// Set owner reference for garbage collection
-		if err := controllerutil.SetControllerReference(server, secret, r.Scheme); err != nil {
-			return err
+		if retain {
+			// Remove owner reference so the secret survives CR deletion (PVCs are retained)
+			r.removeOwnerReference(secret, server)
+		} else {
+			// Set owner reference for garbage collection (PVCs will be deleted)
+			if err := controllerutil.SetControllerReference(server, secret, r.Scheme); err != nil {
+				return err
+			}
 		}
 
-		// Set labels
-		if secret.Labels == nil {
-			secret.Labels = make(map[string]string)
-		}
-		secret.Labels["app.kubernetes.io/name"] = "axonops"
-		secret.Labels["app.kubernetes.io/component"] = component
-		secret.Labels["app.kubernetes.io/managed-by"] = appManagedBy
+		// Set labels for discovery on re-creation
+		secret.Labels = r.buildLabels(server, component)
 
 		// Set secret data with component-specific keys
 		secret.Type = corev1.SecretTypeOpaque
@@ -715,6 +783,7 @@ func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
 	ctx context.Context,
 	server *corev1alpha1.AxonOpsServer,
 	component string,
+	storageConfig corev1.PersistentVolumeClaimSpec,
 ) (string, error) {
 	log := logf.FromContext(ctx)
 	secretName := fmt.Sprintf("%s-%s-keystore-password", server.Name, component)
@@ -751,9 +820,15 @@ func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
 		},
 	}
 
+	retain := r.shouldRetainCredentials(ctx, storageConfig)
+
 	err = r.createOrUpdate(ctx, secret, func() error {
-		if err := controllerutil.SetControllerReference(server, secret, r.Scheme); err != nil {
-			return err
+		if retain {
+			r.removeOwnerReference(secret, server)
+		} else {
+			if err := controllerutil.SetControllerReference(server, secret, r.Scheme); err != nil {
+				return err
+			}
 		}
 
 		secret.Labels = r.buildLabels(server, component)
@@ -768,7 +843,7 @@ func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
 		return "", fmt.Errorf("failed to create/update keystore password secret: %w", err)
 	}
 
-	log.Info("Keystore password secret reconciled", "name", secretName)
+	log.Info("Keystore password secret reconciled", "name", secretName, "retained", retain)
 	return secretName, nil
 }
 
@@ -778,6 +853,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 	ctx context.Context,
 	server *corev1alpha1.AxonOpsServer,
 	component string,
+	storageConfig corev1.PersistentVolumeClaimSpec,
 ) (string, error) {
 	log := logf.FromContext(ctx)
 
@@ -789,7 +865,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 	keystorePasswordSecretName := ""
 	if component == componentSearch || component == componentTimeseries {
 		var err error
-		keystorePasswordSecretName, err = r.ensureKeystorePasswordSecret(ctx, server, component)
+		keystorePasswordSecretName, err = r.ensureKeystorePasswordSecret(ctx, server, component, storageConfig)
 		if err != nil {
 			return "", fmt.Errorf("failed to ensure keystore password secret: %w", err)
 		}
@@ -898,12 +974,18 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 	return secretName, nil
 }
 
-// isComponentEnabled checks if a component is enabled.
-// cleanupInternalSearchResources deletes internal Search resources when switching to external search
+// cleanupInternalSearchResources deletes internal Search resources when switching to external search.
+// Credential secrets are retained if the StorageClass reclaimPolicy is Retain.
 func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
 	log := logf.FromContext(ctx)
 
-	// List of resources to delete
+	var storageConfig corev1.PersistentVolumeClaimSpec
+	if server.Spec.Search != nil {
+		storageConfig = server.Spec.Search.StorageConfig
+	}
+	retain := r.shouldRetainCredentials(ctx, storageConfig)
+
+	// Always delete workload resources
 	resourcesToDelete := []struct {
 		name string
 		obj  client.Object
@@ -914,12 +996,26 @@ func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Con
 			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentSearch), Namespace: server.Namespace}}},
 		{name: "Search ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("%s-%s", server.Name, componentSearch), Namespace: server.Namespace}}},
-		{name: "Search auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-auth", server.Name, componentSearch), Namespace: server.Namespace}}},
-		{name: "Search keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentSearch), Namespace: server.Namespace}}},
 		{name: "Search TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentSearch), Namespace: server.Namespace}}},
+	}
+
+	// Only delete credential secrets if storage is not retained
+	if !retain {
+		resourcesToDelete = append(resourcesToDelete,
+			struct {
+				name string
+				obj  client.Object
+			}{name: "Search auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("%s-%s-auth", server.Name, componentSearch), Namespace: server.Namespace}}},
+			struct {
+				name string
+				obj  client.Object
+			}{name: "Search keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentSearch), Namespace: server.Namespace}}},
+		)
+	} else {
+		log.Info("Retaining Search credential secrets for reuse with existing PVCs")
 	}
 
 	for _, item := range resourcesToDelete {
@@ -936,11 +1032,18 @@ func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Con
 	return nil
 }
 
-// cleanupInternalTimeseriesResources deletes internal TimeSeries resources when switching to external timeseries
+// cleanupInternalTimeseriesResources deletes internal TimeSeries resources when switching to external timeseries.
+// Credential secrets are retained if the StorageClass reclaimPolicy is Retain.
 func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
 	log := logf.FromContext(ctx)
 
-	// List of resources to delete
+	var storageConfig corev1.PersistentVolumeClaimSpec
+	if server.Spec.TimeSeries != nil {
+		storageConfig = server.Spec.TimeSeries.StorageConfig
+	}
+	retain := r.shouldRetainCredentials(ctx, storageConfig)
+
+	// Always delete workload resources
 	resourcesToDelete := []struct {
 		name string
 		obj  client.Object
@@ -951,12 +1054,26 @@ func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context
 			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries), Namespace: server.Namespace}}},
 		{name: "TimeSeries ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentTimeseries), Namespace: server.Namespace}}},
 		{name: "TimeSeries TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+	}
+
+	// Only delete credential secrets if storage is not retained
+	if !retain {
+		resourcesToDelete = append(resourcesToDelete,
+			struct {
+				name string
+				obj  client.Object
+			}{name: "TimeSeries auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+			struct {
+				name string
+				obj  client.Object
+			}{name: "TimeSeries keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		)
+	} else {
+		log.Info("Retaining TimeSeries credential secrets for reuse with existing PVCs")
 	}
 
 	for _, item := range resourcesToDelete {
@@ -2657,6 +2774,57 @@ func (r *AxonOpsServerReconciler) buildLabels(server *corev1alpha1.AxonOpsServer
 		"app.kubernetes.io/component":  component,
 		"app.kubernetes.io/managed-by": appManagedBy,
 	}
+}
+
+// removeOwnerReference removes the owner reference for the given owner from the object.
+func (r *AxonOpsServerReconciler) removeOwnerReference(obj metav1.Object, owner metav1.Object) {
+	ownerUID := owner.GetUID()
+	refs := obj.GetOwnerReferences()
+	filtered := make([]metav1.OwnerReference, 0, len(refs))
+	for _, ref := range refs {
+		if ref.UID != ownerUID {
+			filtered = append(filtered, ref)
+		}
+	}
+	obj.SetOwnerReferences(filtered)
+}
+
+// shouldRetainCredentials checks the StorageClass reclaimPolicy for a component's storage.
+// Returns true if the StorageClass has Retain policy, meaning credential secrets should
+// survive CR deletion so retained PVCs remain usable on re-creation.
+func (r *AxonOpsServerReconciler) shouldRetainCredentials(ctx context.Context, storageConfig corev1.PersistentVolumeClaimSpec) bool {
+	log := logf.FromContext(ctx)
+
+	scName := ""
+	if storageConfig.StorageClassName != nil {
+		scName = *storageConfig.StorageClassName
+	}
+
+	// If no StorageClass specified, look up the cluster default
+	if scName == "" {
+		scList := &storagev1.StorageClassList{}
+		if err := r.List(ctx, scList); err != nil {
+			log.Error(err, "Could not list StorageClasses, defaulting to Delete behaviour")
+			return false
+		}
+		for i := range scList.Items {
+			if scList.Items[i].Annotations["storageclass.kubernetes.io/is-default-class"] == "true" {
+				scName = scList.Items[i].Name
+				break
+			}
+		}
+		if scName == "" {
+			return false
+		}
+	}
+
+	sc := &storagev1.StorageClass{}
+	if err := r.Get(ctx, client.ObjectKey{Name: scName}, sc); err != nil {
+		log.Error(err, "Could not get StorageClass, defaulting to Delete behaviour", "storageClass", scName)
+		return false
+	}
+
+	return sc.ReclaimPolicy != nil && *sc.ReclaimPolicy == corev1.PersistentVolumeReclaimRetain
 }
 
 // buildSelectorLabels builds selector labels for a component
