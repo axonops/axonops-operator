@@ -2277,6 +2277,7 @@ type serverConfigData struct {
 	CQLCert          string
 	CQLSSLEnabled    bool
 	CQLSkipVerify    bool
+	CQLLocalDC       string
 }
 
 // serverConfigTemplate is the Go template for axon-server.yml
@@ -2326,7 +2327,6 @@ cql_batch_size: 100
 cql_hosts:
   - {{ .CQLHosts }}
 cql_keyspace_replication: "{ 'class': 'NetworkTopologyStrategy', 'axonopsdb_dc1': 1 }"
-cql_local_dc: axonopsdb_dc1
 cql_max_searchqueriesparallelism: 100
 cql_metrics_cache_max_items: 500000
 cql_metrics_cache_max_size: 128
@@ -2348,6 +2348,9 @@ cql_key_file: {{ .CQLKey }}
 {{ end -}}
 {{ if .CQLCert -}}
 cql_cert_file: {{ .CQLCert }}
+{{ end -}}
+{{ if .CQLLocalDC }}
+cql_local_dc: {{ .CQLLocalDC }}
 {{ end -}}
 `
 
@@ -2392,8 +2395,10 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 	cqlCACert := "/etc/axonops/certs/timeseries/ca.crt"
 	cqlKey := "/etc/axonops/certs/timeseries/tls.key"
 	cqlCert := "/etc/axonops/certs/timeseries/tls.crt"
+	localDC := "axonopsdb_dc1"
 
 	if isTimeSeriesExternal(server) && server.Spec.TimeSeries != nil {
+		localDC = ""
 		// For external timeseries, respect the TLS configuration
 		tls := server.Spec.TimeSeries.External.TLS
 		if tls.Enabled {
@@ -2433,6 +2438,7 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		CQLCert:          cqlCert,
 		CQLSSLEnabled:    cqlSSLEnabled,
 		CQLSkipVerify:    cqlSkipVerify,
+		CQLLocalDC:       localDC,
 	}
 
 	tmpl, err := template.New("axon-server").Parse(serverConfigTemplate)
