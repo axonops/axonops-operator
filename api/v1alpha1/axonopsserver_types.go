@@ -161,6 +161,12 @@ type AxonExternalConfig struct {
 	// TLS configures TLS settings for external connections
 	// +optional
 	TLS AxonTLSConfig `json:"tls,omitempty"`
+
+	// DataCenter is the Cassandra datacenter name for CQL connections.
+	// When set on an external TimeSeries component, it is used in
+	// cql_local_dc and cql_keyspace_replication. Defaults to "axonopsdb_dc1".
+	// +optional
+	DataCenter string `json:"dataCenter,omitempty"`
 }
 
 // AxonTLSConfig configures TLS settings

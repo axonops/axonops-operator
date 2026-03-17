@@ -74,7 +74,9 @@ spec:
                     type: object
                   enabled:
                     default: true
-                    description: Enabled determines if the component should be deployed
+                    description: |-
+                      Enabled determines if the component should be deployed.
+                      Defaults to true when the component is specified.
                     type: boolean
                   env:
                     description: Env is a list of additional environment variables
@@ -82,6 +84,12 @@ spec:
                   external:
                     description: External configures external access to the component
                     properties:
+                      dataCenter:
+                        description: |-
+                          DataCenter is the Cassandra datacenter name for CQL connections.
+                          When set on an external TimeSeries component, it is used in
+                          cql_local_dc and cql_keyspace_replication. Defaults to "axonopsdb_dc1".
+                        type: string
                       hosts:
                         description: Hosts is a list of external hostnames for the
                           component
@@ -177,7 +185,9 @@ spec:
                     type: object
                   enabled:
                     default: true
-                    description: Enabled determines if the component should be deployed
+                    description: |-
+                      Enabled determines if the component should be deployed.
+                      Defaults to true when the component is specified.
                     type: boolean
                   env:
                     description: Env is a list of additional environment variables
@@ -185,6 +195,12 @@ spec:
                   external:
                     description: External configures external access to the component
                     properties:
+                      dataCenter:
+                        description: |-
+                          DataCenter is the Cassandra datacenter name for CQL connections.
+                          When set on an external TimeSeries component, it is used in
+                          cql_local_dc and cql_keyspace_replication. Defaults to "axonopsdb_dc1".
+                        type: string
                       hosts:
                         description: Hosts is a list of external hostnames for the
                           component
@@ -283,7 +299,9 @@ spec:
                     type: object
                   enabled:
                     default: true
-                    description: Enabled determines if the component should be deployed
+                    description: |-
+                      Enabled determines if the component should be deployed.
+                      Defaults to true when the component is specified.
                     type: boolean
                   env:
                     description: Env is a list of additional environment variables
@@ -291,6 +309,12 @@ spec:
                   external:
                     description: External configures external access to the component
                     properties:
+                      dataCenter:
+                        description: |-
+                          DataCenter is the Cassandra datacenter name for CQL connections.
+                          When set on an external TimeSeries component, it is used in
+                          cql_local_dc and cql_keyspace_replication. Defaults to "axonopsdb_dc1".
+                        type: string
                       hosts:
                         description: Hosts is a list of external hostnames for the
                           component
@@ -384,7 +408,9 @@ spec:
                     type: object
                   enabled:
                     default: true
-                    description: Enabled determines if the component should be deployed
+                    description: |-
+                      Enabled determines if the component should be deployed.
+                      Defaults to true when the component is specified.
                     type: boolean
                   env:
                     description: Env is a list of additional environment variables
@@ -392,6 +418,12 @@ spec:
                   external:
                     description: External configures external access to the component
                     properties:
+                      dataCenter:
+                        description: |-
+                          DataCenter is the Cassandra datacenter name for CQL connections.
+                          When set on an external TimeSeries component, it is used in
+                          cql_local_dc and cql_keyspace_replication. Defaults to "axonopsdb_dc1".
+                        type: string
                       hosts:
                         description: Hosts is a list of external hostnames for the
                           component

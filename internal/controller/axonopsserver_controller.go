@@ -2265,20 +2265,21 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 
 // serverConfigData holds the data for the axon-server.yml template
 type serverConfigData struct {
-	SearchURL        string
-	SearchCACert     string
-	SearchCert       string
-	SearchKey        string
-	SearchSkipVerify bool
-	OrgName          string
-	DashURL          string
-	CQLHosts         string
-	CQLCACert        string
-	CQLKey           string
-	CQLCert          string
-	CQLSSLEnabled    bool
-	CQLSkipVerify    bool
-	CQLLocalDC       string
+	SearchURL              string
+	SearchCACert           string
+	SearchCert             string
+	SearchKey              string
+	SearchSkipVerify       bool
+	OrgName                string
+	DashURL                string
+	CQLHosts               string
+	CQLCACert              string
+	CQLKey                 string
+	CQLCert                string
+	CQLSSLEnabled          bool
+	CQLSkipVerify          bool
+	CQLLocalDC             string
+	CQLKeyspaceReplication string
 }
 
 // serverConfigTemplate is the Go template for axon-server.yml
@@ -2327,7 +2328,7 @@ cql_autocreate_tables: true
 cql_batch_size: 100
 cql_hosts:
   - {{ .CQLHosts }}
-cql_keyspace_replication: "{ 'class': 'NetworkTopologyStrategy', 'axonopsdb_dc1': 1 }"
+cql_keyspace_replication: "{{ .CQLKeyspaceReplication }}"
 cql_max_searchqueriesparallelism: 100
 cql_metrics_cache_max_items: 500000
 cql_metrics_cache_max_size: 128
@@ -2399,7 +2400,12 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 	localDC := "axonopsdb_dc1"
 
 	if isTimeSeriesExternal(server) && server.Spec.TimeSeries != nil {
-		localDC = ""
+		dc := server.Spec.TimeSeries.External.DataCenter
+		if dc != "" {
+			localDC = dc
+		} else {
+			localDC = ""
+		}
 		// For external timeseries, respect the TLS configuration
 		tls := server.Spec.TimeSeries.External.TLS
 		if tls.Enabled {
@@ -2425,21 +2431,27 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		}
 	}
 
+	cqlKeyspaceReplication := fmt.Sprintf("{ 'class': 'NetworkTopologyStrategy', '%s': 1 }", localDC)
+	if localDC == "" {
+		cqlKeyspaceReplication = "{ 'class': 'NetworkTopologyStrategy' }"
+	}
+
 	data := serverConfigData{
-		SearchURL:        searchURL,
-		SearchCACert:     searchCACert,
-		SearchSkipVerify: searchSkipVerify,
-		SearchCert:       searchCert,
-		SearchKey:        searchKey,
-		OrgName:          strings.ToLower(server.Spec.Server.OrgName),
-		DashURL:          dashURL,
-		CQLHosts:         cqlHosts,
-		CQLCACert:        cqlCACert,
-		CQLKey:           cqlKey,
-		CQLCert:          cqlCert,
-		CQLSSLEnabled:    cqlSSLEnabled,
-		CQLSkipVerify:    cqlSkipVerify,
-		CQLLocalDC:       localDC,
+		SearchURL:              searchURL,
+		SearchCACert:           searchCACert,
+		SearchSkipVerify:       searchSkipVerify,
+		SearchCert:             searchCert,
+		SearchKey:              searchKey,
+		OrgName:                strings.ToLower(server.Spec.Server.OrgName),
+		DashURL:                dashURL,
+		CQLHosts:               cqlHosts,
+		CQLCACert:              cqlCACert,
+		CQLKey:                 cqlKey,
+		CQLCert:                cqlCert,
+		CQLSSLEnabled:          cqlSSLEnabled,
+		CQLSkipVerify:          cqlSkipVerify,
+		CQLLocalDC:             localDC,
+		CQLKeyspaceReplication: cqlKeyspaceReplication,
 	}
 
 	tmpl, err := template.New("axon-server").Parse(serverConfigTemplate)
