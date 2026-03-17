@@ -45,21 +45,15 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 **Install the CRDs and run the operator locally (development):**
 
 ```bash
-make install   # Install CRDs into the current cluster
-make run       # Run the operator locally against the current kubeconfig
-```
-
-**Deploy the operator to a cluster:**
-
-```bash
-make docker-build docker-push IMG=<registry>/axonops-operator:<tag>
-make deploy IMG=<registry>/axonops-operator:<tag>
+helm upgrade --install -n axonops-operator-system \
+  --create-namespace \
+  oci://ghcr.io/axonops/charts/axonops-operator:0.0.2
 ```
 
 **Install from a pre-built YAML bundle:**
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/<org>/axonops-operator/<tag>/dist/install.yaml
+kubectl apply -f https://github.com/axonops/axonops-operator/releases/latest/download/install.yaml
 ```
 
 ---

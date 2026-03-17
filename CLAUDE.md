@@ -13,6 +13,28 @@ Kubernetes operator that manages the AxonOps observability stack. It aims to rep
 - **Current Phase**: Development — Phase 3 (testing & validation) with code review findings
 - **Health**: Green — all CRD controllers implemented and compiled; identified 7 bugs in code review (#20-#26)
 
+## Workflow — Agent Gates
+
+These agents are mandatory gates, not optional tools. Do not skip them.
+
+### Before creating any GitHub issue:
+Run the **issue-writer** agent. Every issue must have: summary, detailed requirements, numbered acceptance criteria, specific testing requirements (named tests, not "add tests"), documentation requirements, dependencies, and labels. If any section is missing or vague, rewrite it before creating.
+
+### After completing any feature:
+1. **code-reviewer** — on all changed files
+2. **security-reviewer** — on any code touching TLS, HTTP, credentials, or external input
+3. **go-quality** — as a final gate before commit
+
+### After creating or modifying CI/CD configuration:
+4. **devops** — on any workflow, GoReleaser, Dependabot, or Makefile changes
+
+### When writing tests:
+5. **test-writer** — use for creating unit, integration, and BDD tests
+
+### When writing or reviewing documentation:
+6. **docs-writer** — on any README, godoc, examples, CONTRIBUTING, CHANGELOG, SECURITY.md, or config reference changes. All documentation follows RFC 2119 for requirement-level terminology. Every code example must compile. Every config field must be documented with type, default, valid values, and boundary behaviour.
+
+
 ## Active Tasks
 
 ### Code Review Findings (Priority Bugs)
