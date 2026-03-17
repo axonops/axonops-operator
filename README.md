@@ -1,135 +1,238 @@
 # axonops-operator
-// TODO(user): Add simple overview of use/purpose
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com) observability stack. It replaces both the AxonOps Helm charts and Terraform provider, giving you a single, declarative interface for running AxonOps entirely within Kubernetes.
 
-## Getting Started
+## What It Does
 
-### Prerequisites
-- go version v1.24.6+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+- **Deploys the full AxonOps stack** — axon-server, axon-dash, axondb-timeseries, and axondb-search — from a single `AxonOpsServer` custom resource.
+- **Manages AxonOps configuration** — alert rules, alert routes, and healthchecks are reconciled as Kubernetes resources and kept in sync with the AxonOps API.
+- **Handles day-2 operations** — credential rotation, TLS certificate management, startup ordering, and Ingress/Gateway API configuration.
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+---
 
-```sh
-make docker-build docker-push IMG=<some-registry>/axonops-operator:tag
+## CRDs
+
+### `core.axonops.com/v1alpha1`
+
+| Kind | Purpose |
+|---|---|
+| `AxonOpsServer` | Deploys and manages the full AxonOps server stack |
+| `AxonOpsConnection` | Stores reusable API credentials for the AxonOps API |
+
+### `alerts.axonops.com/v1alpha1`
+
+| Kind | Purpose |
+|---|---|
+| `AxonOpsMetricAlert` | Metric threshold alerts |
+| `AxonOpsLogAlert` | Log pattern alerts |
+| `AxonOpsAlertRoute` | Alert routing and notification channels |
+| `AxonOpsHealthcheckHTTP` | HTTP endpoint healthchecks |
+| `AxonOpsHealthcheckTCP` | TCP port healthchecks |
+| `AxonOpsHealthcheckShell` | Shell script healthchecks |
+
+---
+
+## Prerequisites
+
+- Kubernetes 1.28+
+- [cert-manager](https://cert-manager.io) — required only when using internal database components (TimeSeries or Search)
+- [Gateway API CRDs](https://gateway-api.sigs.k8s.io/guides/#installing-gateway-api) — required only when using Gateway API ingress
+
+---
+
+## Installation
+
+**Install the CRDs and run the operator locally (development):**
+
+```bash
+make install   # Install CRDs into the current cluster
+make run       # Run the operator locally against the current kubeconfig
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+**Deploy the operator to a cluster:**
 
-**Install the CRDs into the cluster:**
-
-```sh
-make install
+```bash
+make docker-build docker-push IMG=<registry>/axonops-operator:<tag>
+make deploy IMG=<registry>/axonops-operator:<tag>
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+**Install from a pre-built YAML bundle:**
 
-```sh
-make deploy IMG=<some-registry>/axonops-operator:tag
+```bash
+kubectl apply -f https://raw.githubusercontent.com/<org>/axonops-operator/<tag>/dist/install.yaml
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+---
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+## Quick Start
 
-```sh
+### All-in-one deployment (fully managed)
+
+Deploy the complete AxonOps stack with a single resource. The operator provisions all components, generates credentials, and manages TLS certificates automatically.
+
+```yaml
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  name: axonops
+  namespace: axonops
+spec:
+  server:
+    orgName: "my-company"
+  timeSeries: {}
+  search: {}
+  dashboard: {}
+```
+
+### External databases
+
+Connect the AxonOps server to existing Cassandra and Elasticsearch/OpenSearch clusters instead of running them in-cluster.
+
+```yaml
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  name: axonops
+  namespace: axonops
+spec:
+  server:
+    orgName: "my-company"
+  timeSeries:
+    external:
+      hosts:
+        - cassandra-node1.example.com:9042
+        - cassandra-node2.example.com:9042
+      tls:
+        enabled: false
+    authentication:
+      secretRef: cassandra-credentials   # Secret with AXONOPS_DB_USER / AXONOPS_DB_PASSWORD
+  search:
+    external:
+      hosts:
+        - https://elasticsearch.example.com:9200
+    authentication:
+      secretRef: elasticsearch-credentials  # Secret with AXONOPS_SEARCH_USER / AXONOPS_SEARCH_PASSWORD
+  dashboard: {}
+```
+
+### Alert management
+
+Create an `AxonOpsConnection` once per namespace, then reference it from alert resources.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: axonops-api-key
+  namespace: axonops
+stringData:
+  api-key: "your-api-key-here"
+---
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsConnection
+metadata:
+  name: axonops-api
+  namespace: axonops
+spec:
+  orgId: "my-org-id"
+  host: "axonops.example.com"
+  protocol: "https"
+  apiKeyRef:
+    name: axonops-api-key
+    key: api-key
+---
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsMetricAlert
+metadata:
+  name: high-read-latency
+  namespace: axonops
+spec:
+  connectionRef: axonops-api
+  clusterName: production-cluster
+  clusterType: cassandra
+  name: high-read-latency
+  operator: ">"
+  warningValue: 50
+  criticalValue: 100
+  duration: 15m
+  dashboard: Cassandra Overview
+  chart: Read Latency
+  annotations:
+    summary: "Cassandra read latency is high"
+```
+
+---
+
+## AxonOpsServer Components
+
+Each component can operate in **internal** (operator-managed) or **external** (user-provided) mode.
+
+| Component | Image | Internal | External |
+|---|---|---|---|
+| `axon-server` | `axon-server` | StatefulSet | n/a |
+| `axon-dash` | `axon-dash` | Deployment | n/a |
+| `axondb-timeseries` | `axondb-timeseries` | StatefulSet | Cassandra-compatible |
+| `axondb-search` | `axondb-search` | StatefulSet | Elasticsearch/OpenSearch |
+
+### Authentication
+
+For each database component, the operator uses credentials in this priority order:
+
+1. `authentication.secretRef` — reference an existing Secret
+2. `authentication.username` / `authentication.password` — inline values
+3. Auto-generated — operator creates and manages a Secret with random credentials
+
+### Ingress and Gateway API
+
+Both Dashboard and Server endpoints (agent and API) support `ingress` and `gateway` configuration independently. You can enable one, both, or neither per endpoint.
+
+### TLS
+
+When using internal TimeSeries or Search components, the operator creates TLS certificates via cert-manager. cert-manager is not required for external database configurations.
+
+### Startup ordering
+
+The operator enforces dependency ordering: Server waits for its databases to be ready; Dashboard waits for Server.
+
+---
+
+## Samples
+
+Pre-built sample resources are available under `config/samples/`:
+
+```bash
 kubectl apply -k config/samples/
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+---
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+## Development
 
-```sh
-kubectl delete -k config/samples/
+```bash
+make manifests        # Regenerate CRDs and RBAC from kubebuilder markers
+make generate         # Regenerate DeepCopy methods
+make fmt && make vet  # Format and vet code
+make lint             # Run linter
+make test             # Run unit tests (uses envtest)
+make build            # Build the manager binary
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow.
 
-```sh
-make uninstall
+---
+
+## Uninstall
+
+```bash
+kubectl delete -k config/samples/  # Remove sample CRs
+make uninstall                      # Remove CRDs from the cluster
+make undeploy                       # Remove the operator from the cluster
 ```
 
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/axonops-operator:tag
-```
-
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/axonops-operator/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v2-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+---
 
 ## License
 
 Copyright 2026.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+Licensed under the [Apache License, Version 2.0](LICENSE).
