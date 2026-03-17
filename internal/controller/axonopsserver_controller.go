@@ -2489,20 +2489,33 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 	return result, nil
 }
 
+// resolveSecretName returns the secret name for a component's authentication.
+// Priority: spec SecretRef > status (from previous reconcile) > default convention.
+func (r *AxonOpsServerReconciler) resolveSecretName(server *corev1alpha1.AxonOpsServer, component string) string {
+	switch component {
+	case componentTimeseries:
+		if server.Spec.TimeSeries != nil && server.Spec.TimeSeries.Authentication.SecretRef != "" {
+			return server.Spec.TimeSeries.Authentication.SecretRef
+		}
+		if server.Status.TimeSeriesSecretName != "" {
+			return server.Status.TimeSeriesSecretName
+		}
+	case componentSearch:
+		if server.Spec.Search != nil && server.Spec.Search.Authentication.SecretRef != "" {
+			return server.Spec.Search.Authentication.SecretRef
+		}
+		if server.Status.SearchSecretName != "" {
+			return server.Status.SearchSecretName
+		}
+	}
+	return fmt.Sprintf("%s-%s-auth", server.Name, component)
+}
+
 // buildServerEnv builds environment variables for the server container
 // including credentials from search and timeseries secrets
 func (r *AxonOpsServerReconciler) buildServerEnv(server *corev1alpha1.AxonOpsServer, extraEnv []corev1.EnvVar) []corev1.EnvVar {
-	// Build secret names based on the AxonOpsServer name
-	searchSecretName := fmt.Sprintf("%s-%s-auth", server.Name, componentSearch)
-	timeseriesSecretName := fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries)
-
-	// Use status secret names if available (in case user provided their own secrets)
-	if server.Status.SearchSecretName != "" {
-		searchSecretName = server.Status.SearchSecretName
-	}
-	if server.Status.TimeSeriesSecretName != "" {
-		timeseriesSecretName = server.Status.TimeSeriesSecretName
-	}
+	searchSecretName := r.resolveSecretName(server, componentSearch)
+	timeseriesSecretName := r.resolveSecretName(server, componentTimeseries)
 
 	env := []corev1.EnvVar{
 		// Search credentials (mapped to AXONOPS_SEARCH_USER/PASSWORD)
