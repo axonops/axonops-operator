@@ -287,10 +287,11 @@ type AxonRepository struct {
 }
 
 type AxonBaseComponent struct {
-	// Enabled determines if the component should be deployed
+	// Enabled determines if the component should be deployed.
+	// Defaults to true when the component is specified.
 	// +optional
 	// +kubebuilder:default=true
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// Annotations to add to the component pods
 	// +optional

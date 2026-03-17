@@ -163,7 +163,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Spec: corev1alpha1.AxonOpsServerSpec{
 					Search: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: true,
+							Enabled: ptr(true),
 							External: corev1alpha1.AxonExternalConfig{
 								Hosts: []string{"https://opensearch.example.com:9200"},
 								TLS: corev1alpha1.AxonTLSConfig{
@@ -231,7 +231,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Spec: corev1alpha1.AxonOpsServerSpec{
 					Search: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: true,
+							Enabled: ptr(true),
 							External: corev1alpha1.AxonExternalConfig{
 								Hosts: []string{"https://opensearch.example.com:9200"},
 							},
@@ -303,7 +303,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Spec: corev1alpha1.AxonOpsServerSpec{
 					Search: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: true,
+							Enabled: ptr(true),
 							External: corev1alpha1.AxonExternalConfig{
 								Hosts: []string{"https://opensearch.example.com:9200"},
 							},
@@ -314,7 +314,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 					},
 					Server: &corev1alpha1.AxonServerComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: true,
+							Enabled: ptr(true),
 						},
 						OrgName: "test-org",
 					},
@@ -390,7 +390,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Spec: corev1alpha1.AxonOpsServerSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: true,
+							Enabled: ptr(true),
 							External: corev1alpha1.AxonExternalConfig{
 								Hosts: []string{"cassandra-node1.example.com:9042", "cassandra-node2.example.com:9042"},
 								TLS: corev1alpha1.AxonTLSConfig{
@@ -458,7 +458,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Spec: corev1alpha1.AxonOpsServerSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: true,
+							Enabled: ptr(true),
 							External: corev1alpha1.AxonExternalConfig{
 								Hosts: []string{"cassandra-node1.example.com:9042"},
 							},
@@ -530,7 +530,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Spec: corev1alpha1.AxonOpsServerSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: true,
+							Enabled: ptr(true),
 							External: corev1alpha1.AxonExternalConfig{
 								Hosts: []string{"cassandra-node1.example.com:9042"},
 							},
@@ -541,7 +541,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 					},
 					Server: &corev1alpha1.AxonServerComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: true,
+							Enabled: ptr(true),
 						},
 						OrgName: "test-org",
 					},

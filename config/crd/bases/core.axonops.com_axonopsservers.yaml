@@ -71,7 +71,9 @@ spec:
                     type: object
                   enabled:
                     default: true
-                    description: Enabled determines if the component should be deployed
+                    description: |-
+                      Enabled determines if the component should be deployed.
+                      Defaults to true when the component is specified.
                     type: boolean
                   env:
                     description: Env is a list of additional environment variables
@@ -174,7 +176,9 @@ spec:
                     type: object
                   enabled:
                     default: true
-                    description: Enabled determines if the component should be deployed
+                    description: |-
+                      Enabled determines if the component should be deployed.
+                      Defaults to true when the component is specified.
                     type: boolean
                   env:
                     description: Env is a list of additional environment variables
@@ -280,7 +284,9 @@ spec:
                     type: object
                   enabled:
                     default: true
-                    description: Enabled determines if the component should be deployed
+                    description: |-
+                      Enabled determines if the component should be deployed.
+                      Defaults to true when the component is specified.
                     type: boolean
                   env:
                     description: Env is a list of additional environment variables
@@ -381,7 +387,9 @@ spec:
                     type: object
                   enabled:
                     default: true
-                    description: Enabled determines if the component should be deployed
+                    description: |-
+                      Enabled determines if the component should be deployed.
+                      Defaults to true when the component is specified.
                     type: boolean
                   env:
                     description: Env is a list of additional environment variables
