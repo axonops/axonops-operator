@@ -68,6 +68,20 @@ jobs:
         run: |
           make build-installer IMG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Update Helm chart versions
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          sed -i "s/^version:.*/version: ${VERSION}/" charts/axonops-operator/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" charts/axonops-operator/Chart.yaml
+
+      - name: Push Helm chart to GHCR
+        run: |
+          helm package charts/axonops-operator
+          helm push axonops-operator-*.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
