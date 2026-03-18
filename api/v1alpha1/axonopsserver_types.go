@@ -72,6 +72,11 @@ type AxonOpsServerSpec struct {
 	// TLS configures cert-manager TLS certificate issuance for internal components.
 	// +optional
 	TLS AxonOpsTLSConfig `json:"tls,omitempty"`
+
+	// InitImage is the container image used for init containers (e.g., volume permission fixing).
+	// Defaults to "busybox:1.37.0" if not specified. Must be pinned to a specific version.
+	// +optional
+	InitImage string `json:"initImage,omitempty"`
 }
 
 // AxonOpsServerStatus defines the observed state of AxonOpsServer.
