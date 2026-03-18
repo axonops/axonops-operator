@@ -531,6 +531,72 @@ func (c *Client) CreateOrUpdateIntegration(ctx context.Context, clusterType, clu
 	return result, nil
 }
 
+// GetAdaptiveRepair fetches the current adaptive repair settings for a cluster
+func (c *Client) GetAdaptiveRepair(ctx context.Context, clusterType, clusterName string) (*AdaptiveRepairSettings, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/adaptiveRepair/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get adaptive repair settings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	var result AdaptiveRepairSettings
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode adaptive repair response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateAdaptiveRepair updates the adaptive repair settings for a cluster
+func (c *Client) UpdateAdaptiveRepair(ctx context.Context, clusterType, clusterName string, settings AdaptiveRepairSettings) error {
+	reqURL := fmt.Sprintf("%s/api/v1/adaptiveRepair/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+
+	body, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal adaptive repair settings: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update adaptive repair settings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
+	}
+
+	return nil
+}
+
 // DeleteIntegration deletes an integration by ID.
 // Returns nil on 200, 204, or 404 (already deleted).
 func (c *Client) DeleteIntegration(ctx context.Context, clusterType, clusterName, integrationID string) error {

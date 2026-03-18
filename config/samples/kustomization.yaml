@@ -10,4 +10,5 @@ resources:
 - alerts_v1alpha1_axonopshealthcheckshell.yaml
 - alerts_v1alpha1_axonopshealthchecktcp.yaml
 - alerts_v1alpha1_axonopsalertendpoint.yaml
+- alerts_v1alpha1_axonopsadaptiverepair.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

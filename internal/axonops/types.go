@@ -169,3 +169,16 @@ type HealthcheckIntegrations struct {
 	OverrideWarning bool     `json:"OverrideWarning,omitempty"`
 	OverrideError   bool     `json:"OverrideError,omitempty"`
 }
+
+// AdaptiveRepairSettings represents the adaptive repair configuration for a cluster
+type AdaptiveRepairSettings struct {
+	Active              bool     `json:"Active"`
+	BlacklistedTables   []string `json:"BlacklistedTables"`
+	FilterTWCSTables    bool     `json:"FilterTWCSTables"`
+	GcGraceThreshold    int64    `json:"GcGraceThreshold"`
+	MaxSegmentsPerTable int32    `json:"MaxSegmentsPerTable"`
+	SegmentRetries      int32    `json:"SegmentRetries"`
+	SegmentTargetSizeMB int32    `json:"SegmentTargetSizeMB"`
+	SegmentTimeout      string   `json:"SegmentTimeout"`
+	TableParallelism    int32    `json:"TableParallelism"`
+}

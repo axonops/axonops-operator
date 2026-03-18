@@ -1,0 +1,90 @@
+# Example 1: Enable adaptive repair with default settings
+# Minimal configuration — all tuning fields use sensible defaults.
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAdaptiveRepair
+metadata:
+  name: production-repair
+  namespace: default
+spec:
+  # Reference to the AxonOpsConnection in the same namespace
+  connectionRef: production
+
+  # Cluster information
+  clusterName: production-cluster
+  clusterType: cassandra
+
+---
+# Example 2: Tuned adaptive repair for a large Cassandra cluster
+# Reduces parallelism, increases segment size, and excludes known-large tables.
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAdaptiveRepair
+metadata:
+  name: production-repair-tuned
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cluster
+  clusterType: cassandra
+
+  # Keep repair enabled
+  active: true
+
+  # Lower parallelism to reduce I/O pressure on busy clusters
+  tableParallelism: 2
+
+  # Only repair tables with gc_grace >= 2 days (172800 seconds)
+  gcGraceThreshold: 172800
+
+  # Target 64 MB segments for more predictable repair times
+  segmentTargetSizeMB: 64
+
+  # Cap segments per table to avoid very long repair cycles
+  maxSegmentsPerTable: 4
+
+  # Allow more retries for flaky segments
+  segmentRetries: 5
+
+  # Extend per-segment timeout for large tables
+  segmentTimeout: "4h"
+
+  # Skip TWCS tables (time-window compaction handles its own TTL)
+  filterTWCSTables: true
+
+  # Exclude specific tables from repair
+  excludedTables:
+    - system_distributed.repair_history
+    - my_keyspace.large_archive_table
+
+---
+# Example 3: Disable adaptive repair entirely
+# Useful when performing manual repairs or during maintenance windows.
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAdaptiveRepair
+metadata:
+  name: staging-repair-disabled
+  namespace: default
+spec:
+  connectionRef: staging
+  clusterName: staging-cluster
+  clusterType: cassandra
+  active: false
+
+---
+# Example 4: DSE cluster with default repair settings
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAdaptiveRepair
+metadata:
+  name: dse-repair
+  namespace: default
+spec:
+  connectionRef: dse-production
+  clusterName: dse-analytics-cluster
+  clusterType: dse
+
+  # Include TWCS tables in DSE repair cycle
+  filterTWCSTables: false
+
+  # Exclude DSE search index tables
+  excludedTables:
+    - dse_analytics.alwayson_sql_cache
+    - solr_admin.solr_resources

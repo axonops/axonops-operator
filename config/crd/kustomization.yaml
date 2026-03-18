@@ -11,6 +11,7 @@ resources:
 - bases/alerts.axonops.com_axonopshealthcheckshells.yaml
 - bases/alerts.axonops.com_axonopshealthchecktcps.yaml
 - bases/alerts.axonops.com_axonopsalertendpoints.yaml
+- bases/alerts.axonops.com_axonopsadaptiverepairs.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
