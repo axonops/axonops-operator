@@ -1,0 +1,23 @@
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsScheduledRepair
+metadata:
+  name: monthly-repair
+  namespace: default
+spec:
+  connectionRef: my-axonops-connection
+  clusterName: production-cluster
+  clusterType: cassandra
+  tag: monthly-full-repair
+  scheduleExpression: "0 0 1 * *"
+  parallelism: DC-Aware
+  segmented: true
+  segmentsPerNode: 4
+  jobThreads: 2
+  optimiseStreams: true
+  # Optional targeting:
+  # keyspace: analytics
+  # blacklistedTables: [large_events]
+  # specificDataCenters: [dc1, dc2]
+  # Paxos options (mutually exclusive):
+  # skipPaxos: true
+  # paxosOnly: true
