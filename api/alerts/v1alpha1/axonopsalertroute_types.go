@@ -62,7 +62,7 @@ type AxonOpsAlertRouteSpec struct {
 	// Ignored for global routes. Defaults to true.
 	// +kubebuilder:default=true
 	// +optional
-	EnableOverride bool `json:"enableOverride,omitempty"`
+	EnableOverride *bool `json:"enableOverride,omitempty"`
 }
 
 // AxonOpsAlertRouteStatus defines the observed state of AxonOpsAlertRoute.
