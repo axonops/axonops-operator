@@ -625,3 +625,109 @@ func (c *Client) DeleteIntegration(ctx context.Context, clusterType, clusterName
 
 	return nil
 }
+
+// GetScheduledSnapshots retrieves all scheduled snapshots for a cluster
+func (c *Client) GetScheduledSnapshots(ctx context.Context, clusterType, clusterName string) (*ScheduledSnapshotResponse, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraScheduleSnapshot/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get scheduled snapshots: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	var result ScheduledSnapshotResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// CreateScheduledSnapshot creates a new scheduled snapshot.
+// A UUID is generated client-side when no ID is present.
+func (c *Client) CreateScheduledSnapshot(ctx context.Context, clusterType, clusterName string, payload BackupPayload) error {
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraSnapshot/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+
+	if payload.ID == "" {
+		payload.ID = uuid.New().String()
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create scheduled snapshot: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
+	}
+
+	return nil
+}
+
+// DeleteScheduledSnapshot deletes a scheduled snapshot by ID.
+// The API expects a JSON array of IDs in the request body.
+func (c *Client) DeleteScheduledSnapshot(ctx context.Context, clusterType, clusterName, snapshotID string) error {
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraScheduleSnapshot/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+
+	body, err := json.Marshal([]string{snapshotID})
+	if err != nil {
+		return fmt.Errorf("failed to marshal snapshot ID: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete scheduled snapshot: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
+	}
+
+	return nil
+}

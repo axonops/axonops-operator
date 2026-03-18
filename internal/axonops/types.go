@@ -170,6 +170,51 @@ type HealthcheckIntegrations struct {
 	OverrideError   bool     `json:"OverrideError,omitempty"`
 }
 
+// ScheduledSnapshotResponse represents the GET response for scheduled snapshots
+type ScheduledSnapshotResponse struct {
+	ScheduledSnapshots []ScheduledSnapshot `json:"ScheduledSnapshots"`
+}
+
+// ScheduledSnapshot represents a single scheduled snapshot entry
+type ScheduledSnapshot struct {
+	ID     string          `json:"ID"`
+	Params []SnapshotParam `json:"Params"`
+}
+
+// SnapshotParam wraps the backup details JSON string
+type SnapshotParam struct {
+	BackupDetails string `json:"BackupDetails"`
+}
+
+// BackupPayload represents the POST payload for creating a scheduled snapshot
+type BackupPayload struct {
+	ID                      string     `json:"ID"`
+	Tag                     string     `json:"tag"`
+	Datacenters             []string   `json:"datacenters"`
+	Nodes                   []string   `json:"nodes"`
+	Tables                  []TableRef `json:"tables"`
+	Keyspaces               []string   `json:"keyspaces"`
+	AllTables               bool       `json:"allTables"`
+	AllNodes                bool       `json:"allNodes"`
+	LocalRetentionDuration  string     `json:"LocalRetentionDuration"`
+	Remote                  bool       `json:"Remote"`
+	RemoteType              string     `json:"remoteType,omitempty"`
+	RemotePath              string     `json:"remotePath,omitempty"`
+	RemoteRetentionDuration string     `json:"RemoteRetentionDuration,omitempty"`
+	RemoteConfig            string     `json:"remoteConfig,omitempty"`
+	Timeout                 string     `json:"timeout,omitempty"`
+	Transfers               int        `json:"transfers,omitempty"`
+	TPSLimit                float64    `json:"tpslimit,omitempty"`
+	BWLimit                 string     `json:"bwlimit,omitempty"`
+	Schedule                bool       `json:"schedule"`
+	ScheduleExpr            string     `json:"scheduleExpr,omitempty"`
+}
+
+// TableRef represents a table reference in backup configuration
+type TableRef struct {
+	Name string `json:"Name"`
+}
+
 // AdaptiveRepairSettings represents the adaptive repair configuration for a cluster
 type AdaptiveRepairSettings struct {
 	Active              bool     `json:"Active"`
