@@ -38,3 +38,11 @@ spec:
   # Example: disable a component
   # dashboard:
   #   enabled: false
+
+  # Example: constrain pods to specific nodes
+  # timeSeries:
+  #   nodeSelector:
+  #     disktype: ssd
+  # server:
+  #   nodeSelector:
+  #     role: infra
