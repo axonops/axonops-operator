@@ -182,6 +182,7 @@ rules:
   - kafka.axonops.com
   resources:
   - axonopskafkaacls
+  - axonopskafkaconnectors
   - axonopskafkatopics
   verbs:
   - create
@@ -195,6 +196,7 @@ rules:
   - kafka.axonops.com
   resources:
   - axonopskafkaacls/finalizers
+  - axonopskafkaconnectors/finalizers
   - axonopskafkatopics/finalizers
   verbs:
   - update
@@ -202,6 +204,7 @@ rules:
   - kafka.axonops.com
   resources:
   - axonopskafkaacls/status
+  - axonopskafkaconnectors/status
   - axonopskafkatopics/status
   verbs:
   - get

@@ -1,0 +1,19 @@
+apiVersion: kafka.axonops.com/v1alpha1
+kind: AxonOpsKafkaConnector
+metadata:
+  name: s3-sink
+  namespace: default
+spec:
+  connectionRef: my-axonops-connection
+  clusterName: production-kafka
+  connectClusterName: my-connect-cluster
+  name: s3-sink-connector
+  config:
+    connector.class: "io.confluent.connect.s3.S3SinkConnector"
+    topics: "events,orders"
+    s3.region: "eu-west-1"
+    s3.bucket.name: "my-kafka-backups"
+    flush.size: "1000"
+    storage.class: "io.confluent.connect.s3.storage.S3Storage"
+    format.class: "io.confluent.connect.s3.format.json.JsonFormat"
+    tasks.max: "2"

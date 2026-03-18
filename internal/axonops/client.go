@@ -954,3 +954,93 @@ func (c *Client) DeleteKafkaACL(ctx context.Context, clusterName string, acl Kaf
 	}
 	return nil
 }
+
+// CreateKafkaConnector creates a Kafka Connect connector
+func (c *Client) CreateKafkaConnector(ctx context.Context, clusterName, connectClusterName string, connector KafkaConnectorCreateRequest) (*KafkaConnectorResponse, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/connect/%s/connector",
+		c.baseURL, c.orgID, clusterName, connectClusterName)
+
+	body, err := json.Marshal(connector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal connector: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kafka connector: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+
+	var result KafkaConnectorResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &result, nil
+}
+
+// UpdateKafkaConnectorConfig updates a Kafka Connect connector's configuration
+func (c *Client) UpdateKafkaConnectorConfig(ctx context.Context, clusterName, connectClusterName, connectorName string, config map[string]string) error {
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/connect/%s/%s/config",
+		c.baseURL, c.orgID, clusterName, connectClusterName, connectorName)
+
+	payload := KafkaConnectorConfigUpdate{Config: config}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update kafka connector config: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
+
+// DeleteKafkaConnector deletes a Kafka Connect connector
+func (c *Client) DeleteKafkaConnector(ctx context.Context, clusterName, connectClusterName, connectorName string) error {
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/connect/%s/%s",
+		c.baseURL, c.orgID, clusterName, connectClusterName, connectorName)
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete kafka connector: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}

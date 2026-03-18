@@ -318,3 +318,32 @@ type KafkaACL struct {
 	Operation           string `json:"operation"`
 	PermissionType      string `json:"permissionType"`
 }
+
+// KafkaConnectorCreateRequest is the POST payload for creating a connector
+type KafkaConnectorCreateRequest struct {
+	Name   string            `json:"name"`
+	Config map[string]string `json:"config"`
+}
+
+// KafkaConnectorConfigUpdate is the PUT payload for updating connector config
+type KafkaConnectorConfigUpdate struct {
+	Config map[string]string `json:"config"`
+}
+
+// KafkaConnectorResponse is returned from create/read/update
+type KafkaConnectorResponse struct {
+	Name   string            `json:"name"`
+	Config map[string]string `json:"config"`
+	Type   string            `json:"type"` // "source" or "sink"
+}
+
+// KafkaConnectorsListResponse wraps the list endpoint response
+type KafkaConnectorsListResponse struct {
+	ClusterName string                             `json:"clusterName"`
+	Connectors  map[string]KafkaConnectorListEntry `json:"connectors"`
+}
+
+// KafkaConnectorListEntry wraps a connector's info and status
+type KafkaConnectorListEntry struct {
+	Info KafkaConnectorResponse `json:"info"`
+}
