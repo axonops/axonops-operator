@@ -48,8 +48,14 @@ func TestReplaceImageRegistry(t *testing.T) {
 			want:        "registry.local:5000/axonops/img",
 		},
 		{
-			name:        "DockerHubImage_NoSlash",
+			name:        "DockerHubImage_FullyQualified",
 			image:       "docker.io/library/busybox:1.37.0",
+			newRegistry: "registry.local",
+			want:        "registry.local/library/busybox:1.37.0",
+		},
+		{
+			name:        "DockerHubImage_ShortForm",
+			image:       "busybox:1.37.0",
 			newRegistry: "registry.local",
 			want:        "registry.local/busybox:1.37.0",
 		},
@@ -111,7 +117,7 @@ func TestReplaceImageRegistry(t *testing.T) {
 			name:        "AllDefaultImages_InitContainer",
 			image:       defaultInitImage,
 			newRegistry: "harbor.internal.com",
-			want:        "harbor.internal.com/busybox:1.37.0",
+			want:        "harbor.internal.com/library/busybox:1.37.0",
 		},
 	}
 
@@ -166,7 +172,7 @@ func TestResolveImage(t *testing.T) {
 			defaultImage:      "docker.io/library/busybox:1.37.0",
 			globalRegistry:    "registry.local",
 			componentOverride: "",
-			want:              "registry.local/busybox:1.37.0",
+			want:              "registry.local/library/busybox:1.37.0",
 		},
 	}
 
@@ -209,7 +215,7 @@ func TestResolveInitImage_ImageRegistry(t *testing.T) {
 					ImageRegistry: "registry.local",
 				},
 			},
-			want: "registry.local/busybox:1.37.0",
+			want: "registry.local/library/busybox:1.37.0",
 		},
 	}
 
