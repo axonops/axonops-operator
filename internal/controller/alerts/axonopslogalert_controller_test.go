@@ -36,79 +36,86 @@ import (
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
 
-var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
-	const connName = "shell-hc-conn"
-	newShellHealthcheckCR := func(name string) *alertsv1alpha1.AxonOpsHealthcheckShell {
-		return &alertsv1alpha1.AxonOpsHealthcheckShell{
+var _ = Describe("AxonOpsLogAlert Controller", func() {
+	const connName = "log-alert-conn"
+	newLogAlertCR := func(name string) *alertsv1alpha1.AxonOpsLogAlert {
+		return &alertsv1alpha1.AxonOpsLogAlert{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: testNamespace,
 			},
-			Spec: alertsv1alpha1.AxonOpsHealthcheckShellSpec{
+			Spec: alertsv1alpha1.AxonOpsLogAlertSpec{
 				ConnectionRef: connName,
 				ClusterName:   testClusterName,
-				ClusterType:   "kafka",
-				Name:          "test-shell-healthcheck",
-				Script:        "/bin/echo hello",
-				Shell:         "/bin/bash",
-				Interval:      "1m",
-				Timeout:       "30s",
+				ClusterType:   testClusterType,
+				Name:          "Test Log Alert",
+				Operator:      ">",
+				WarningValue:  5,
+				CriticalValue: 10,
+				Duration:      "10m",
+				Content:       "OutOfMemoryError",
+				Level:         "error,warning",
+				Source:        "/var/log/cassandra/system.log",
 			},
 		}
 	}
 
-	emptyHealthchecksResp := func() axonops.HealthchecksResponse {
-		return axonops.HealthchecksResponse{}
-	}
-
-	newMockServer := func(getStatus, putStatus int) *httptest.Server {
+	// Log alerts use the same alert-rules API endpoint as metric alerts (no dashboard resolution needed).
+	newMockServer := func(alertStatus int) *httptest.Server {
 		return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.Contains(r.URL.Path, "/api/v1/healthchecks/") {
+			if !strings.Contains(r.URL.Path, "/api/v1/alert-rules/") {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			switch r.Method {
-			case http.MethodGet:
-				if getStatus != http.StatusOK {
-					w.WriteHeader(getStatus)
-					return
-				}
-				_ = json.NewEncoder(w).Encode(emptyHealthchecksResp())
-			case http.MethodPut:
-				w.WriteHeader(putStatus)
-			default:
-				w.WriteHeader(http.StatusMethodNotAllowed)
+			if r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusNoContent)
+				return
 			}
+			if alertStatus != http.StatusOK && alertStatus != http.StatusCreated {
+				w.WriteHeader(alertStatus)
+				_, _ = w.Write([]byte(`{"error":"test error"}`))
+				return
+			}
+			var rule axonops.MetricAlertRule
+			_ = json.NewDecoder(r.Body).Decode(&rule)
+			if rule.ID == "" {
+				rule.ID = "generated-log-alert-id"
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(rule)
 		}))
 	}
 
 	Context("Reconcile_Create_Success", func() {
-		It("should create the healthcheck and set Ready status", func() {
-			server := newMockServer(http.StatusOK, http.StatusOK)
+		It("should create the log alert and set Ready status", func() {
+			server := newMockServer(http.StatusCreated)
 			defer server.Close()
 			cleanup := createTestConnectionAndSecret(ctx, connName, server)
 			defer cleanup()
 
-			cr := newShellHealthcheckCR("shell-hc-create-test")
+			cr := newLogAlertCR("log-create-test")
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 			defer func() {
 				_ = k8sClient.Delete(ctx, cr)
 			}()
 
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
-			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
+			// Adds finalizer
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			Expect(controllerutil.ContainsFinalizer(cr, shellHealthcheckFinalizer)).To(BeTrue())
+			Expect(controllerutil.ContainsFinalizer(cr, logAlertFinalizerName)).To(BeTrue())
 
+			// Syncs with API
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			Expect(cr.Status.SyncedHealthcheckID).NotTo(BeEmpty())
+			Expect(cr.Status.SyncedAlertID).NotTo(BeEmpty())
 			Expect(cr.Status.LastSyncTime).NotTo(BeNil())
 
 			readyCond := meta.FindStatusCondition(cr.Status.Conditions, "Ready")
@@ -119,14 +126,14 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 	})
 
 	Context("Reconcile_Update_Success", func() {
-		It("should update the healthcheck when spec changes", func() {
-			server := newMockServer(http.StatusOK, http.StatusOK)
+		It("should update the log alert when spec changes", func() {
+			server := newMockServer(http.StatusCreated)
 			defer server.Close()
 			connUpd := connName + "-upd"
 			cleanup := createTestConnectionAndSecret(ctx, connUpd, server)
 			defer cleanup()
 
-			cr := newShellHealthcheckCR("shell-hc-update-test")
+			cr := newLogAlertCR("log-update-test")
 			cr.Spec.ConnectionRef = connUpd
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 			defer func() {
@@ -134,7 +141,7 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			}()
 
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
-			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -142,7 +149,11 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			cr.Spec.Script = "/bin/echo updated"
+			Expect(cr.Status.SyncedAlertID).NotTo(BeEmpty())
+
+			// Update spec
+			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
+			cr.Spec.Content = "StackOverflowError"
 			Expect(k8sClient.Update(ctx, cr)).To(Succeed())
 
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
@@ -156,28 +167,29 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 	})
 
 	Context("Reconcile_Delete_WithFinalizer", func() {
-		It("should remove healthcheck from API and remove finalizer", func() {
-			var putCalled atomic.Bool
+		It("should call API delete and remove finalizer", func() {
+			var deleteCalled atomic.Bool
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				switch r.Method {
-				case http.MethodGet:
-					_ = json.NewEncoder(w).Encode(emptyHealthchecksResp())
-				case http.MethodPut:
-					putCalled.Store(true)
-					w.WriteHeader(http.StatusOK)
+				if r.Method == http.MethodDelete {
+					deleteCalled.Store(true)
+					w.WriteHeader(http.StatusNoContent)
+					return
 				}
+				rule := axonops.MetricAlertRule{ID: "log-del-id"}
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(rule)
 			}))
 			defer server.Close()
 			connDel := connName + "-del"
 			cleanup := createTestConnectionAndSecret(ctx, connDel, server)
 			defer cleanup()
 
-			cr := newShellHealthcheckCR("shell-hc-delete-test")
+			cr := newLogAlertCR("log-delete-test")
 			cr.Spec.ConnectionRef = connDel
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
-			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -188,7 +200,7 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(putCalled.Load()).To(BeTrue())
+			Expect(deleteCalled.Load()).To(BeTrue())
 
 			err = k8sClient.Get(ctx, nn, cr)
 			Expect(err).To(HaveOccurred())
@@ -197,19 +209,19 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 
 	Context("Reconcile_ConnectionNotFound", func() {
 		It("should set Failed condition when connection is missing", func() {
-			cr := newShellHealthcheckCR("shell-hc-no-conn-test")
+			cr := newLogAlertCR("log-no-conn-test")
 			cr.Spec.ConnectionRef = nonexistentConnName
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 			defer func() {
 				if err := k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: testNamespace}, cr); err == nil {
-					controllerutil.RemoveFinalizer(cr, shellHealthcheckFinalizer)
+					controllerutil.RemoveFinalizer(cr, logAlertFinalizerName)
 					_ = k8sClient.Update(ctx, cr)
 					_ = k8sClient.Delete(ctx, cr)
 				}
 			}()
 
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
-			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			_, err1 := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err1).NotTo(HaveOccurred())
@@ -222,31 +234,31 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Status).To(Equal(metav1.ConditionTrue))
-			Expect(failedCond.Reason).To(Equal(ReasonConnectionError))
+			Expect(failedCond.Reason).To(Equal("FailedToResolveConnection"))
 		})
 	})
 
 	Context("Reconcile_APIError", func() {
 		It("should set Failed condition when API returns error", func() {
-			server := newMockServer(http.StatusInternalServerError, http.StatusOK)
+			server := newMockServer(http.StatusInternalServerError)
 			defer server.Close()
 			connErr := connName + "-err"
 			cleanup := createTestConnectionAndSecret(ctx, connErr, server)
 			defer cleanup()
 
-			cr := newShellHealthcheckCR("shell-hc-api-error-test")
+			cr := newLogAlertCR("log-api-error-test")
 			cr.Spec.ConnectionRef = connErr
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 			defer func() {
 				if err := k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: testNamespace}, cr); err == nil {
-					controllerutil.RemoveFinalizer(cr, shellHealthcheckFinalizer)
+					controllerutil.RemoveFinalizer(cr, logAlertFinalizerName)
 					_ = k8sClient.Update(ctx, cr)
 					_ = k8sClient.Delete(ctx, cr)
 				}
 			}()
 
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
-			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			_, err1 := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err1).NotTo(HaveOccurred())
@@ -258,37 +270,32 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
 			Expect(failedCond).NotTo(BeNil())
-			Expect(failedCond.Reason).To(Equal(ReasonAPIError))
+			Expect(failedCond.Reason).To(Equal("SyncFailed"))
 		})
 	})
 
 	Context("Reconcile_API404OnDelete", func() {
 		It("should remove finalizer even when API returns 404 on delete", func() {
-			var callCount atomic.Int32
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				switch r.Method {
-				case http.MethodGet:
-					callCount.Add(1)
-					if callCount.Load() > 1 {
-						w.WriteHeader(http.StatusNotFound)
-						return
-					}
-					_ = json.NewEncoder(w).Encode(emptyHealthchecksResp())
-				case http.MethodPut:
-					w.WriteHeader(http.StatusOK)
+				if r.Method == http.MethodDelete {
+					w.WriteHeader(http.StatusNotFound)
+					return
 				}
+				rule := axonops.MetricAlertRule{ID: "log-404-id"}
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(rule)
 			}))
 			defer server.Close()
 			conn404 := connName + "-404"
 			cleanup := createTestConnectionAndSecret(ctx, conn404, server)
 			defer cleanup()
 
-			cr := newShellHealthcheckCR("shell-hc-404-delete-test")
+			cr := newLogAlertCR("log-404-delete-test")
 			cr.Spec.ConnectionRef = conn404
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
-			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())

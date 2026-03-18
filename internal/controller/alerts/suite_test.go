@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
+	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -61,6 +62,9 @@ var _ = BeforeSuite(func() {
 
 	var err error
 	err = alertsv1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = corev1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
