@@ -127,6 +127,13 @@ spec:
                       type: string
                     description: Labels to add to the component pods
                     type: object
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      NodeSelector is a map of key-value pairs used to constrain pods to nodes
+                      with matching labels. See https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                    type: object
                   replicas:
                     default: 1
                     x-kubernetes-preserve-unknown-fields: true
@@ -231,6 +238,13 @@ spec:
                     additionalProperties:
                       type: string
                     description: Labels to add to the component pods
+                    type: object
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      NodeSelector is a map of key-value pairs used to constrain pods to nodes
+                      with matching labels. See https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
                     type: object
                   repository:
                     description: Repository configures the container image
@@ -355,6 +369,13 @@ spec:
                     type: object
                   license:
                     x-kubernetes-preserve-unknown-fields: true
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      NodeSelector is a map of key-value pairs used to constrain pods to nodes
+                      with matching labels. See https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                    type: object
                   orgName:
                     description: OrgName configures to organization
                     type: string
@@ -461,6 +482,13 @@ spec:
                     additionalProperties:
                       type: string
                     description: Labels to add to the component pods
+                    type: object
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      NodeSelector is a map of key-value pairs used to constrain pods to nodes
+                      with matching labels. See https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
                     type: object
                   repository:
                     description: Repository configures the container image

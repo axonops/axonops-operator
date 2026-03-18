@@ -1628,6 +1628,7 @@ func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Contex
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: name,
+					NodeSelector:       ts.NodeSelector,
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup: ptr(int64(999)),
 					},
@@ -1941,6 +1942,7 @@ func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, s
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:            name,
+					NodeSelector:                  search.NodeSelector,
 					AutomountServiceAccountToken:  ptr(false),
 					TerminationGracePeriodSeconds: ptr(int64(120)),
 					SecurityContext: &corev1.PodSecurityContext{
@@ -2757,6 +2759,7 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: name,
+					NodeSelector:       srv.NodeSelector,
 					InitContainers: []corev1.Container{
 						{
 							Name:            "fsgroup-volume",
@@ -3161,6 +3164,7 @@ func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: name,
+					NodeSelector:       dash.NodeSelector,
 					Containers: []corev1.Container{
 						{
 							Name:            "axon-dash",

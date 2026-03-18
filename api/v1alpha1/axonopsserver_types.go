@@ -338,6 +338,11 @@ type AxonBaseComponent struct {
 	// +kubebuilder:validation:Schemaless
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
+	// NodeSelector is a map of key-value pairs used to constrain pods to nodes
+	// with matching labels. See https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
 	// ExtraVolumes defines additional volumes to mount
 	// +optional
 	// +kubebuilder:validation:XPreserveUnknownFields

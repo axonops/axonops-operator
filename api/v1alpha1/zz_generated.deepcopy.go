@@ -75,6 +75,13 @@ func (in *AxonBaseComponent) DeepCopyInto(out *AxonBaseComponent) {
 	out.Authentication = in.Authentication
 	out.Repository = in.Repository
 	in.Resources.DeepCopyInto(&out.Resources)
+	if in.NodeSelector != nil {
+		in, out := &in.NodeSelector, &out.NodeSelector
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.ExtraVolumes != nil {
 		in, out := &in.ExtraVolumes, &out.ExtraVolumes
 		*out = make([]corev1.Volume, len(*in))
