@@ -811,3 +811,88 @@ func (c *Client) DeleteScheduledRepair(ctx context.Context, clusterType, cluster
 	}
 	return nil
 }
+
+// CreateKafkaTopic creates a Kafka topic
+func (c *Client) CreateKafkaTopic(ctx context.Context, clusterName string, topic KafkaTopicCreateRequest) error {
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics", c.baseURL, c.orgID, clusterName)
+
+	body, err := json.Marshal(topic)
+	if err != nil {
+		return fmt.Errorf("failed to marshal topic: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create kafka topic: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
+
+// UpdateKafkaTopicConfig updates a Kafka topic's configuration
+func (c *Client) UpdateKafkaTopicConfig(ctx context.Context, clusterName, topicName string, configs []KafkaTopicConfigUpdate) error {
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics/%s/configs", c.baseURL, c.orgID, clusterName, topicName)
+
+	payload := struct {
+		Configs []KafkaTopicConfigUpdate `json:"configs"`
+	}{Configs: configs}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config update: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update kafka topic config: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
+
+// DeleteKafkaTopic deletes a Kafka topic
+func (c *Client) DeleteKafkaTopic(ctx context.Context, clusterName, topicName string) error {
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics/%s", c.baseURL, c.orgID, clusterName, topicName)
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete kafka topic: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}

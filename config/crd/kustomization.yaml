@@ -14,6 +14,7 @@ resources:
 - bases/alerts.axonops.com_axonopsadaptiverepairs.yaml
 - bases/backups.axonops.com_axonopsbackups.yaml
 - bases/alerts.axonops.com_axonopsscheduledrepairs.yaml
+- bases/kafka.axonops.com_axonopskafkatopics.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

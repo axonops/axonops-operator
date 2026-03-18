@@ -179,6 +179,32 @@ rules:
   - update
   - watch
 - apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopskafkatopics
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopskafkatopics/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopskafkatopics/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - networking.k8s.io
   resources:
   - ingresses
