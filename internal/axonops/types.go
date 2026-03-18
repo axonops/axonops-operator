@@ -260,3 +260,50 @@ type AdaptiveRepairSettings struct {
 	SegmentTimeout      string   `json:"SegmentTimeout"`
 	TableParallelism    int32    `json:"TableParallelism"`
 }
+
+// KafkaTopicCreateRequest is the POST payload for creating a Kafka topic
+type KafkaTopicCreateRequest struct {
+	TopicName         string             `json:"topicName"`
+	PartitionCount    int32              `json:"partitionCount"`
+	ReplicationFactor int32              `json:"replicationFactor"`
+	Configs           []KafkaTopicConfig `json:"configs"`
+}
+
+// KafkaTopicConfig is a single topic config key-value pair
+type KafkaTopicConfig struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// KafkaTopicInfo is the GET response for a single topic
+type KafkaTopicInfo struct {
+	Name              string `json:"name"`
+	PartitionCount    int32  `json:"partitionCount"`
+	ReplicationFactor int32  `json:"replicationFactor"`
+}
+
+// KafkaTopicConfigResponse is the GET response for topic configs
+type KafkaTopicConfigResponse struct {
+	TopicDescription []KafkaTopicConfigDescription `json:"topicDescription"`
+}
+
+// KafkaTopicConfigDescription wraps config entries for a topic
+type KafkaTopicConfigDescription struct {
+	TopicName     string                  `json:"topicName"`
+	ConfigEntries []KafkaTopicConfigEntry `json:"configEntries"`
+}
+
+// KafkaTopicConfigEntry is a single config entry from the API
+type KafkaTopicConfigEntry struct {
+	Name            string `json:"name"`
+	Value           string `json:"value"`
+	Source          string `json:"source"`
+	IsExplicitlySet bool   `json:"isExplicitlySet"`
+}
+
+// KafkaTopicConfigUpdate is a single config update operation
+type KafkaTopicConfigUpdate struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Op    string `json:"op"`
+}

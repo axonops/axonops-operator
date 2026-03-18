@@ -1,0 +1,16 @@
+apiVersion: kafka.axonops.com/v1alpha1
+kind: AxonOpsKafkaTopic
+metadata:
+  name: my-topic
+  namespace: default
+spec:
+  connectionRef: my-axonops-connection
+  clusterName: production-kafka
+  name: my-application-events
+  partitions: 6
+  replicationFactor: 3
+  config:
+    cleanup.policy: "delete"
+    retention.ms: "604800000"
+    min.insync.replicas: "2"
+    segment.bytes: "1073741824"
