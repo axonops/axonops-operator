@@ -125,6 +125,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 
 	Context("Reconcile_Update_Success", func() {
 		It("should update the healthcheck when spec changes", func() {
+			var err error
 			server := newMockServer(http.StatusOK, http.StatusOK)
 			defer server.Close()
 			connUpd := connName + "-upd"
@@ -151,7 +152,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			cr.Spec.Timeout = "60s"
 			Expect(k8sClient.Update(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
@@ -164,6 +165,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 	Context("Reconcile_Delete_WithFinalizer", func() {
 		It("should remove healthcheck from API and remove finalizer", func() {
 			var putCalled atomic.Bool
+			var err error
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.Method {
 				case http.MethodGet:
@@ -195,7 +197,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(putCalled.Load()).To(BeTrue())
 
@@ -220,8 +222,8 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsHealthcheckHTTPReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			Expect(err).NotTo(HaveOccurred())
+			_, err1 := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err1).NotTo(HaveOccurred())
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -257,8 +259,8 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsHealthcheckHTTPReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			Expect(err).NotTo(HaveOccurred())
+			_, err1 := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err1).NotTo(HaveOccurred())
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -300,7 +302,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsHealthcheckHTTPReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -308,7 +310,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = k8sClient.Get(ctx, nn, cr)

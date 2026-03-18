@@ -143,7 +143,7 @@ var _ = Describe("AxonOpsLogAlert Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -156,7 +156,7 @@ var _ = Describe("AxonOpsLogAlert Controller", func() {
 			cr.Spec.Content = "StackOverflowError"
 			Expect(k8sClient.Update(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
@@ -191,14 +191,14 @@ var _ = Describe("AxonOpsLogAlert Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deleteCalled.Load()).To(BeTrue())
 
@@ -223,8 +223,8 @@ var _ = Describe("AxonOpsLogAlert Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			Expect(err).NotTo(HaveOccurred())
+			_, err1 := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err1).NotTo(HaveOccurred())
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -260,8 +260,8 @@ var _ = Describe("AxonOpsLogAlert Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			Expect(err).NotTo(HaveOccurred())
+			_, err1 := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err1).NotTo(HaveOccurred())
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -297,7 +297,7 @@ var _ = Describe("AxonOpsLogAlert Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsLogAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -305,7 +305,7 @@ var _ = Describe("AxonOpsLogAlert Controller", func() {
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = k8sClient.Get(ctx, nn, cr)

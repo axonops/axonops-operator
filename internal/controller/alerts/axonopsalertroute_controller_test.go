@@ -137,6 +137,7 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 
 	Context("Reconcile_Update_Success", func() {
 		It("should update the route when spec changes", func() {
+			var err error
 			server := newMockServer(http.StatusOK, http.StatusCreated, http.StatusOK)
 			defer server.Close()
 			connUpd := connName + "-upd"
@@ -163,7 +164,7 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 			cr.Spec.Severity = "warning"
 			Expect(k8sClient.Update(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
@@ -176,6 +177,7 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 	Context("Reconcile_Delete_WithFinalizer", func() {
 		It("should call API delete and remove finalizer", func() {
 			var routeDeleteCalled atomic.Bool
+			var err error
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch {
 				case strings.Contains(r.URL.Path, "/api/v1/integrations-routing/") && r.Method == http.MethodDelete:
@@ -210,7 +212,7 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(routeDeleteCalled.Load()).To(BeTrue())
 
@@ -235,8 +237,8 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsAlertRouteReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			Expect(err).NotTo(HaveOccurred())
+			_, err1 := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err1).NotTo(HaveOccurred())
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -252,6 +254,7 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 
 	Context("Reconcile_APIError", func() {
 		It("should set Ready=False when API returns error", func() {
+			var err error
 			server := newMockServer(http.StatusInternalServerError, http.StatusOK, http.StatusOK)
 			defer server.Close()
 			connErr := connName + "-err"
@@ -290,6 +293,7 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 	Context("Reconcile_API404OnDelete", func() {
 		It("should remove finalizer even when integration not found on delete", func() {
 			var callCount atomic.Int32
+			var err error
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch {
 				case strings.Contains(r.URL.Path, "/api/v1/integrations-routing/"):
@@ -328,7 +332,7 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = k8sClient.Get(ctx, nn, cr)

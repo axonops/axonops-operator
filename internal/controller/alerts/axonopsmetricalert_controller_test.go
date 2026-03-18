@@ -233,7 +233,7 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 			reconciler := &AxonOpsMetricAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			// Reconcile to add finalizer + sync
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -245,7 +245,7 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
 			// Reconcile handles deletion
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(deleteCalled.Load()).To(BeTrue())
@@ -313,8 +313,8 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 			reconciler := &AxonOpsMetricAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			// Adds finalizer
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			Expect(err).NotTo(HaveOccurred())
+			_, err1 := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err1).NotTo(HaveOccurred())
 
 			// API error on create
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
@@ -364,7 +364,7 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 			reconciler := &AxonOpsMetricAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			// Create + sync
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -374,7 +374,7 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
 			// Reconcile deletion — API returns 404 but finalizer should still be removed
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
 			// CR should be fully deleted
