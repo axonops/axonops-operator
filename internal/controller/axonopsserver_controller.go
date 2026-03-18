@@ -79,7 +79,7 @@ const (
 	defaultDashboardTag    = "2.0.28"
 
 	// Default init container image (pinned version — do not use :latest)
-	defaultInitImage = "busybox:1.37.0"
+	defaultInitImage = "docker.io/library/busybox:1.37.0"
 
 	// Default heap sizes
 	defaultTimeseriesHeapSize = "1024M"

@@ -82,7 +82,7 @@ type AxonOpsServerSpec struct {
 	ImageRegistry string `json:"imageRegistry,omitempty"`
 
 	// InitImage is the container image used for init containers (e.g., volume permission fixing).
-	// Defaults to "busybox:1.37.0" if not specified. Must be pinned to a specific version.
+	// Defaults to "docker.io/library/busybox:1.37.0" if not specified. Must be pinned to a specific version.
 	// +optional
 	InitImage string `json:"initImage,omitempty"`
 }

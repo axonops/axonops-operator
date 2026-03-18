@@ -32,32 +32,32 @@ func TestReplaceImageRegistry(t *testing.T) {
 		{
 			name:        "ExplicitRegistry_SingleSegmentPath",
 			image:       "ghcr.io/axonops/img",
-			newRegistry: "harbor.io",
-			want:        "harbor.io/axonops/img",
+			newRegistry: "registry.local",
+			want:        "registry.local/axonops/img",
 		},
 		{
 			name:        "ExplicitRegistry_MultiSegmentPath",
 			image:       "registry.axonops.com/axonops-public/axonops-docker/axon-server",
-			newRegistry: "harbor.io",
-			want:        "harbor.io/axonops-public/axonops-docker/axon-server",
+			newRegistry: "registry.local",
+			want:        "registry.local/axonops-public/axonops-docker/axon-server",
 		},
 		{
 			name:        "ExplicitRegistry_WithPort",
 			image:       "ghcr.io/axonops/img",
-			newRegistry: "harbor.io:5000",
-			want:        "harbor.io:5000/axonops/img",
+			newRegistry: "registry.local:5000",
+			want:        "registry.local:5000/axonops/img",
 		},
 		{
 			name:        "DockerHubImage_NoSlash",
-			image:       "busybox:1.37.0",
-			newRegistry: "harbor.io",
-			want:        "harbor.io/busybox:1.37.0",
+			image:       "docker.io/library/busybox:1.37.0",
+			newRegistry: "registry.local",
+			want:        "registry.local/busybox:1.37.0",
 		},
 		{
 			name:        "DockerHubImage_LibraryPath",
 			image:       "library/nginx:latest",
-			newRegistry: "harbor.io",
-			want:        "harbor.io/library/nginx:latest",
+			newRegistry: "registry.local",
+			want:        "registry.local/library/nginx:latest",
 		},
 		{
 			name:        "EmptyRegistry_ReturnsOriginal",
@@ -68,20 +68,20 @@ func TestReplaceImageRegistry(t *testing.T) {
 		{
 			name:        "TrailingSlash_Stripped",
 			image:       "ghcr.io/axonops/img",
-			newRegistry: "harbor.io/",
-			want:        "harbor.io/axonops/img",
+			newRegistry: "registry.local/",
+			want:        "registry.local/axonops/img",
 		},
 		{
 			name:        "RegistryWithPort_ColonInFirstSegment",
 			image:       "localhost:5000/myimg",
-			newRegistry: "harbor.io",
-			want:        "harbor.io/myimg",
+			newRegistry: "registry.local",
+			want:        "registry.local/myimg",
 		},
 		{
 			name:        "ImageOnly_NoTag",
 			image:       "busybox",
-			newRegistry: "harbor.io",
-			want:        "harbor.io/busybox",
+			newRegistry: "registry.local",
+			want:        "registry.local/busybox",
 		},
 		{
 			name:        "AllDefaultImages_TimeSeries",
@@ -136,16 +136,16 @@ func TestResolveImage(t *testing.T) {
 		{
 			name:              "ComponentOverride_TakesPrecedence",
 			defaultImage:      "ghcr.io/axonops/img",
-			globalRegistry:    "harbor.io",
+			globalRegistry:    "registry.local",
 			componentOverride: "custom.io/my-img",
 			want:              "custom.io/my-img",
 		},
 		{
 			name:              "GlobalRegistry_Applied",
 			defaultImage:      "ghcr.io/axonops/img",
-			globalRegistry:    "harbor.io",
+			globalRegistry:    "registry.local",
 			componentOverride: "",
-			want:              "harbor.io/axonops/img",
+			want:              "registry.local/axonops/img",
 		},
 		{
 			name:              "Default_WhenNothingSet",
@@ -156,17 +156,17 @@ func TestResolveImage(t *testing.T) {
 		},
 		{
 			name:              "ComponentOverride_IgnoresGlobalRegistry",
-			defaultImage:      "busybox:1.37.0",
-			globalRegistry:    "harbor.io",
+			defaultImage:      "docker.io/library/busybox:1.37.0",
+			globalRegistry:    "registry.local",
 			componentOverride: "my.io/custom-busybox:2.0",
 			want:              "my.io/custom-busybox:2.0",
 		},
 		{
 			name:              "GlobalRegistry_DockerHubImage",
-			defaultImage:      "busybox:1.37.0",
-			globalRegistry:    "harbor.io",
+			defaultImage:      "docker.io/library/busybox:1.37.0",
+			globalRegistry:    "registry.local",
 			componentOverride: "",
-			want:              "harbor.io/busybox:1.37.0",
+			want:              "registry.local/busybox:1.37.0",
 		},
 	}
 
@@ -196,7 +196,7 @@ func TestResolveInitImage_ImageRegistry(t *testing.T) {
 			name: "CustomInitImage_TakesPrecedence",
 			server: &corev1alpha1.AxonOpsServer{
 				Spec: corev1alpha1.AxonOpsServerSpec{
-					ImageRegistry: "harbor.io",
+					ImageRegistry: "registry.local",
 					InitImage:     "my.io/custom-busybox:2.0",
 				},
 			},
@@ -206,10 +206,10 @@ func TestResolveInitImage_ImageRegistry(t *testing.T) {
 			name: "ImageRegistry_AppliedToDefault",
 			server: &corev1alpha1.AxonOpsServer{
 				Spec: corev1alpha1.AxonOpsServerSpec{
-					ImageRegistry: "harbor.io",
+					ImageRegistry: "registry.local",
 				},
 			},
-			want: "harbor.io/busybox:1.37.0",
+			want: "registry.local/busybox:1.37.0",
 		},
 	}
 

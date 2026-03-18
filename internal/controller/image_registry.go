@@ -25,13 +25,13 @@ import "strings"
 // For images with an explicit registry (first path segment contains "." or ":"),
 // that segment is replaced:
 //
-//	replaceImageRegistry("ghcr.io/axonops/img", "harbor.io") => "harbor.io/axonops/img"
-//	replaceImageRegistry("registry.axonops.com/path/img", "harbor.io") => "harbor.io/path/img"
+//	replaceImageRegistry("ghcr.io/axonops/img", "registry.local") => "registry.local/axonops/img"
+//	replaceImageRegistry("registry.axonops.com/path/img", "registry.local") => "registry.local/path/img"
 //
 // For images without an explicit registry (e.g., Docker Hub library images),
 // the registry is prepended:
 //
-//	replaceImageRegistry("busybox:1.37.0", "harbor.io") => "harbor.io/busybox:1.37.0"
+//	replaceImageRegistry("docker.io/library/busybox:1.37.0", "registry.local") => "registry.local/busybox:1.37.0"
 func replaceImageRegistry(image, newRegistry string) string {
 	if newRegistry == "" {
 		return image
@@ -42,7 +42,7 @@ func replaceImageRegistry(image, newRegistry string) string {
 	// Split image into segments by "/"
 	parts := strings.SplitN(image, "/", 2)
 
-	// Single segment (e.g., "busybox:1.37.0") — no explicit registry, prepend
+	// Single segment (e.g., "docker.io/library/busybox:1.37.0") — no explicit registry, prepend
 	if len(parts) == 1 {
 		return newRegistry + "/" + image
 	}
