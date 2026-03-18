@@ -29,7 +29,9 @@ import (
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
@@ -116,23 +118,43 @@ func main() {
 		setupLog.Info("Metrics collection is disabled via DISABLE_METRICS environment variable")
 	}
 
-	// Initialize OpenTelemetry tracing if endpoint is configured
+	// Initialize OpenTelemetry tracing if endpoint is configured.
+	// The OTel SDK natively reads OTEL_EXPORTER_OTLP_* env vars for endpoint,
+	// insecure, headers, etc. We only need to select the right exporter based
+	// on the protocol env var and avoid passing explicit options that override
+	// the SDK's env var handling.
 	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" && !disableMetrics {
 		setupLog.Info("Initializing OpenTelemetry tracing", "endpoint", endpoint)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		insecure := os.Getenv("OTEL_EXPORTER_OTLP_INSECURE") == "true"
-		opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(endpoint)}
-		if insecure {
-			opts = append(opts, otlptracegrpc.WithInsecure())
+		// Determine protocol: check traces-specific var first, then general, default to grpc
+		protocol := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL")
+		if protocol == "" {
+			protocol = os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+		}
+		if protocol == "" {
+			protocol = "grpc"
 		}
 
-		exporter, err := otlptracegrpc.New(ctx, opts...)
+		var exporter *otlptrace.Exporter
+		var err error
+
+		switch protocol {
+		case "http/protobuf":
+			// otlptracehttp reads OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_INSECURE,
+			// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, etc. from env automatically
+			exporter, err = otlptracehttp.New(ctx)
+		default: // "grpc"
+			// otlptracegrpc reads the same env vars automatically
+			exporter, err = otlptracegrpc.New(ctx)
+		}
 		if err != nil {
 			setupLog.Error(err, "Failed to create OTLP trace exporter")
 			os.Exit(1)
 		}
+
+		setupLog.Info("OTLP exporter created", "protocol", protocol)
 
 		res, err := resource.New(ctx,
 			resource.WithSchemaURL(semconv.SchemaURL),

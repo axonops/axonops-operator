@@ -2370,8 +2370,26 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 		cqlHosts = fmt.Sprintf("%s-%s-headless.%s.svc.cluster.local", server.Name, componentTimeseries, server.Namespace)
 	}
 
+	// Resolve license key: inline key takes priority, then SecretRef
+	var licenseKey string
+	if server.Spec.Server.License.Key != "" {
+		licenseKey = server.Spec.Server.License.Key
+	} else if server.Spec.Server.License.SecretRef != "" {
+		licenseSecret := &corev1.Secret{}
+		secretKey := types.NamespacedName{
+			Name:      server.Spec.Server.License.SecretRef,
+			Namespace: server.Namespace,
+		}
+		if err := r.Get(ctx, secretKey, licenseSecret); err != nil {
+			return "", fmt.Errorf("failed to get license secret %q: %w", server.Spec.Server.License.SecretRef, err)
+		}
+		if key, ok := licenseSecret.Data["license_key"]; ok {
+			licenseKey = string(key)
+		}
+	}
+
 	// Build the axon-server.yml config (credentials are injected via env vars from secrets)
-	configYAML, err := r.buildServerConfig(server, searchURL, cqlHosts)
+	configYAML, err := r.buildServerConfig(server, searchURL, cqlHosts, licenseKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to build server config: %w", err)
 	}
@@ -2417,6 +2435,7 @@ type serverConfigData struct {
 	SearchKey              string
 	SearchSkipVerify       bool
 	OrgName                string
+	LicenseKey             string
 	DashURL                string
 	CQLHosts               string
 	CQLCACert              string
@@ -2434,6 +2453,10 @@ type serverConfigData struct {
 const serverConfigTemplate = `agents_port: 1888
 api_port: 8080
 host: 0.0.0.0
+org_name: {{ .OrgName }}
+{{ if .LicenseKey -}}
+license_key: {{ .LicenseKey }}
+{{ end -}}
 
 search_db:
   hosts:
@@ -2449,7 +2472,6 @@ search_db:
   key_file: {{ .SearchKey }}
   {{ end -}}
 
-org_name: {{ .OrgName }}
 
 axon_dash_url: {{ .DashURL }}
 
@@ -2504,7 +2526,7 @@ cql_local_dc: {{ .CQLLocalDC }}
 
 // buildServerConfig generates the axon-server.yml configuration using a Go template.
 // Credentials are passed via environment variables from mounted secrets.
-func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOpsServer, searchURL, cqlHosts string) (string, error) {
+func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOpsServer, searchURL, cqlHosts, licenseKey string) (string, error) {
 	// Build dashboard URL from external hosts if available
 	dashURL := fmt.Sprintf("https://%s-%s", server.Name, componentDashboard)
 	if server.Spec.Dashboard != nil && len(server.Spec.Dashboard.External.Hosts) > 0 {
@@ -2589,6 +2611,7 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 		SearchCert:             searchCert,
 		SearchKey:              searchKey,
 		OrgName:                strings.ToLower(server.Spec.Server.OrgName),
+		LicenseKey:             licenseKey,
 		DashURL:                dashURL,
 		CQLHosts:               cqlHosts,
 		CQLCACert:              cqlCACert,
