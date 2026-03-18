@@ -18,6 +18,7 @@ package alerts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -99,7 +100,8 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 	if err != nil {
 		log.Error(err, "Failed to get adaptive repair settings from AxonOps")
 		r.setFailedCondition(ctx, repair, ReasonAPIError, fmt.Sprintf("Failed to get adaptive repair settings: %v", err))
-		if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+		var apiErr *axonops.APIError
+		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -119,7 +121,8 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 	if err := apiClient.UpdateAdaptiveRepair(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName, desired); err != nil {
 		log.Error(err, "Failed to update adaptive repair settings")
 		r.setFailedCondition(ctx, repair, ReasonAPIError, fmt.Sprintf("Failed to update adaptive repair settings: %v", err))
-		if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+		var apiErr *axonops.APIError
+		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil

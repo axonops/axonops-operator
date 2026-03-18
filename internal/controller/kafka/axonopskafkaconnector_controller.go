@@ -18,6 +18,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -98,7 +99,8 @@ func (r *AxonOpsKafkaConnectorReconciler) Reconcile(ctx context.Context, req ctr
 		if err != nil {
 			log.Error(err, "Failed to create Kafka connector")
 			r.setFailedCondition(ctx, connector, "CreateFailed", fmt.Sprintf("Failed to create connector: %v", err))
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 			return ctrl.Result{}, nil
@@ -112,7 +114,8 @@ func (r *AxonOpsKafkaConnectorReconciler) Reconcile(ctx context.Context, req ctr
 		if err := apiClient.UpdateKafkaConnectorConfig(ctx, connector.Spec.ClusterName, connector.Spec.ConnectClusterName, connector.Spec.Name, connector.Spec.Config); err != nil {
 			log.Error(err, "Failed to update Kafka connector config")
 			r.setFailedCondition(ctx, connector, "UpdateFailed", fmt.Sprintf("Failed to update connector config: %v", err))
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 			return ctrl.Result{}, nil
@@ -167,7 +170,8 @@ func (r *AxonOpsKafkaConnectorReconciler) handleDeletion(ctx context.Context, co
 	if connector.Status.Synced {
 		if err := apiClient.DeleteKafkaConnector(ctx, connector.Spec.ClusterName, connector.Spec.ConnectClusterName, connector.Spec.Name); err != nil {
 			log.Error(err, "Failed to delete Kafka connector")
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		} else {

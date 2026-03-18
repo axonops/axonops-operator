@@ -18,6 +18,7 @@ package alerts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -126,7 +127,8 @@ func (r *AxonOpsHealthcheckTCPReconciler) Reconcile(ctx context.Context, req ctr
 	if err := apiClient.UpdateHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName, allHealthchecks); err != nil {
 		log.Error(err, "Failed to update healthchecks")
 		r.setFailedCondition(ctx, healthcheck, ReasonAPIError, fmt.Sprintf("Failed to update healthchecks: %v", err))
-		if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+		var apiErr *axonops.APIError
+		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
@@ -184,7 +186,8 @@ func (r *AxonOpsHealthcheckTCPReconciler) handleDeletion(ctx context.Context, he
 		// Get all healthchecks
 		allHealthchecks, err := apiClient.GetHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName)
 		if err != nil {
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.StatusCode == 404 {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
 				log.Info("Healthchecks not found, proceeding with finalizer removal")
 			} else {
 				log.Error(err, "Failed to get healthchecks for deletion")
@@ -202,7 +205,8 @@ func (r *AxonOpsHealthcheckTCPReconciler) handleDeletion(ctx context.Context, he
 
 			// Update via bulk PUT
 			if err := apiClient.UpdateHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName, allHealthchecks); err != nil {
-				if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+				var apiErr *axonops.APIError
+				if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 					return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 				}
 				log.Error(err, "Failed to delete healthcheck from AxonOps")
