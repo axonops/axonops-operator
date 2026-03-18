@@ -1,0 +1,57 @@
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsAlertEndpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: axonops-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: slack-ops
+  namespace: axonops
+spec:
+  connectionRef: axonops-connection
+  clusterName: my-cassandra-cluster
+  clusterType: cassandra
+  name: slack-ops-channel
+  type: slack
+  slack:
+    url: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+    channel: "#ops-alerts"
+    # Alternatively, use a SecretRef for the webhook URL:
+    # urlSecretRef:
+    #   name: slack-webhook-secret
+    #   key: webhook-url
+---
+# Example: PagerDuty endpoint
+# apiVersion: alerts.axonops.com/v1alpha1
+# kind: AxonOpsAlertEndpoint
+# metadata:
+#   name: pagerduty-critical
+#   namespace: axonops
+# spec:
+#   connectionRef: axonops-connection
+#   clusterName: my-cassandra-cluster
+#   clusterType: cassandra
+#   name: pagerduty-critical
+#   type: pagerduty
+#   pagerDuty:
+#     integrationKeySecretRef:
+#       name: pagerduty-secret
+#       key: integration-key
+---
+# Example: ServiceNow endpoint with password from Secret
+# apiVersion: alerts.axonops.com/v1alpha1
+# kind: AxonOpsAlertEndpoint
+# metadata:
+#   name: servicenow-production
+#   namespace: axonops
+# spec:
+#   connectionRef: axonops-connection
+#   clusterName: my-cassandra-cluster
+#   clusterType: cassandra
+#   name: servicenow-production
+#   type: servicenow
+#   serviceNow:
+#     instanceName: mycompany
+#     user: api-user
+#     passwordSecretRef:
+#       name: servicenow-secret
+#       key: password

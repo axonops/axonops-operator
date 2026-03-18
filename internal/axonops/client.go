@@ -471,3 +471,91 @@ func (c *Client) UpdateHealthchecks(ctx context.Context, clusterType, clusterNam
 
 	return nil
 }
+
+// CreateOrUpdateIntegration creates or updates an integration definition.
+// The server determines create vs update from the ID field in the POST body.
+// A UUID is generated client-side when no ID is present.
+func (c *Client) CreateOrUpdateIntegration(ctx context.Context, clusterType, clusterName string, def IntegrationDefinition) (IntegrationDefinition, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+
+	// Generate a client-side UUID when no ID exists
+	if def.ID == "" {
+		def.ID = uuid.New().String()
+	}
+
+	// Build the request payload matching the API format
+	payload := map[string]any{
+		"type":   def.Type,
+		"params": def.Params,
+		"id":     def.ID,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return IntegrationDefinition{}, fmt.Errorf("failed to marshal integration: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return IntegrationDefinition{}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return IntegrationDefinition{}, fmt.Errorf("failed to create/update integration: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return IntegrationDefinition{}, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
+	}
+
+	// 204 returns no content, return the definition with the ID we sent
+	if resp.StatusCode == http.StatusNoContent {
+		return def, nil
+	}
+
+	var result IntegrationDefinition
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		// If we can't decode, return the definition with the ID we generated
+		return def, nil
+	}
+
+	return result, nil
+}
+
+// DeleteIntegration deletes an integration by ID.
+// Returns nil on 200, 204, or 404 (already deleted).
+func (c *Client) DeleteIntegration(ctx context.Context, clusterType, clusterName, integrationID string) error {
+	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName, integrationID)
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete integration: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
+	}
+
+	return nil
+}

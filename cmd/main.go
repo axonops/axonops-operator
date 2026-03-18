@@ -44,12 +44,13 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/controller"
 	alertscontroller "github.com/axonops/axonops-operator/internal/controller/alerts"
 	_ "github.com/axonops/axonops-operator/internal/metrics"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -326,6 +327,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "AxonOpsHealthcheckTCP")
+		os.Exit(1)
+	}
+	if err := (&alertscontroller.AxonOpsAlertEndpointReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "AxonOpsAlertEndpoint")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
