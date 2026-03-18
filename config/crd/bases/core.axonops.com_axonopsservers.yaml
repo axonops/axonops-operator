@@ -158,6 +158,11 @@ spec:
                     description: StorageConfig defines persistent storage configuration
                     x-kubernetes-preserve-unknown-fields: true
                 type: object
+              initImage:
+                description: |-
+                  InitImage is the container image used for init containers (e.g., volume permission fixing).
+                  Defaults to "busybox:1.37.0" if not specified. Must be pinned to a specific version.
+                type: string
               search:
                 description: Search configures the axondb-search component
                 properties:

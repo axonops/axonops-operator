@@ -78,6 +78,9 @@ const (
 	defaultDashboardImage  = "registry.axonops.com/axonops-public/axonops-docker/axon-dash"
 	defaultDashboardTag    = "2.0.28"
 
+	// Default init container image (pinned version — do not use :latest)
+	defaultInitImage = "busybox:1.37.0"
+
 	// Default heap sizes
 	defaultTimeseriesHeapSize = "1024M"
 	defaultSearchHeapSize     = "2g"
@@ -1992,7 +1995,7 @@ func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, s
 					InitContainers: []corev1.Container{
 						{
 							Name:            "fsgroup-volume",
-							Image:           "busybox:latest",
+							Image:           resolveInitImage(server),
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command:         []string{"sh", "-c"},
 							Args:            []string{"chown -R 999:999 /var/lib/opensearch"},
@@ -2784,7 +2787,7 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 					InitContainers: []corev1.Container{
 						{
 							Name:            "fsgroup-volume",
-							Image:           "busybox:latest",
+							Image:           resolveInitImage(server),
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command:         []string{"sh", "-c"},
 							Args:            []string{fmt.Sprintf("chown -R %d:%d /var/lib/axonops", serverUserID, serverGroupID)},
@@ -3570,6 +3573,16 @@ func (r *AxonOpsServerReconciler) ensureServerApiGateway(ctx context.Context, se
 // ptr returns a pointer to the given value
 func ptr[T any](v T) *T {
 	return &v
+}
+
+// resolveInitImage returns the init container image to use. If the user
+// specified one in the CRD spec, it is used; otherwise the pinned default
+// is returned.
+func resolveInitImage(server *corev1alpha1.AxonOpsServer) string {
+	if server.Spec.InitImage != "" {
+		return server.Spec.InitImage
+	}
+	return defaultInitImage
 }
 
 // SetupWithManager sets up the controller with the Manager.
