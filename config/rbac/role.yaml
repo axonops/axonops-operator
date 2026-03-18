@@ -181,6 +181,7 @@ rules:
 - apiGroups:
   - kafka.axonops.com
   resources:
+  - axonopskafkaacls
   - axonopskafkatopics
   verbs:
   - create
@@ -193,12 +194,14 @@ rules:
 - apiGroups:
   - kafka.axonops.com
   resources:
+  - axonopskafkaacls/finalizers
   - axonopskafkatopics/finalizers
   verbs:
   - update
 - apiGroups:
   - kafka.axonops.com
   resources:
+  - axonopskafkaacls/status
   - axonopskafkatopics/status
   verbs:
   - get
