@@ -1,5 +1,9 @@
 # AxonOps Kubernetes Operator
 
+<div align=center>
+<img src="AxonOps-Operator.png" width="700" height="200">
+</div>
+
 A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com) control plane. It replaces both the AxonOps Helm charts and Terraform provider, giving you a single, declarative interface for running AxonOps entirely within Kubernetes.
 
 ## What It Does
