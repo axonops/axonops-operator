@@ -356,6 +356,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	var timeSeriesSecretName, searchSecretName string
+	var timeSeriesAuthHash, searchAuthHash string
 	var timeSeriesCertSecretName, searchCertSecretName string
 
 	// Ensure TimeSeries authentication secret, certificate, and workload (if component is enabled)
@@ -372,7 +373,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			// inline username/password (creates a managed Secret), and no credentials
 			// (auto-generates into a managed Secret).
 			var err error
-			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication, server.Spec.TimeSeries.StorageConfig)
+			timeSeriesSecretName, _, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication, server.Spec.TimeSeries.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure external TimeSeries authentication secret")
 				return ctrl.Result{}, err
@@ -381,7 +382,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		} else {
 			// Internal timeseries - existing behavior
 			var err error
-			timeSeriesSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication, server.Spec.TimeSeries.StorageConfig)
+			timeSeriesSecretName, timeSeriesAuthHash, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication, server.Spec.TimeSeries.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure TimeSeries authentication secret")
 				return ctrl.Result{}, err
@@ -395,7 +396,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 
 			// Create ServiceAccount, Services, and StatefulSet for TimeSeries
-			if err := r.reconcileTimeseries(ctx, server); err != nil {
+			if err := r.reconcileTimeseries(ctx, server, timeSeriesAuthHash); err != nil {
 				log.Error(err, "Failed to reconcile TimeSeries workload")
 				return ctrl.Result{}, err
 			}
@@ -422,7 +423,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			// inline username/password (creates a managed Secret), and no credentials
 			// (auto-generates into a managed Secret).
 			var err error
-			searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication, server.Spec.Search.StorageConfig)
+			searchSecretName, _, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication, server.Spec.Search.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure external Search authentication secret")
 				return ctrl.Result{}, err
@@ -431,7 +432,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		} else {
 			// Internal search - existing behavior
 			var err error
-			searchSecretName, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication, server.Spec.Search.StorageConfig)
+			searchSecretName, searchAuthHash, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication, server.Spec.Search.StorageConfig)
 			if err != nil {
 				log.Error(err, "Failed to ensure Search authentication secret")
 				return ctrl.Result{}, err
@@ -445,7 +446,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 
 			// Create ServiceAccount, Services, and StatefulSet for Search
-			if err := r.reconcileSearch(ctx, server); err != nil {
+			if err := r.reconcileSearch(ctx, server, searchAuthHash); err != nil {
 				log.Error(err, "Failed to reconcile Search workload")
 				return ctrl.Result{}, err
 			}
@@ -715,13 +716,16 @@ func (r *AxonOpsServerReconciler) cleanupCredentialSecretsOnDelete(ctx context.C
 // 1. If SecretRef is set, verify it exists and return its name
 // 2. If Username/Password are provided, create a Secret with those values
 // 3. Otherwise, generate random credentials and create a Secret
+// ensureAuthenticationSecret ensures an auth Secret exists for a database component.
+// Returns (secretName, contentHash, error). The contentHash is used for rolling update
+// annotations on the StatefulSet pod template.
 func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 	ctx context.Context,
 	server *corev1alpha1.AxonOpsServer,
 	component string,
 	auth corev1alpha1.AxonAuthentication,
 	storageConfig corev1.PersistentVolumeClaimSpec,
-) (string, error) {
+) (string, string, error) {
 	log := logf.FromContext(ctx)
 
 	// Get the correct secret keys for this component
@@ -735,17 +739,17 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 			Namespace: server.Namespace,
 		}, secret)
 		if err != nil {
-			return "", fmt.Errorf("referenced secret %q not found: %w", auth.SecretRef, err)
+			return "", "", fmt.Errorf("referenced secret %q not found: %w", auth.SecretRef, err)
 		}
 		// Verify required keys exist
 		if _, ok := secret.Data[userKey]; !ok {
-			return "", fmt.Errorf("secret %q missing required key %q", auth.SecretRef, userKey)
+			return "", "", fmt.Errorf("secret %q missing required key %q", auth.SecretRef, userKey)
 		}
 		if _, ok := secret.Data[passwordKey]; !ok {
-			return "", fmt.Errorf("secret %q missing required key %q", auth.SecretRef, passwordKey)
+			return "", "", fmt.Errorf("secret %q missing required key %q", auth.SecretRef, passwordKey)
 		}
 		log.Info("Using existing secret for authentication", "component", component, "secret", auth.SecretRef)
-		return auth.SecretRef, nil
+		return auth.SecretRef, configDataHash(secret.Data), nil
 	}
 
 	// Case 2 & 3: Create or update a managed secret
@@ -766,7 +770,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		// Secret exists - if no explicit credentials provided, keep existing ones
 		if username == "" && password == "" {
 			log.Info("Using existing generated secret", "component", component, "secret", secretName)
-			return secretName, nil
+			return secretName, configDataHash(existingSecret.Data), nil
 		}
 		// User provided credentials - update the secret
 		if username == "" {
@@ -776,7 +780,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 			password = string(existingSecret.Data[passwordKey])
 		}
 	} else if !errors.IsNotFound(err) {
-		return "", fmt.Errorf("failed to check existing secret: %w", err)
+		return "", "", fmt.Errorf("failed to check existing secret: %w", err)
 	} else {
 		// Secret doesn't exist - generate credentials if not provided
 		if username == "" {
@@ -785,7 +789,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 		if password == "" {
 			password, err = generateRandomPassword(32)
 			if err != nil {
-				return "", fmt.Errorf("failed to generate password: %w", err)
+				return "", "", fmt.Errorf("failed to generate password: %w", err)
 			}
 			log.Info("Generated random credentials", "component", component, "username", username)
 		}
@@ -826,11 +830,18 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 	}, "secret")
 
 	if err != nil {
-		return "", fmt.Errorf("failed to create/update secret: %w", err)
+		return "", "", fmt.Errorf("failed to create/update secret: %w", err)
 	}
 
+	// Compute hash from the credentials we just wrote (not from re-reading the Secret,
+	// which could differ due to encoding). This ensures the hash is stable.
+	contentHash := configDataHash(map[string][]byte{
+		userKey:     []byte(username),
+		passwordKey: []byte(password),
+	})
+
 	log.Info("Secret reconciled", "component", component, "secret", secretName)
-	return secretName, nil
+	return secretName, contentHash, nil
 }
 
 // getSecretKeys returns the appropriate secret key names for a given component.
@@ -1379,7 +1390,7 @@ func generateRandomPassword(length int) (string, error) {
 }
 
 // reconcileTimeseries ensures all TimeSeries resources are created/updated
-func (r *AxonOpsServerReconciler) reconcileTimeseries(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsServerReconciler) reconcileTimeseries(ctx context.Context, server *corev1alpha1.AxonOpsServer, authHash string) error {
 	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.timeseries")
 	defer span.End()
 
@@ -1401,7 +1412,7 @@ func (r *AxonOpsServerReconciler) reconcileTimeseries(ctx context.Context, serve
 	}
 
 	// Ensure StatefulSet
-	if err := r.ensureTimeseriesStatefulSet(ctx, server); err != nil {
+	if err := r.ensureTimeseriesStatefulSet(ctx, server, authHash); err != nil {
 		return fmt.Errorf("failed to ensure StatefulSet: %w", err)
 	}
 
@@ -1549,7 +1560,7 @@ func (r *AxonOpsServerReconciler) getServicePorts(component string, headless boo
 }
 
 // ensureTimeseriesStatefulSet ensures the TimeSeries StatefulSet exists
-func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer, authHash string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentTimeseries)
 	headlessSvcName := fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries)
@@ -1602,12 +1613,7 @@ func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Contex
 		orgName = strings.ToLower(server.Spec.Server.OrgName)
 	}
 
-	// Fetch the auth secret to compute a checksum for rolling updates
-	authSecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: timeseriesAuthSecretName, Namespace: server.Namespace}, authSecret); err != nil {
-		return fmt.Errorf("failed to get timeseries auth secret %s: %w", timeseriesAuthSecretName, err)
-	}
-	podAnnotations := mergeAnnotationsWithChecksum(ts.Annotations, "checksum/auth", configDataHash(authSecret.Data))
+	podAnnotations := mergeAnnotationsWithChecksum(ts.Annotations, "checksum/auth", authHash)
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, sts, func() error {
 		if err := controllerutil.SetControllerReference(server, sts, r.Scheme); err != nil {
@@ -1836,7 +1842,7 @@ func (r *AxonOpsServerReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, ke
 }
 
 // reconcileSearch ensures all Search resources are created/updated
-func (r *AxonOpsServerReconciler) reconcileSearch(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsServerReconciler) reconcileSearch(ctx context.Context, server *corev1alpha1.AxonOpsServer, authHash string) error {
 	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.search")
 	defer span.End()
 
@@ -1858,7 +1864,7 @@ func (r *AxonOpsServerReconciler) reconcileSearch(ctx context.Context, server *c
 	}
 
 	// Ensure StatefulSet
-	if err := r.ensureSearchStatefulSet(ctx, server); err != nil {
+	if err := r.ensureSearchStatefulSet(ctx, server, authHash); err != nil {
 		return fmt.Errorf("failed to ensure StatefulSet: %w", err)
 	}
 
@@ -1867,7 +1873,7 @@ func (r *AxonOpsServerReconciler) reconcileSearch(ctx context.Context, server *c
 }
 
 // ensureSearchStatefulSet ensures the Search StatefulSet exists
-func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer, authHash string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentSearch)
 	headlessSvcName := fmt.Sprintf("%s-%s-headless", server.Name, componentSearch)
@@ -1909,12 +1915,7 @@ func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, s
 	fqdn := fmt.Sprintf("%s.%s.svc.cluster.local", name, server.Namespace)
 	clusterName := fmt.Sprintf("%s-cluster", name)
 
-	// Fetch the auth secret to compute a checksum for rolling updates
-	searchAuthSecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: searchAuthSecretName, Namespace: server.Namespace}, searchAuthSecret); err != nil {
-		return fmt.Errorf("failed to get search auth secret %s: %w", searchAuthSecretName, err)
-	}
-	podAnnotations := mergeAnnotationsWithChecksum(search.Annotations, "checksum/auth", configDataHash(searchAuthSecret.Data))
+	podAnnotations := mergeAnnotationsWithChecksum(search.Annotations, "checksum/auth", authHash)
 
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2224,13 +2225,14 @@ func (r *AxonOpsServerReconciler) reconcileServer(ctx context.Context, server *c
 		return fmt.Errorf("failed to ensure API Service: %w", err)
 	}
 
-	// Ensure Config Secret
-	if err := r.ensureServerConfigSecret(ctx, server); err != nil {
+	// Ensure Config Secret (returns content hash for rolling update annotations)
+	configHash, err := r.ensureServerConfigSecret(ctx, server)
+	if err != nil {
 		return fmt.Errorf("failed to ensure Config Secret: %w", err)
 	}
 
 	// Ensure StatefulSet
-	if err := r.ensureServerStatefulSet(ctx, server); err != nil {
+	if err := r.ensureServerStatefulSet(ctx, server, configHash); err != nil {
 		return fmt.Errorf("failed to ensure StatefulSet: %w", err)
 	}
 
@@ -2344,8 +2346,9 @@ func (r *AxonOpsServerReconciler) ensureServerApiService(ctx context.Context, se
 	return nil
 }
 
-// ensureServerConfigSecret ensures the config Secret exists for the Server
-func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+// ensureServerConfigSecret ensures the config Secret exists for the Server.
+// Returns the config content hash for use in pod template annotations.
+func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, server *corev1alpha1.AxonOpsServer) (string, error) {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentServer)
 
@@ -2370,8 +2373,13 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 	// Build the axon-server.yml config (credentials are injected via env vars from secrets)
 	configYAML, err := r.buildServerConfig(server, searchURL, cqlHosts)
 	if err != nil {
-		return fmt.Errorf("failed to build server config: %w", err)
+		return "", fmt.Errorf("failed to build server config: %w", err)
 	}
+
+	// Compute hash from the generated config content (not from Secret.Data which may
+	// differ due to StringData→Data encoding). This ensures the hash is stable across
+	// operator restarts when the config content hasn't changed.
+	contentHash := configStringDataHash(map[string]string{"axon-server.yml": configYAML})
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2394,11 +2402,11 @@ func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, 
 	})
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	log.Info("Config Secret reconciled", "name", name, "operation", op)
-	return nil
+	return contentHash, nil
 }
 
 // serverConfigData holds the data for the axon-server.yml template
@@ -2697,8 +2705,9 @@ func (r *AxonOpsServerReconciler) buildServerEnv(server *corev1alpha1.AxonOpsSer
 	return slices.Concat(env, extraEnv)
 }
 
-// ensureServerStatefulSet ensures the Server StatefulSet exists
-func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+// ensureServerStatefulSet ensures the Server StatefulSet exists.
+// configHash is the pre-computed hash of the config Secret content.
+func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer, configHash string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentServer)
 	headlessSvcName := fmt.Sprintf("%s-%s-headless", server.Name, componentServer)
@@ -2730,12 +2739,7 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 		}
 	}
 
-	// Fetch the config secret to compute a checksum for rolling updates
-	configSecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: configSecretName, Namespace: server.Namespace}, configSecret); err != nil {
-		return fmt.Errorf("failed to get server config secret %s: %w", configSecretName, err)
-	}
-	podAnnotations := mergeAnnotationsWithChecksum(srv.Annotations, "checksum/config", configDataHash(configSecret.Data))
+	podAnnotations := mergeAnnotationsWithChecksum(srv.Annotations, "checksum/config", configHash)
 
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -3048,13 +3052,14 @@ func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server
 		return fmt.Errorf("failed to ensure Service: %w", err)
 	}
 
-	// Ensure ConfigMap
-	if err := r.ensureDashboardConfigMap(ctx, server); err != nil {
+	// Ensure ConfigMap (returns content hash for rolling update annotations)
+	configHash, err := r.ensureDashboardConfigMap(ctx, server)
+	if err != nil {
 		return fmt.Errorf("failed to ensure ConfigMap: %w", err)
 	}
 
 	// Ensure Deployment
-	if err := r.ensureDashboardDeployment(ctx, server); err != nil {
+	if err := r.ensureDashboardDeployment(ctx, server, configHash); err != nil {
 		return fmt.Errorf("failed to ensure Deployment: %w", err)
 	}
 
@@ -3076,8 +3081,9 @@ func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server
 	return nil
 }
 
-// ensureDashboardConfigMap ensures the Dashboard ConfigMap exists
-func (r *AxonOpsServerReconciler) ensureDashboardConfigMap(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+// ensureDashboardConfigMap ensures the Dashboard ConfigMap exists.
+// Returns the config content hash for use in pod template annotations.
+func (r *AxonOpsServerReconciler) ensureDashboardConfigMap(ctx context.Context, server *corev1alpha1.AxonOpsServer) (string, error) {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
 
@@ -3094,6 +3100,9 @@ axon-dash:
     enabled: false
 `, serverAPIURL)
 
+	configData := map[string]string{"axon-dash.yml": configYAML}
+	contentHash := configStringDataHash(configData)
+
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -3107,23 +3116,22 @@ axon-dash:
 		}
 
 		cm.Labels = r.buildLabels(server, componentDashboard)
-		cm.Data = map[string]string{
-			"axon-dash.yml": configYAML,
-		}
+		cm.Data = configData
 
 		return nil
 	})
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	log.Info("ConfigMap reconciled", "name", name, "operation", op)
-	return nil
+	return contentHash, nil
 }
 
-// ensureDashboardDeployment ensures the Dashboard Deployment exists
-func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+// ensureDashboardDeployment ensures the Dashboard Deployment exists.
+// configHash is the pre-computed hash of the ConfigMap content.
+func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context, server *corev1alpha1.AxonOpsServer, configHash string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
 	configMapName := name
@@ -3148,12 +3156,7 @@ func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context,
 		replicas = *dash.Replicas
 	}
 
-	// Fetch the ConfigMap to compute a checksum for rolling updates
-	dashConfigMap := &corev1.ConfigMap{}
-	if err := r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: server.Namespace}, dashConfigMap); err != nil {
-		return fmt.Errorf("failed to get dashboard ConfigMap %s: %w", configMapName, err)
-	}
-	podAnnotations := mergeAnnotationsWithChecksum(dash.Annotations, "checksum/config", configStringDataHash(dashConfigMap.Data))
+	podAnnotations := mergeAnnotationsWithChecksum(dash.Annotations, "checksum/config", configHash)
 
 	deploy := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
