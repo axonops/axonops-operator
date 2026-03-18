@@ -158,10 +158,18 @@ spec:
                     description: StorageConfig defines persistent storage configuration
                     x-kubernetes-preserve-unknown-fields: true
                 type: object
+              imageRegistry:
+                description: |-
+                  ImageRegistry overrides the registry host for all default component images.
+                  When set, the registry portion of each default image (e.g., "ghcr.io" in
+                  "ghcr.io/axonops/axondb-timeseries") is replaced with this value.
+                  Per-component repository.image overrides take full precedence over this field.
+                  Must not include a URI scheme (no "https://"). May include a port (e.g., "harbor.internal.com:5000").
+                type: string
               initImage:
                 description: |-
                   InitImage is the container image used for init containers (e.g., volume permission fixing).
-                  Defaults to "busybox:1.37.0" if not specified. Must be pinned to a specific version.
+                  Defaults to "docker.io/library/busybox:1.37.0" if not specified. Must be pinned to a specific version.
                 type: string
               search:
                 description: Search configures the axondb-search component

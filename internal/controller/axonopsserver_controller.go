@@ -79,7 +79,7 @@ const (
 	defaultDashboardTag    = "2.0.28"
 
 	// Default init container image (pinned version — do not use :latest)
-	defaultInitImage = "busybox:1.37.0"
+	defaultInitImage = "docker.io/library/busybox:1.37.0"
 
 	// Default heap sizes
 	defaultTimeseriesHeapSize = "1024M"
@@ -1563,12 +1563,9 @@ func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Contex
 	ts := server.Spec.TimeSeries
 
 	// Determine image
-	image := defaultTimeseriesImage
+	image := resolveImage(defaultTimeseriesImage, server.Spec.ImageRegistry, ts.Repository.Image)
 	tag := defaultTimeseriesTag
 	pullPolicy := corev1.PullIfNotPresent
-	if ts.Repository.Image != "" {
-		image = ts.Repository.Image
-	}
 	if ts.Repository.Tag != "" {
 		tag = ts.Repository.Tag
 	}
@@ -1884,12 +1881,9 @@ func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, s
 	search := server.Spec.Search
 
 	// Determine image
-	image := defaultSearchImage
+	image := resolveImage(defaultSearchImage, server.Spec.ImageRegistry, search.Repository.Image)
 	tag := defaultSearchTag
 	pullPolicy := corev1.PullIfNotPresent
-	if search.Repository.Image != "" {
-		image = search.Repository.Image
-	}
 	if search.Repository.Tag != "" {
 		tag = search.Repository.Tag
 	}
@@ -2718,12 +2712,9 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 	srv := server.Spec.Server
 
 	// Determine image
-	image := defaultServerImage
+	image := resolveImage(defaultServerImage, server.Spec.ImageRegistry, srv.Repository.Image)
 	tag := defaultServerTag
 	pullPolicy := corev1.PullIfNotPresent
-	if srv.Repository.Image != "" {
-		image = srv.Repository.Image
-	}
 	if srv.Repository.Tag != "" {
 		tag = srv.Repository.Tag
 	}
@@ -3141,12 +3132,9 @@ func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context,
 	dash := server.Spec.Dashboard
 
 	// Determine image
-	image := defaultDashboardImage
+	image := resolveImage(defaultDashboardImage, server.Spec.ImageRegistry, dash.Repository.Image)
 	tag := defaultDashboardTag
 	pullPolicy := corev1.PullIfNotPresent
-	if dash.Repository.Image != "" {
-		image = dash.Repository.Image
-	}
 	if dash.Repository.Tag != "" {
 		tag = dash.Repository.Tag
 	}
@@ -3575,14 +3563,10 @@ func ptr[T any](v T) *T {
 	return &v
 }
 
-// resolveInitImage returns the init container image to use. If the user
-// specified one in the CRD spec, it is used; otherwise the pinned default
-// is returned.
+// resolveInitImage returns the init container image to use.
+// Precedence: spec.initImage > spec.imageRegistry applied to default > default.
 func resolveInitImage(server *corev1alpha1.AxonOpsServer) string {
-	if server.Spec.InitImage != "" {
-		return server.Spec.InitImage
-	}
-	return defaultInitImage
+	return resolveImage(defaultInitImage, server.Spec.ImageRegistry, server.Spec.InitImage)
 }
 
 // SetupWithManager sets up the controller with the Manager.
