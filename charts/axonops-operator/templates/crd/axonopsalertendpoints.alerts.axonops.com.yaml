@@ -1,0 +1,346 @@
+{{- if .Values.crd.enable }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    {{- if .Values.crd.keep }}
+    "helm.sh/resource-policy": keep
+    {{- end }}
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: axonopsalertendpoints.alerts.axonops.com
+spec:
+  group: alerts.axonops.com
+  names:
+    kind: AxonOpsAlertEndpoint
+    listKind: AxonOpsAlertEndpointList
+    plural: axonopsalertendpoints
+    singular: axonopsalertendpoint
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterName
+      name: Cluster
+      type: string
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .spec.name
+      name: Name
+      type: string
+    - jsonPath: .status.syncedIntegrationID
+      name: IntegrationID
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AxonOpsAlertEndpoint is the Schema for the axonopsalertendpoints API.
+          Manages integration endpoint definitions (Slack, PagerDuty, OpsGenie, ServiceNow, Teams, etc.)
+          in the AxonOps API for alert notification delivery.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of AxonOpsAlertEndpoint
+            properties:
+              clusterName:
+                description: ClusterName is the name of the cluster this endpoint
+                  applies to
+                minLength: 1
+                type: string
+              clusterType:
+                description: ClusterType is the type of the cluster (cassandra, kafka,
+                  dse)
+                enum:
+                - cassandra
+                - kafka
+                - dse
+                type: string
+              connectionRef:
+                description: ConnectionRef is the name of an AxonOpsConnection in
+                  the same namespace.
+                minLength: 1
+                type: string
+              microsoftTeams:
+                description: MicrosoftTeams holds Microsoft Teams-specific configuration.
+                  Must be set when type is "microsoft_teams".
+                properties:
+                  webHookURL:
+                    description: WebHookURL is the Teams incoming webhook URL (plain
+                      text).
+                    type: string
+                  webHookURLSecretRef:
+                    description: |-
+                      WebHookURLSecretRef references a Secret key containing the webhook URL.
+                      Takes priority over WebHookURL when both are set.
+                    properties:
+                      key:
+                        description: Key is the key within the Secret data map.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name is the name of the Secret in the same namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                type: object
+              name:
+                description: Name is the human-readable name of the integration endpoint
+                minLength: 1
+                type: string
+              opsGenie:
+                description: OpsGenie holds OpsGenie-specific configuration. Must
+                  be set when type is "opsgenie".
+                properties:
+                  opsgenieKey:
+                    description: OpsGenieKey is the OpsGenie API key (plain text).
+                    type: string
+                  opsgenieKeySecretRef:
+                    description: |-
+                      OpsGenieKeySecretRef references a Secret key containing the API key.
+                      Takes priority over OpsGenieKey when both are set.
+                    properties:
+                      key:
+                        description: Key is the key within the Secret data map.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name is the name of the Secret in the same namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                type: object
+              pagerDuty:
+                description: PagerDuty holds PagerDuty-specific configuration. Must
+                  be set when type is "pagerduty".
+                properties:
+                  integrationKey:
+                    description: IntegrationKey is the PagerDuty integration key (plain
+                      text).
+                    type: string
+                  integrationKeySecretRef:
+                    description: |-
+                      IntegrationKeySecretRef references a Secret key containing the integration key.
+                      Takes priority over IntegrationKey when both are set.
+                    properties:
+                      key:
+                        description: Key is the key within the Secret data map.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name is the name of the Secret in the same namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                type: object
+              params:
+                additionalProperties:
+                  type: string
+                description: |-
+                  Params holds generic key-value parameters for email, smtp, and webhook types.
+                  Ignored for typed integrations (slack, pagerduty, opsgenie, servicenow, microsoft_teams).
+                type: object
+              serviceNow:
+                description: ServiceNow holds ServiceNow-specific configuration. Must
+                  be set when type is "servicenow".
+                properties:
+                  instanceName:
+                    description: InstanceName is the ServiceNow instance name.
+                    minLength: 1
+                    type: string
+                  password:
+                    description: Password is the ServiceNow password (plain text).
+                    type: string
+                  passwordSecretRef:
+                    description: |-
+                      PasswordSecretRef references a Secret key containing the password.
+                      Takes priority over Password when both are set.
+                    properties:
+                      key:
+                        description: Key is the key within the Secret data map.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name is the name of the Secret in the same namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  user:
+                    description: User is the ServiceNow username.
+                    minLength: 1
+                    type: string
+                required:
+                - instanceName
+                - user
+                type: object
+              slack:
+                description: Slack holds Slack-specific configuration. Must be set
+                  when type is "slack".
+                properties:
+                  axondashUrl:
+                    description: AxonDashURL is the AxonOps dashboard URL included
+                      in messages.
+                    type: string
+                  channel:
+                    description: Channel is the Slack channel name (optional override).
+                    type: string
+                  url:
+                    description: URL is the Slack incoming webhook URL (plain text).
+                    type: string
+                  urlSecretRef:
+                    description: |-
+                      URLSecretRef references a Secret key containing the webhook URL.
+                      Takes priority over URL when both are set.
+                    properties:
+                      key:
+                        description: Key is the key within the Secret data map.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name is the name of the Secret in the same namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                type: object
+              type:
+                description: Type is the integration type
+                enum:
+                - slack
+                - pagerduty
+                - opsgenie
+                - servicenow
+                - microsoft_teams
+                - email
+                - smtp
+                - webhook
+                type: string
+            required:
+            - clusterName
+            - clusterType
+            - connectionRef
+            - name
+            - type
+            type: object
+          status:
+            description: status defines the observed state of AxonOpsAlertEndpoint
+            properties:
+              conditions:
+                description: Conditions represent the current state of the AxonOpsAlertEndpoint
+                  resource.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  sync
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the generation observed at last
+                  reconciliation
+                format: int64
+                type: integer
+              syncedIntegrationID:
+                description: SyncedIntegrationID is the UUID assigned by the AxonOps
+                  API after creation
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- end }}
