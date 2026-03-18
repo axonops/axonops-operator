@@ -17,7 +17,6 @@ limitations under the License.
 package alerts
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -39,9 +38,6 @@ import (
 
 var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 	const connName = "shell-hc-conn"
-
-	ctx := context.Background()
-
 	newShellHealthcheckCR := func(name string) *alertsv1alpha1.AxonOpsHealthcheckShell {
 		return &alertsv1alpha1.AxonOpsHealthcheckShell{
 			ObjectMeta: metav1.ObjectMeta{
@@ -140,8 +136,10 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			cr.Spec.Script = "/bin/echo updated"
@@ -181,8 +179,10 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())
 
@@ -211,7 +211,8 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -247,7 +248,8 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
@@ -288,8 +290,10 @@ var _ = Describe("AxonOpsHealthcheckShell Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsHealthcheckShellReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, cr)).To(Succeed())

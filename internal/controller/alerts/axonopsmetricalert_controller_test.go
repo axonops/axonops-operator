@@ -17,7 +17,6 @@ limitations under the License.
 package alerts
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -38,9 +37,6 @@ import (
 
 var _ = Describe("AxonOpsMetricAlert Controller", func() {
 	const connName = "metric-alert-conn"
-
-	ctx := context.Background()
-
 	// newMetricAlertCR creates a metric alert CR with the given name.
 	newMetricAlertCR := func(name string) *alertsv1alpha1.AxonOpsMetricAlert {
 		return &alertsv1alpha1.AxonOpsMetricAlert{
@@ -237,8 +233,10 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 			reconciler := &AxonOpsMetricAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			// Reconcile to add finalizer + sync
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(cr.Status.SyncedAlertID).NotTo(BeEmpty())
@@ -315,7 +313,8 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 			reconciler := &AxonOpsMetricAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			// Adds finalizer
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
 
 			// API error on create
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
@@ -365,8 +364,10 @@ var _ = Describe("AxonOpsMetricAlert Controller", func() {
 			reconciler := &AxonOpsMetricAlertReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
 			// Create + sync
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
 
 			// Delete CR
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
