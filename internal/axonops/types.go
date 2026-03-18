@@ -215,6 +215,39 @@ type TableRef struct {
 	Name string `json:"Name"`
 }
 
+// ScheduledRepairsResponse represents the GET response for scheduled repairs
+type ScheduledRepairsResponse struct {
+	Repairs []ScheduledRepairEntry `json:"Repairs"`
+}
+
+// ScheduledRepairEntry represents a single scheduled repair entry
+type ScheduledRepairEntry struct {
+	ID     string                  `json:"ID"`
+	Params []ScheduledRepairParams `json:"Params"`
+}
+
+// ScheduledRepairParams represents the repair configuration payload
+type ScheduledRepairParams struct {
+	Tag                 string   `json:"tag"`
+	Keyspace            string   `json:"keyspace"`
+	Tables              []string `json:"tables"`
+	BlacklistedTables   []string `json:"blacklistedTables"`
+	Nodes               []string `json:"nodes"`
+	SegmentsPerNode     int      `json:"segmentsPerNode"`
+	Segmented           bool     `json:"segmented"`
+	Incremental         bool     `json:"incremental"`
+	JobThreads          int      `json:"jobThreads"`
+	Schedule            bool     `json:"schedule"`
+	ScheduleExpr        string   `json:"scheduleExpr"`
+	PrimaryRange        bool     `json:"primaryRange"`
+	Parallelism         string   `json:"parallelism"`
+	OptimiseStreams     bool     `json:"optimiseStreams"`
+	SpecificDataCenters []string `json:"specificDataCenters"`
+	Paxos               string   `json:"paxos"`
+	SkipPaxos           bool     `json:"skipPaxos"`
+	PaxosOnly           bool     `json:"paxosOnly"`
+}
+
 // AdaptiveRepairSettings represents the adaptive repair configuration for a cluster
 type AdaptiveRepairSettings struct {
 	Active              bool     `json:"Active"`

@@ -30,6 +30,7 @@ rules:
   - axonopshealthchecktcps
   - axonopslogalerts
   - axonopsmetricalerts
+  - axonopsscheduledrepairs
   verbs:
   - create
   - delete
@@ -49,6 +50,7 @@ rules:
   - axonopshealthchecktcps/finalizers
   - axonopslogalerts/finalizers
   - axonopsmetricalerts/finalizers
+  - axonopsscheduledrepairs/finalizers
   verbs:
   - update
 - apiGroups:
@@ -62,6 +64,7 @@ rules:
   - axonopshealthchecktcps/status
   - axonopslogalerts/status
   - axonopsmetricalerts/status
+  - axonopsscheduledrepairs/status
   verbs:
   - get
   - patch

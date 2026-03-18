@@ -12,4 +12,5 @@ resources:
 - alerts_v1alpha1_axonopsalertendpoint.yaml
 - alerts_v1alpha1_axonopsadaptiverepair.yaml
 - backups_v1alpha1_axonopsbackup.yaml
+- alerts_v1alpha1_axonopsscheduledrepair.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
