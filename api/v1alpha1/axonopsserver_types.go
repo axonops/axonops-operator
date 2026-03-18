@@ -73,6 +73,14 @@ type AxonOpsServerSpec struct {
 	// +optional
 	TLS AxonOpsTLSConfig `json:"tls,omitempty"`
 
+	// ImageRegistry overrides the registry host for all default component images.
+	// When set, the registry portion of each default image (e.g., "ghcr.io" in
+	// "ghcr.io/axonops/axondb-timeseries") is replaced with this value.
+	// Per-component repository.image overrides take full precedence over this field.
+	// Must not include a URI scheme (no "https://"). May include a port (e.g., "harbor.internal.com:5000").
+	// +optional
+	ImageRegistry string `json:"imageRegistry,omitempty"`
+
 	// InitImage is the container image used for init containers (e.g., volume permission fixing).
 	// Defaults to "busybox:1.37.0" if not specified. Must be pinned to a specific version.
 	// +optional
