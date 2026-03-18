@@ -131,4 +131,13 @@ resources:
   kind: AxonOpsKafkaACL
   path: github.com/axonops/axonops-operator/api/kafka/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: axonops.com
+  group: kafka
+  kind: AxonOpsKafkaConnector
+  path: github.com/axonops/axonops-operator/api/kafka/v1alpha1
+  version: v1alpha1
 version: "3"

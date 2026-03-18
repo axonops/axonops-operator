@@ -15,4 +15,5 @@ resources:
 - alerts_v1alpha1_axonopsscheduledrepair.yaml
 - kafka_v1alpha1_axonopskafkatopic.yaml
 - kafka_v1alpha1_axonopskafkaacl.yaml
+- kafka_v1alpha1_axonopskafkaconnector.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
