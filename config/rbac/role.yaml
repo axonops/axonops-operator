@@ -22,6 +22,7 @@ rules:
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsalertendpoints
   - axonopsalertroutes
   - axonopshealthcheckhttps
   - axonopshealthcheckshells
@@ -39,6 +40,7 @@ rules:
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsalertendpoints/finalizers
   - axonopsalertroutes/finalizers
   - axonopshealthcheckhttps/finalizers
   - axonopshealthcheckshells/finalizers
@@ -50,6 +52,7 @@ rules:
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsalertendpoints/status
   - axonopsalertroutes/status
   - axonopshealthcheckhttps/status
   - axonopshealthcheckshells/status
