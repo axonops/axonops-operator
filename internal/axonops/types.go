@@ -307,3 +307,14 @@ type KafkaTopicConfigUpdate struct {
 	Value string `json:"value"`
 	Op    string `json:"op"`
 }
+
+// KafkaACL represents a Kafka ACL entry
+type KafkaACL struct {
+	ResourceType        string `json:"resourceType"`
+	ResourceName        string `json:"resourceName"`
+	ResourcePatternType string `json:"resourcePatternType"`
+	Principal           string `json:"principal"`
+	Host                string `json:"host"`
+	Operation           string `json:"operation"`
+	PermissionType      string `json:"permissionType"`
+}

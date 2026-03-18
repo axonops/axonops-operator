@@ -1,0 +1,15 @@
+apiVersion: kafka.axonops.com/v1alpha1
+kind: AxonOpsKafkaACL
+metadata:
+  name: producer-write-events
+  namespace: default
+spec:
+  connectionRef: my-axonops-connection
+  clusterName: production-kafka
+  resourceType: TOPIC
+  resourceName: application-events
+  resourcePatternType: LITERAL
+  principal: "User:producer-app"
+  host: "*"
+  operation: WRITE
+  permissionType: ALLOW

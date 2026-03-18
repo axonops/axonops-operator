@@ -896,3 +896,61 @@ func (c *Client) DeleteKafkaTopic(ctx context.Context, clusterName, topicName st
 	}
 	return nil
 }
+
+// CreateKafkaACL creates a Kafka ACL entry
+func (c *Client) CreateKafkaACL(ctx context.Context, clusterName string, acl KafkaACL) error {
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/acls", c.baseURL, c.orgID, clusterName)
+
+	body, err := json.Marshal(acl)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ACL: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create kafka ACL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
+
+// DeleteKafkaACL deletes a Kafka ACL entry. The full ACL struct is sent as the request body.
+func (c *Client) DeleteKafkaACL(ctx context.Context, clusterName string, acl KafkaACL) error {
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/acls", c.baseURL, c.orgID, clusterName)
+
+	body, err := json.Marshal(acl)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ACL: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete kafka ACL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
