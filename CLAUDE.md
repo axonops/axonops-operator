@@ -34,6 +34,8 @@ Run the **issue-writer** agent. Every issue must have: summary, detailed require
 ### When writing or reviewing documentation:
 6. **docs-writer** — on any README, godoc, examples, CONTRIBUTING, CHANGELOG, SECURITY.md, or config reference changes. All documentation follows RFC 2119 for requirement-level terminology. Every code example must compile. Every config field must be documented with type, default, valid values, and boundary behaviour.
 
+### When working on complex Kubernetes tasks
+7. Ask **kube** for help with kubebuilder, operators or decisions about how to implement and resolve Kubernetes issues.
 
 ## Active Tasks
 
