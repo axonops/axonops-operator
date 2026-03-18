@@ -174,8 +174,9 @@ func (r *AxonOpsAlertRouteReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// Check if route already exists
 	routeExists := checkRouteExists(integrations, apiRouteType, route.Spec.Severity, integrationID)
 
-	// Set override if non-global and enabled
-	if route.Spec.Type != "global" && route.Spec.EnableOverride {
+	// Set override if non-global and enabled (defaults to true when nil)
+	enableOverride := route.Spec.EnableOverride == nil || *route.Spec.EnableOverride
+	if route.Spec.Type != "global" && enableOverride {
 		log.Info("Setting integration override", "routeType", apiRouteType, "severity", route.Spec.Severity)
 		if err := apiClient.SetIntegrationOverride(ctx, route.Spec.ClusterType, route.Spec.ClusterName,
 			apiRouteType, route.Spec.Severity, true); err != nil {
