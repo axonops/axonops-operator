@@ -1,4 +1,4 @@
-# axonops-operator
+# AxonOps Kubernetes Operator
 
 A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com) control plane. It replaces both the AxonOps Helm charts and Terraform provider, giving you a single, declarative interface for running AxonOps entirely within Kubernetes.
 
@@ -42,11 +42,12 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 
 ## Installation
 
-**Install the CRDs and run the operator locally (development):**
+**Install from Helm Chart:**
 
 ```bash
+LATEST_VERSION=$(curl -s https://api.github.com/repos/axonops/axonops-operator/releases/latest | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
 helm upgrade --install -n axonops-operator-system axonops-operator --create-namespace \
-  oci://ghcr.io/axonops/charts/axonops-operator:0.0.2
+  oci://ghcr.io/axonops/charts/axonops-operator:${LATEST_VERSION}
 ```
 
 **Install from a pre-built YAML bundle:**
