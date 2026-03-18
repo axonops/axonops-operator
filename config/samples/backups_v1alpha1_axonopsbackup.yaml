@@ -1,0 +1,29 @@
+apiVersion: backups.axonops.com/v1alpha1
+kind: AxonOpsBackup
+metadata:
+  name: daily-backup
+  namespace: default
+spec:
+  connectionRef: my-axonops-connection
+  clusterName: production-cluster
+  clusterType: cassandra
+  tag: daily-backup
+  datacenters:
+    - dc1
+  schedule: true
+  scheduleExpression: "0 1 * * *"
+  localRetention: "10d"
+  timeout: "10h"
+  # Optional: Remote backup to S3
+  # remote:
+  #   type: s3
+  #   path: /backups/prod
+  #   retention: "60d"
+  #   s3:
+  #     region: eu-west-1
+  #     # Option 1: Secret credentials
+  #     credentialsRef: s3-backup-credentials
+  #     # Option 2: Inline credentials (dev / vals-operator)
+  #     # accessKeyID: AKIAIOSFODNN7EXAMPLE
+  #     # secretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+  #     # Option 3: Omit both for IAM role auth
