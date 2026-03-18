@@ -1602,6 +1602,13 @@ func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Contex
 		orgName = strings.ToLower(server.Spec.Server.OrgName)
 	}
 
+	// Fetch the auth secret to compute a checksum for rolling updates
+	authSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: timeseriesAuthSecretName, Namespace: server.Namespace}, authSecret); err != nil {
+		return fmt.Errorf("failed to get timeseries auth secret %s: %w", timeseriesAuthSecretName, err)
+	}
+	podAnnotations := mergeAnnotationsWithChecksum(ts.Annotations, "checksum/auth", configDataHash(authSecret.Data))
+
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, sts, func() error {
 		if err := controllerutil.SetControllerReference(server, sts, r.Scheme); err != nil {
 			return err
@@ -1624,7 +1631,7 @@ func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Contex
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
-					Annotations: ts.Annotations,
+					Annotations: podAnnotations,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: name,
@@ -1905,6 +1912,13 @@ func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, s
 	fqdn := fmt.Sprintf("%s.%s.svc.cluster.local", name, server.Namespace)
 	clusterName := fmt.Sprintf("%s-cluster", name)
 
+	// Fetch the auth secret to compute a checksum for rolling updates
+	searchAuthSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: searchAuthSecretName, Namespace: server.Namespace}, searchAuthSecret); err != nil {
+		return fmt.Errorf("failed to get search auth secret %s: %w", searchAuthSecretName, err)
+	}
+	podAnnotations := mergeAnnotationsWithChecksum(search.Annotations, "checksum/auth", configDataHash(searchAuthSecret.Data))
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -1938,7 +1952,7 @@ func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, s
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
-					Annotations: search.Annotations,
+					Annotations: podAnnotations,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:            name,
@@ -2722,6 +2736,13 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 		}
 	}
 
+	// Fetch the config secret to compute a checksum for rolling updates
+	configSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: configSecretName, Namespace: server.Namespace}, configSecret); err != nil {
+		return fmt.Errorf("failed to get server config secret %s: %w", configSecretName, err)
+	}
+	podAnnotations := mergeAnnotationsWithChecksum(srv.Annotations, "checksum/config", configDataHash(configSecret.Data))
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -2755,7 +2776,7 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
-					Annotations: srv.Annotations,
+					Annotations: podAnnotations,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: name,
@@ -3136,6 +3157,13 @@ func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context,
 		replicas = *dash.Replicas
 	}
 
+	// Fetch the ConfigMap to compute a checksum for rolling updates
+	dashConfigMap := &corev1.ConfigMap{}
+	if err := r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: server.Namespace}, dashConfigMap); err != nil {
+		return fmt.Errorf("failed to get dashboard ConfigMap %s: %w", configMapName, err)
+	}
+	podAnnotations := mergeAnnotationsWithChecksum(dash.Annotations, "checksum/config", configStringDataHash(dashConfigMap.Data))
+
 	deploy := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -3160,7 +3188,7 @@ func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
-					Annotations: dash.Annotations,
+					Annotations: podAnnotations,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: name,
