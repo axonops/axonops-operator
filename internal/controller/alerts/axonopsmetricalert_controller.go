@@ -18,6 +18,7 @@ package alerts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -156,7 +157,8 @@ func (r *AxonOpsMetricAlertReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 
 		// Check if error is retryable
-		if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+		var apiErr *axonops.APIError
+		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
@@ -227,7 +229,8 @@ func (r *AxonOpsMetricAlertReconciler) handleDeletion(ctx context.Context, alert
 		if err := apiClient.DeleteMetricAlertRule(ctx, alert.Spec.ClusterType, alert.Spec.ClusterName, alert.Status.SyncedAlertID); err != nil {
 			log.Error(err, "Failed to delete alert rule from AxonOps", "alertID", alert.Status.SyncedAlertID)
 			// Check for retryable API errors
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 			// For non-retryable errors (like 404), proceed to remove the finalizer

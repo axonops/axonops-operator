@@ -18,7 +18,9 @@ package backups
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -146,7 +148,8 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if backup.Status.SyncedBackupID != "" {
 		log.Info("Deleting existing backup before recreate", "backupID", backup.Status.SyncedBackupID)
 		if err := apiClient.DeleteScheduledSnapshot(ctx, backup.Spec.ClusterType, backup.Spec.ClusterName, backup.Status.SyncedBackupID); err != nil {
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 			// Non-retryable (e.g., 404) — proceed with create
@@ -167,7 +170,8 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if err := r.Status().Update(ctx, backup); err != nil {
 			log.Error(err, "Failed to update status")
 		}
-		if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+		var apiErr *axonops.APIError
+		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
@@ -223,7 +227,8 @@ func (r *AxonOpsBackupReconciler) handleDeletion(ctx context.Context, backup *ba
 	if backup.Status.SyncedBackupID != "" {
 		if err := apiClient.DeleteScheduledSnapshot(ctx, backup.Spec.ClusterType, backup.Spec.ClusterName, backup.Status.SyncedBackupID); err != nil {
 			log.Error(err, "Failed to delete backup from AxonOps", "backupID", backup.Status.SyncedBackupID)
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		} else {
@@ -468,7 +473,7 @@ func formatRemoteConfig(config map[string]string) string {
 		keys = append(keys, k)
 	}
 	// Sort alphabetically — not required by AxonOps API but ensures hash stability
-	sortStrings(keys)
+	slices.Sort(keys)
 
 	var parts []string
 	for _, k := range keys {
@@ -489,17 +494,6 @@ func boolToString(b bool) string {
 		return trueStr
 	}
 	return falseStr
-}
-
-// sortStrings sorts a string slice in-place (avoids importing "sort" for one call)
-func sortStrings(s []string) {
-	for i := range s {
-		for j := i + 1; j < len(s); j++ {
-			if s[j] < s[i] {
-				s[i], s[j] = s[j], s[i]
-			}
-		}
-	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

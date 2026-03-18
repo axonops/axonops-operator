@@ -18,6 +18,7 @@ package alerts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -266,7 +267,8 @@ func (r *AxonOpsAlertRouteReconciler) handleDeletion(ctx context.Context, route 
 	integrations, err := apiClient.GetIntegrations(ctx, route.Spec.ClusterType, route.Spec.ClusterName)
 	if err != nil {
 		log.Error(err, "Failed to get integrations for cleanup")
-		if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+		var apiErr *axonops.APIError
+		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		// Non-retryable error, proceed with finalizer removal
@@ -286,7 +288,8 @@ func (r *AxonOpsAlertRouteReconciler) handleDeletion(ctx context.Context, route 
 				if err := apiClient.RemoveIntegrationRoute(ctx, route.Spec.ClusterType, route.Spec.ClusterName,
 					apiRouteType, route.Spec.Severity, integrationID); err != nil {
 					log.Error(err, "Failed to remove route from AxonOps", "integrationID", integrationID)
-					if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+					var apiErr *axonops.APIError
+					if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 						return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 					}
 				} else {

@@ -18,6 +18,7 @@ package alerts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -119,7 +120,8 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 	if repair.Status.SyncedRepairID != "" {
 		log.Info("Deleting existing repair before recreate", "repairID", repair.Status.SyncedRepairID)
 		if err := apiClient.DeleteScheduledRepair(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName, repair.Status.SyncedRepairID); err != nil {
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		}
@@ -141,7 +143,8 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 		if err := r.Status().Update(ctx, repair); err != nil {
 			log.Error(err, "Failed to update status")
 		}
-		if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+		var apiErr *axonops.APIError
+		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
@@ -203,7 +206,8 @@ func (r *AxonOpsScheduledRepairReconciler) handleDeletion(ctx context.Context, r
 	if repair.Status.SyncedRepairID != "" {
 		if err := apiClient.DeleteScheduledRepair(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName, repair.Status.SyncedRepairID); err != nil {
 			log.Error(err, "Failed to delete repair from AxonOps", "repairID", repair.Status.SyncedRepairID)
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		} else {

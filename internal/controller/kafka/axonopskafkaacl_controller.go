@@ -18,6 +18,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -94,7 +95,8 @@ func (r *AxonOpsKafkaACLReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err := apiClient.CreateKafkaACL(ctx, acl.Spec.ClusterName, aclPayload); err != nil {
 		log.Error(err, "Failed to create Kafka ACL")
 		r.setFailedCondition(ctx, acl, "CreateFailed", fmt.Sprintf("Failed to create ACL: %v", err))
-		if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+		var apiErr *axonops.APIError
+		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
@@ -147,7 +149,8 @@ func (r *AxonOpsKafkaACLReconciler) handleDeletion(ctx context.Context, acl *kaf
 		aclPayload := buildACLPayload(acl)
 		if err := apiClient.DeleteKafkaACL(ctx, acl.Spec.ClusterName, aclPayload); err != nil {
 			log.Error(err, "Failed to delete Kafka ACL")
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		} else {

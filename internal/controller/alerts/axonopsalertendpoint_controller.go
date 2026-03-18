@@ -18,6 +18,7 @@ package alerts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"time"
@@ -218,7 +219,8 @@ func (r *AxonOpsAlertEndpointReconciler) handleDeletion(ctx context.Context, end
 	if endpoint.Status.SyncedIntegrationID != "" {
 		if err := apiClient.DeleteIntegration(ctx, endpoint.Spec.ClusterType, endpoint.Spec.ClusterName, endpoint.Status.SyncedIntegrationID); err != nil {
 			log.Error(err, "Failed to delete integration from AxonOps", "integrationID", endpoint.Status.SyncedIntegrationID)
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 			// Non-retryable error, proceed with finalizer removal

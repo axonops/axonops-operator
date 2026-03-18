@@ -18,6 +18,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -102,7 +103,8 @@ func (r *AxonOpsKafkaTopicReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		if err := apiClient.CreateKafkaTopic(ctx, topic.Spec.ClusterName, createReq); err != nil {
 			log.Error(err, "Failed to create Kafka topic")
 			r.setFailedCondition(ctx, topic, "CreateFailed", fmt.Sprintf("Failed to create topic: %v", err))
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 			return ctrl.Result{}, nil
@@ -119,7 +121,8 @@ func (r *AxonOpsKafkaTopicReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			if err := apiClient.UpdateKafkaTopicConfig(ctx, topic.Spec.ClusterName, topic.Spec.Name, configs); err != nil {
 				log.Error(err, "Failed to update Kafka topic config")
 				r.setFailedCondition(ctx, topic, "UpdateFailed", fmt.Sprintf("Failed to update topic config: %v", err))
-				if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+				var apiErr *axonops.APIError
+				if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 					return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 				}
 				return ctrl.Result{}, nil
@@ -173,7 +176,8 @@ func (r *AxonOpsKafkaTopicReconciler) handleDeletion(ctx context.Context, topic 
 	if topic.Status.Synced {
 		if err := apiClient.DeleteKafkaTopic(ctx, topic.Spec.ClusterName, topic.Spec.Name); err != nil {
 			log.Error(err, "Failed to delete Kafka topic")
-			if apiErr, ok := err.(*axonops.APIError); ok && apiErr.IsRetryable() {
+			var apiErr *axonops.APIError
+			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		} else {
