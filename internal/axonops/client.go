@@ -89,7 +89,7 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 
 // GetMetricAlertRules fetches all metric alert rules for a cluster
 func (c *Client) GetMetricAlertRules(ctx context.Context, clusterType, clusterName string) ([]MetricAlertRule, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 	// URL format: https://host/api/v1/alert-rules/{orgId}/{clusterType}/{clusterName}
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
@@ -128,7 +128,7 @@ func (c *Client) GetMetricAlertRules(ctx context.Context, clusterType, clusterNa
 // client-side when no ID is present so the caller can track it for future updates.
 func (c *Client) CreateOrUpdateMetricAlertRule(ctx context.Context, clusterType, clusterName string, rule MetricAlertRule) (MetricAlertRule, error) {
 	// Always POST to the base URL — the id in the body is what the server uses.
-	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 
 	// Generate a stable UUID when no ID exists so the server treats this as a specific
 	// new record rather than generating its own, allowing us to detect duplicates later.
@@ -179,7 +179,7 @@ func (c *Client) CreateOrUpdateMetricAlertRule(ctx context.Context, clusterType,
 
 // DeleteMetricAlertRule deletes a metric alert rule
 func (c *Client) DeleteMetricAlertRule(ctx context.Context, clusterType, clusterName, alertID string) error {
-	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName, alertID)
+	reqURL := fmt.Sprintf("%s/api/v1/alert-rules/%s/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName), p(alertID))
 	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -208,7 +208,7 @@ func (c *Client) DeleteMetricAlertRule(ctx context.Context, clusterType, cluster
 
 // ResolveDashboardPanel resolves a dashboard and chart name to a panel UUID (correlation ID)
 func (c *Client) ResolveDashboardPanel(ctx context.Context, clusterType, clusterName, dashboardName, chartTitle string) (string, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 	// URL format: https://host/api/v1/dashboardtemplate/{orgId}/{clusterType}/{clusterName}
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
@@ -239,8 +239,7 @@ func (c *Client) ResolveDashboardPanel(ctx context.Context, clusterType, cluster
 
 	var result DashboardTemplateResponse
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		// Return detailed error showing the actual response
-		return "", fmt.Errorf("failed to decode dashboard response (URL: %s): %w. Response body: %s", reqURL, err, string(bodyBytes[:min(len(bodyBytes), 500)]))
+		return "", fmt.Errorf("failed to decode dashboard response: %w", err)
 	}
 
 	// Find the dashboard and chart
@@ -262,6 +261,12 @@ func (c *Client) setAuthHeader(req *http.Request) {
 	req.Header.Set("Authorization", fmt.Sprintf("%s %s", c.tokenType, c.apiKey))
 }
 
+// p escapes a string for safe use as a URL path segment.
+// Prevents path traversal via user-controlled CRD field values.
+func p(s string) string {
+	return url.PathEscape(s)
+}
+
 // APIError represents an error from the AxonOps API
 type APIError struct {
 	StatusCode int
@@ -280,7 +285,7 @@ func (e *APIError) IsRetryable() bool {
 
 // GetIntegrations retrieves all integrations and their routing configurations for a cluster
 func (c *Client) GetIntegrations(ctx context.Context, clusterType, clusterName string) (*IntegrationsResponse, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -313,7 +318,7 @@ func (c *Client) GetIntegrations(ctx context.Context, clusterType, clusterName s
 // AddIntegrationRoute adds an alert route to an integration
 func (c *Client) AddIntegrationRoute(ctx context.Context, clusterType, clusterName, routeType, severity, integrationID string) error {
 	reqURL := fmt.Sprintf("%s/api/v1/integrations-routing/%s/%s/%s/%s/%s/%s",
-		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity, integrationID)
+		c.baseURL, p(c.orgID), p(clusterType), p(clusterName), routeType, p(severity), p(integrationID))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, nil)
 	if err != nil {
@@ -342,7 +347,7 @@ func (c *Client) AddIntegrationRoute(ctx context.Context, clusterType, clusterNa
 // RemoveIntegrationRoute removes an alert route from an integration
 func (c *Client) RemoveIntegrationRoute(ctx context.Context, clusterType, clusterName, routeType, severity, integrationID string) error {
 	reqURL := fmt.Sprintf("%s/api/v1/integrations-routing/%s/%s/%s/%s/%s/%s",
-		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity, integrationID)
+		c.baseURL, p(c.orgID), p(clusterType), p(clusterName), routeType, p(severity), p(integrationID))
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
@@ -372,7 +377,7 @@ func (c *Client) RemoveIntegrationRoute(ctx context.Context, clusterType, cluste
 // SetIntegrationOverride sets the override flag for a route type and severity
 func (c *Client) SetIntegrationOverride(ctx context.Context, clusterType, clusterName, routeType, severity string, value bool) error {
 	reqURL := fmt.Sprintf("%s/api/v1/integrations-override/%s/%s/%s/%s/%s",
-		c.baseURL, c.orgID, clusterType, clusterName, routeType, severity)
+		c.baseURL, p(c.orgID), p(clusterType), p(clusterName), routeType, p(severity))
 
 	payload := map[string]bool{"value": value}
 	body, err := json.Marshal(payload)
@@ -407,7 +412,7 @@ func (c *Client) SetIntegrationOverride(ctx context.Context, clusterType, cluste
 
 // GetHealthchecks retrieves all healthchecks for a cluster
 func (c *Client) GetHealthchecks(ctx context.Context, clusterType, clusterName string) (*HealthchecksResponse, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -440,7 +445,7 @@ func (c *Client) GetHealthchecks(ctx context.Context, clusterType, clusterName s
 // UpdateHealthchecks updates all healthchecks for a cluster (bulk update)
 // This replaces all healthchecks with the provided list
 func (c *Client) UpdateHealthchecks(ctx context.Context, clusterType, clusterName string, healthchecks *HealthchecksResponse) error {
-	reqURL := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/healthchecks/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 
 	body, err := json.Marshal(healthchecks)
 	if err != nil {
@@ -476,7 +481,7 @@ func (c *Client) UpdateHealthchecks(ctx context.Context, clusterType, clusterNam
 // The server determines create vs update from the ID field in the POST body.
 // A UUID is generated client-side when no ID is present.
 func (c *Client) CreateOrUpdateIntegration(ctx context.Context, clusterType, clusterName string, def IntegrationDefinition) (IntegrationDefinition, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 
 	// Generate a client-side UUID when no ID exists
 	if def.ID == "" {
@@ -533,7 +538,7 @@ func (c *Client) CreateOrUpdateIntegration(ctx context.Context, clusterType, clu
 
 // GetAdaptiveRepair fetches the current adaptive repair settings for a cluster
 func (c *Client) GetAdaptiveRepair(ctx context.Context, clusterType, clusterName string) (*AdaptiveRepairSettings, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/adaptiveRepair/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/adaptiveRepair/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -565,7 +570,7 @@ func (c *Client) GetAdaptiveRepair(ctx context.Context, clusterType, clusterName
 
 // UpdateAdaptiveRepair updates the adaptive repair settings for a cluster
 func (c *Client) UpdateAdaptiveRepair(ctx context.Context, clusterType, clusterName string, settings AdaptiveRepairSettings) error {
-	reqURL := fmt.Sprintf("%s/api/v1/adaptiveRepair/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/adaptiveRepair/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 
 	body, err := json.Marshal(settings)
 	if err != nil {
@@ -600,7 +605,7 @@ func (c *Client) UpdateAdaptiveRepair(ctx context.Context, clusterType, clusterN
 // DeleteIntegration deletes an integration by ID.
 // Returns nil on 200, 204, or 404 (already deleted).
 func (c *Client) DeleteIntegration(ctx context.Context, clusterType, clusterName, integrationID string) error {
-	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName, integrationID)
+	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName), p(integrationID))
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
@@ -628,7 +633,7 @@ func (c *Client) DeleteIntegration(ctx context.Context, clusterType, clusterName
 
 // GetScheduledSnapshots retrieves all scheduled snapshots for a cluster
 func (c *Client) GetScheduledSnapshots(ctx context.Context, clusterType, clusterName string) (*ScheduledSnapshotResponse, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/cassandraScheduleSnapshot/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraScheduleSnapshot/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -661,7 +666,7 @@ func (c *Client) GetScheduledSnapshots(ctx context.Context, clusterType, cluster
 // CreateScheduledSnapshot creates a new scheduled snapshot.
 // A UUID is generated client-side when no ID is present.
 func (c *Client) CreateScheduledSnapshot(ctx context.Context, clusterType, clusterName string, payload BackupPayload) error {
-	reqURL := fmt.Sprintf("%s/api/v1/cassandraSnapshot/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraSnapshot/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 
 	if payload.ID == "" {
 		payload.ID = uuid.New().String()
@@ -700,7 +705,7 @@ func (c *Client) CreateScheduledSnapshot(ctx context.Context, clusterType, clust
 // DeleteScheduledSnapshot deletes a scheduled snapshot by ID.
 // The API expects a JSON array of IDs in the request body.
 func (c *Client) DeleteScheduledSnapshot(ctx context.Context, clusterType, clusterName, snapshotID string) error {
-	reqURL := fmt.Sprintf("%s/api/v1/cassandraScheduleSnapshot/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraScheduleSnapshot/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 
 	body, err := json.Marshal([]string{snapshotID})
 	if err != nil {
@@ -734,7 +739,7 @@ func (c *Client) DeleteScheduledSnapshot(ctx context.Context, clusterType, clust
 
 // GetScheduledRepairs retrieves all scheduled repairs for a cluster
 func (c *Client) GetScheduledRepairs(ctx context.Context, clusterType, clusterName string) (*ScheduledRepairsResponse, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/repair/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/repair/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -761,7 +766,7 @@ func (c *Client) GetScheduledRepairs(ctx context.Context, clusterType, clusterNa
 
 // CreateScheduledRepair creates a new scheduled repair
 func (c *Client) CreateScheduledRepair(ctx context.Context, clusterType, clusterName string, params ScheduledRepairParams) error {
-	reqURL := fmt.Sprintf("%s/api/v1/addrepair/%s/%s/%s", c.baseURL, c.orgID, clusterType, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/addrepair/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
 
 	body, err := json.Marshal(params)
 	if err != nil {
@@ -791,7 +796,7 @@ func (c *Client) CreateScheduledRepair(ctx context.Context, clusterType, cluster
 // DeleteScheduledRepair deletes a scheduled repair by ID (passed as query parameter)
 func (c *Client) DeleteScheduledRepair(ctx context.Context, clusterType, clusterName, repairID string) error {
 	reqURL := fmt.Sprintf("%s/api/v1/cassandrascheduledrepair/%s/%s/%s?id=%s",
-		c.baseURL, c.orgID, clusterType, clusterName, repairID)
+		c.baseURL, p(c.orgID), p(clusterType), p(clusterName), p(repairID))
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
@@ -814,7 +819,7 @@ func (c *Client) DeleteScheduledRepair(ctx context.Context, clusterType, cluster
 
 // CreateKafkaTopic creates a Kafka topic
 func (c *Client) CreateKafkaTopic(ctx context.Context, clusterName string, topic KafkaTopicCreateRequest) error {
-	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics", c.baseURL, c.orgID, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics", c.baseURL, p(c.orgID), p(clusterName))
 
 	body, err := json.Marshal(topic)
 	if err != nil {
@@ -843,7 +848,7 @@ func (c *Client) CreateKafkaTopic(ctx context.Context, clusterName string, topic
 
 // UpdateKafkaTopicConfig updates a Kafka topic's configuration
 func (c *Client) UpdateKafkaTopicConfig(ctx context.Context, clusterName, topicName string, configs []KafkaTopicConfigUpdate) error {
-	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics/%s/configs", c.baseURL, c.orgID, clusterName, topicName)
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics/%s/configs", c.baseURL, p(c.orgID), p(clusterName), p(topicName))
 
 	payload := struct {
 		Configs []KafkaTopicConfigUpdate `json:"configs"`
@@ -876,7 +881,7 @@ func (c *Client) UpdateKafkaTopicConfig(ctx context.Context, clusterName, topicN
 
 // DeleteKafkaTopic deletes a Kafka topic
 func (c *Client) DeleteKafkaTopic(ctx context.Context, clusterName, topicName string) error {
-	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics/%s", c.baseURL, c.orgID, clusterName, topicName)
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/topics/%s", c.baseURL, p(c.orgID), p(clusterName), p(topicName))
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
@@ -899,7 +904,7 @@ func (c *Client) DeleteKafkaTopic(ctx context.Context, clusterName, topicName st
 
 // CreateKafkaACL creates a Kafka ACL entry
 func (c *Client) CreateKafkaACL(ctx context.Context, clusterName string, acl KafkaACL) error {
-	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/acls", c.baseURL, c.orgID, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/acls", c.baseURL, p(c.orgID), p(clusterName))
 
 	body, err := json.Marshal(acl)
 	if err != nil {
@@ -928,7 +933,7 @@ func (c *Client) CreateKafkaACL(ctx context.Context, clusterName string, acl Kaf
 
 // DeleteKafkaACL deletes a Kafka ACL entry. The full ACL struct is sent as the request body.
 func (c *Client) DeleteKafkaACL(ctx context.Context, clusterName string, acl KafkaACL) error {
-	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/acls", c.baseURL, c.orgID, clusterName)
+	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/acls", c.baseURL, p(c.orgID), p(clusterName))
 
 	body, err := json.Marshal(acl)
 	if err != nil {
@@ -958,7 +963,7 @@ func (c *Client) DeleteKafkaACL(ctx context.Context, clusterName string, acl Kaf
 // CreateKafkaConnector creates a Kafka Connect connector
 func (c *Client) CreateKafkaConnector(ctx context.Context, clusterName, connectClusterName string, connector KafkaConnectorCreateRequest) (*KafkaConnectorResponse, error) {
 	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/connect/%s/connector",
-		c.baseURL, c.orgID, clusterName, connectClusterName)
+		c.baseURL, p(c.orgID), p(clusterName), p(connectClusterName))
 
 	body, err := json.Marshal(connector)
 	if err != nil {
@@ -993,7 +998,7 @@ func (c *Client) CreateKafkaConnector(ctx context.Context, clusterName, connectC
 // UpdateKafkaConnectorConfig updates a Kafka Connect connector's configuration
 func (c *Client) UpdateKafkaConnectorConfig(ctx context.Context, clusterName, connectClusterName, connectorName string, config map[string]string) error {
 	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/connect/%s/%s/config",
-		c.baseURL, c.orgID, clusterName, connectClusterName, connectorName)
+		c.baseURL, p(c.orgID), p(clusterName), p(connectClusterName), p(connectorName))
 
 	payload := KafkaConnectorConfigUpdate{Config: config}
 	body, err := json.Marshal(payload)
@@ -1024,7 +1029,7 @@ func (c *Client) UpdateKafkaConnectorConfig(ctx context.Context, clusterName, co
 // DeleteKafkaConnector deletes a Kafka Connect connector
 func (c *Client) DeleteKafkaConnector(ctx context.Context, clusterName, connectClusterName, connectorName string) error {
 	reqURL := fmt.Sprintf("%s/api/v1/%s/kafka/%s/connect/%s/%s",
-		c.baseURL, c.orgID, clusterName, connectClusterName, connectorName)
+		c.baseURL, p(c.orgID), p(clusterName), p(connectClusterName), p(connectorName))
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
 	if err != nil {
