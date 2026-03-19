@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,6 +36,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
 const (
@@ -52,8 +56,27 @@ type AxonOpsHealthcheckTCPReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile implements the reconciliation loop for AxonOpsHealthcheckTCP
-func (r *AxonOpsHealthcheckTCPReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AxonOpsHealthcheckTCPReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
 	log := logf.FromContext(ctx)
+
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.healthchecktcp", trace.WithAttributes())
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+	start := time.Now()
+	defer func() {
+		resultStr := "success"
+		if err != nil {
+			resultStr = "error"
+			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
+		}
+		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopshealthchecktcp", resultStr).Observe(time.Since(start).Seconds())
+		axonopsmetrics.ReconcileTotal.WithLabelValues("axonopshealthchecktcp", resultStr).Inc()
+	}()
 
 	// Fetch the AxonOpsHealthcheckTCP CR
 	healthcheck := &alertsv1alpha1.AxonOpsHealthcheckTCP{}

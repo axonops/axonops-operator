@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,6 +35,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
 const (
@@ -51,8 +55,27 @@ type AxonOpsScheduledRepairReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile implements the reconciliation loop for AxonOpsScheduledRepair
-func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
 	log := logf.FromContext(ctx)
+
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.scheduledrepair", trace.WithAttributes())
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+	start := time.Now()
+	defer func() {
+		resultStr := "success"
+		if err != nil {
+			resultStr = "error"
+			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
+		}
+		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopsscheduledrepair", resultStr).Observe(time.Since(start).Seconds())
+		axonopsmetrics.ReconcileTotal.WithLabelValues("axonopsscheduledrepair", resultStr).Inc()
+	}()
 
 	repair := &alertsv1alpha1.AxonOpsScheduledRepair{}
 	if err := r.Get(ctx, req.NamespacedName, repair); err != nil {
