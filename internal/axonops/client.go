@@ -31,6 +31,11 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	// DefaultTimeout is the default HTTP client timeout for AxonOps API requests.
+	DefaultTimeout = 30 * time.Second
+)
+
 // Client manages communication with the AxonOps API
 type Client struct {
 	httpClient *http.Client
@@ -40,8 +45,25 @@ type Client struct {
 	tokenType  string
 }
 
-// NewClient creates a new AxonOps API client
-func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bool) (*Client, error) {
+// ClientOption configures optional Client settings.
+type ClientOption func(*clientOptions)
+
+type clientOptions struct {
+	timeout time.Duration
+}
+
+// WithTimeout sets the HTTP client timeout. Values <= 0 are ignored and the
+// default (30 s) is used instead.
+func WithTimeout(d time.Duration) ClientOption {
+	return func(o *clientOptions) {
+		o.timeout = d
+	}
+}
+
+// NewClient creates a new AxonOps API client.
+// Optional ClientOption values can be appended to customise behaviour
+// (e.g. WithTimeout).
+func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bool, opts ...ClientOption) (*Client, error) {
 	if host == "" {
 		return nil, fmt.Errorf("host is required")
 	}
@@ -58,6 +80,15 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 		tokenType = "Bearer"
 	}
 
+	// Apply options
+	o := &clientOptions{timeout: DefaultTimeout}
+	for _, opt := range opts {
+		opt(o)
+	}
+	if o.timeout <= 0 {
+		o.timeout = DefaultTimeout
+	}
+
 	// Ensure host is properly formatted (remove protocol if included)
 	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
 		u, err := url.Parse(host)
@@ -70,7 +101,7 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 	baseURL := fmt.Sprintf("%s://%s", protocol, host)
 
 	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: o.timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: tlsSkipVerify,

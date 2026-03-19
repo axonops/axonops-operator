@@ -85,6 +85,12 @@ spec:
                 - http
                 - https
                 type: string
+              timeout:
+                description: |-
+                  Timeout is the HTTP client timeout for API requests (e.g. "30s", "2m").
+                  If not provided, defaults to 30s. Recommended values: 30s for low-latency
+                  networks, 60s-120s for cross-region or high-latency connections.
+                type: string
               tlsSkipVerify:
                 description: |-
                   TLSSkipVerify disables TLS certificate verification
