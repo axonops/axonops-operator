@@ -57,6 +57,12 @@ type AxonOpsConnectionSpec struct {
 	// If not provided, defaults to false
 	// +optional
 	UseSAML bool `json:"useSaml,omitempty"`
+
+	// Timeout is the HTTP client timeout for API requests (e.g. "30s", "2m").
+	// If not provided, defaults to 30s. Recommended values: 30s for low-latency
+	// networks, 60s-120s for cross-region or high-latency connections.
+	// +optional
+	Timeout string `json:"timeout,omitempty"`
 }
 
 // AxonOpsSecretKeyRef references a key in a Secret for AxonOps credentials

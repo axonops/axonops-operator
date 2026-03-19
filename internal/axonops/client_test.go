@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestURLPathEscaping_SpecialCharacters(t *testing.T) {
@@ -118,6 +119,46 @@ func TestAPIError_IsRetryable(t *testing.T) {
 		if got := apiErr.IsRetryable(); got != tt.want {
 			t.Errorf("APIError{StatusCode: %d}.IsRetryable() = %v, want %v", tt.code, got, tt.want)
 		}
+	}
+}
+
+func TestNewClient_DefaultTimeout(t *testing.T) {
+	c, err := NewClient("localhost", "http", "org", "key", "Bearer", false)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	if c.httpClient.Timeout != DefaultTimeout {
+		t.Errorf("expected default timeout %v, got %v", DefaultTimeout, c.httpClient.Timeout)
+	}
+}
+
+func TestNewClient_CustomTimeout(t *testing.T) {
+	c, err := NewClient("localhost", "http", "org", "key", "Bearer", false, WithTimeout(90*time.Second))
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	if c.httpClient.Timeout != 90*time.Second {
+		t.Errorf("expected timeout 90s, got %v", c.httpClient.Timeout)
+	}
+}
+
+func TestNewClient_ZeroTimeout(t *testing.T) {
+	c, err := NewClient("localhost", "http", "org", "key", "Bearer", false, WithTimeout(0))
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	if c.httpClient.Timeout != DefaultTimeout {
+		t.Errorf("zero timeout should fall back to default %v, got %v", DefaultTimeout, c.httpClient.Timeout)
+	}
+}
+
+func TestNewClient_NegativeTimeout(t *testing.T) {
+	c, err := NewClient("localhost", "http", "org", "key", "Bearer", false, WithTimeout(-5*time.Second))
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	if c.httpClient.Timeout != DefaultTimeout {
+		t.Errorf("negative timeout should fall back to default %v, got %v", DefaultTimeout, c.httpClient.Timeout)
 	}
 }
 

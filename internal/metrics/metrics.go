@@ -74,6 +74,12 @@ func init() {
 	)
 }
 
+// Metric result label values used by all controllers.
+const (
+	ResultSuccess = "success"
+	ResultError   = "error"
+)
+
 // ClassifyError categorizes a Kubernetes API error into a metric label value.
 func ClassifyError(err error) string {
 	if err == nil {

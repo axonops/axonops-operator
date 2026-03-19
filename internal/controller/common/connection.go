@@ -19,6 +19,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -74,7 +75,16 @@ func ResolveAPIClient(ctx context.Context, c client.Client, namespace, connectio
 
 	fullHost := BuildHostURL(conn.Spec.Host, conn.Spec.OrgID, conn.Spec.UseSAML)
 
-	apiClient, err := axonops.NewClient(fullHost, "", conn.Spec.OrgID, string(apiKey), tokenType, conn.Spec.TLSSkipVerify)
+	var opts []axonops.ClientOption
+	if conn.Spec.Timeout != "" {
+		d, err := time.ParseDuration(conn.Spec.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timeout %q in AxonOpsConnection: %w", conn.Spec.Timeout, err)
+		}
+		opts = append(opts, axonops.WithTimeout(d))
+	}
+
+	apiClient, err := axonops.NewClient(fullHost, "", conn.Spec.OrgID, string(apiKey), tokenType, conn.Spec.TLSSkipVerify, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AxonOps client from connection: %w", err)
 	}
