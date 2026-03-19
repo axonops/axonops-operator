@@ -9,7 +9,8 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 ## What It Does
 
 - **Deploys the full AxonOps stack** — axon-server, axon-dash, axondb-timeseries, and axondb-search — from a single `AxonOpsServer` custom resource.
-- **Manages AxonOps configuration** — alert rules, alert routes, and healthchecks are reconciled as Kubernetes resources and kept in sync with the AxonOps API.
+- **Manages AxonOps configuration** — alert rules, alert routes, healthchecks, dashboard templates, backups, scheduled repairs, and commitlog archives are reconciled as Kubernetes resources and kept in sync with the AxonOps API.
+- **Manages Kafka resources** — topics, ACLs, and connectors for Kafka-based clusters.
 - **Handles day-2 operations** — credential rotation, TLS certificate management, startup ordering, and Ingress/Gateway API configuration.
 
 ---
@@ -30,9 +31,28 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 | `AxonOpsMetricAlert` | Metric threshold alerts |
 | `AxonOpsLogAlert` | Log pattern alerts |
 | `AxonOpsAlertRoute` | Alert routing and notification channels |
+| `AxonOpsAlertEndpoint` | Alert notification endpoints (email, Slack, PagerDuty, etc.) |
 | `AxonOpsHealthcheckHTTP` | HTTP endpoint healthchecks |
 | `AxonOpsHealthcheckTCP` | TCP port healthchecks |
 | `AxonOpsHealthcheckShell` | Shell script healthchecks |
+| `AxonOpsDashboardTemplate` | Declarative dashboard management |
+| `AxonOpsAdaptiveRepair` | Adaptive repair scheduling |
+| `AxonOpsScheduledRepair` | Scheduled repair management |
+| `AxonOpsCommitlogArchive` | Commitlog archive management |
+
+### `backups.axonops.com/v1alpha1`
+
+| Kind | Purpose |
+|---|---|
+| `AxonOpsBackup` | Backup scheduling and management |
+
+### `kafka.axonops.com/v1alpha1`
+
+| Kind | Purpose |
+|---|---|
+| `AxonOpsKafkaTopic` | Kafka topic management |
+| `AxonOpsKafkaACL` | Kafka ACL management |
+| `AxonOpsKafkaConnector` | Kafka connector management |
 
 ---
 
@@ -46,18 +66,19 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 
 ## Installation
 
-**Install from Helm Chart:**
+**Install from Helm Chart (local):**
+
+A Helm chart is available under `charts/axonops-operator/`. To install from the local chart:
 
 ```bash
-LATEST_VERSION=$(curl -s https://api.github.com/repos/axonops/axonops-operator/releases/latest | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
 helm upgrade --install -n axonops-operator-system axonops-operator --create-namespace \
-  oci://ghcr.io/axonops/charts/axonops-operator:${LATEST_VERSION}
+  ./charts/axonops-operator/
 ```
 
-**Install from a pre-built YAML bundle:**
+**Install from source with Kustomize:**
 
 ```bash
-kubectl apply -f https://github.com/axonops/axonops-operator/releases/latest/download/install.yaml
+make deploy IMG=<registry>/<project>:<tag>
 ```
 
 ---
@@ -68,6 +89,8 @@ kubectl apply -f https://github.com/axonops/axonops-operator/releases/latest/dow
 
 Deploy the complete AxonOps stack with a single resource. The operator provisions all components, generates credentials, and manages TLS certificates automatically.
 
+> **Note:** All components must have `enabled: true` set explicitly until the defaulting webhook is implemented.
+
 ```yaml
 apiVersion: core.axonops.com/v1alpha1
 kind: AxonOpsServer
@@ -77,9 +100,12 @@ metadata:
 spec:
   server:
     orgName: "my-company"
-  timeSeries: {}
-  search: {}
-  dashboard: {}
+  timeSeries:
+    enabled: true
+  search:
+    enabled: true
+  dashboard:
+    enabled: true
 ```
 
 ### External databases
@@ -177,8 +203,9 @@ Each component can operate in **internal** (operator-managed) or **external** (u
 For each database component, the operator uses credentials in this priority order:
 
 1. `authentication.secretRef` — reference an existing Secret
-2. `authentication.username` / `authentication.password` — inline values
-3. Auto-generated — operator creates and manages a Secret with random credentials
+2. Auto-generated — operator creates and manages a Secret with random credentials
+
+> **Note:** Inline `authentication.username` / `authentication.password` fields are not yet supported. Use `secretRef` or rely on auto-generation.
 
 ### Ingress and Gateway API
 
@@ -202,6 +229,8 @@ Pre-built sample resources are available under `config/samples/`:
 kubectl apply -k config/samples/
 ```
 
+For more detailed examples including alert configuration, K8ssandra integration, and full-stack deployments, see the [`examples/`](examples/) directory.
+
 ---
 
 ## Development
@@ -221,6 +250,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow.
 
 ## Uninstall
 
+**If installed via Helm:**
+
+```bash
+kubectl delete -k config/samples/                                         # Remove sample CRs
+helm uninstall axonops-operator -n axonops-operator-system                # Remove the operator
+```
+
+**If installed via Kustomize / Make:**
+
 ```bash
 kubectl delete -k config/samples/  # Remove sample CRs
 make uninstall                      # Remove CRDs from the cluster
@@ -231,6 +269,6 @@ make undeploy                       # Remove the operator from the cluster
 
 ## License
 
-Copyright 2026.
+Copyright 2026 AxonOps Ltd.
 
 Licensed under the [Apache License, Version 2.0](LICENSE).

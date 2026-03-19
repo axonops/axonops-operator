@@ -14,14 +14,11 @@ Start by creating a GitHub issue describing what you want to build:
 
 ### 2. Planning Session
 
-For significant features:
+For significant features, design the implementation before writing code:
 
-```bash
-# Use EnterPlanMode to design the implementation
-# - Explore affected files and architecture
-# - Identify dependencies and risks
-# - Get approval before coding
-```
+- Explore affected files and architecture
+- Identify dependencies and risks
+- Document the approach and get approval before coding
 
 ### 3. Create Feature Branch
 
@@ -158,8 +155,13 @@ api/
   ├── v1alpha1/              # core.axonops.com group
   │   ├── axonopsserver_types.go
   │   └── axonopsconnection_types.go
-  └── alerts/v1alpha1/       # alerts.axonops.com group
-      ├── axonopsmetricalert_types.go
+  ├── alerts/v1alpha1/       # alerts.axonops.com group
+  │   ├── axonopsmetricalert_types.go
+  │   └── ...
+  ├── backups/v1alpha1/      # backups.axonops.com group
+  │   └── axonopsbackup_types.go
+  └── kafka/v1alpha1/        # kafka.axonops.com group
+      ├── axonopskafkatopic_types.go
       └── ...
 
 internal/
