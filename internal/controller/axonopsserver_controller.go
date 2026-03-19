@@ -253,9 +253,9 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// Record reconciliation duration and count metrics
 	start := time.Now()
 	defer func() {
-		resultStr := "success"
+		resultStr := axonopsmetrics.ResultSuccess
 		if err != nil {
-			resultStr = "error"
+			resultStr = axonopsmetrics.ResultError
 			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
 		}
 		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopsserver", resultStr).Observe(time.Since(start).Seconds())

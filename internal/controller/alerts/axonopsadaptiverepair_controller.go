@@ -73,9 +73,9 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 	// Prometheus metrics
 	start := time.Now()
 	defer func() {
-		resultStr := "success"
+		resultStr := axonopsmetrics.ResultSuccess
 		if err != nil {
-			resultStr = "error"
+			resultStr = axonopsmetrics.ResultError
 			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
 		}
 		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopsadaptiverepair", resultStr).Observe(time.Since(start).Seconds())
@@ -92,7 +92,7 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 
 	// Handle deletion
 	if repair.DeletionTimestamp != nil {
-		return r.handleDeletion(ctx, repair)
+		return ctrl.Result{}, r.handleDeletion(ctx, repair)
 	}
 
 	// Add finalizer if not present
@@ -141,7 +141,7 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 	if r.settingsEqual(desired, *currentSettings) {
 		log.Info("Adaptive repair settings match remote, no update needed")
 		// Still update status to mark as synced
-		return r.updateReadyStatus(ctx, req, repair)
+		return ctrl.Result{}, r.updateReadyStatus(ctx, req, repair)
 	}
 
 	// Update settings via API
@@ -156,17 +156,17 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 	}
 
 	log.Info("Successfully synced adaptive repair settings")
-	return r.updateReadyStatus(ctx, req, repair)
+	return ctrl.Result{}, r.updateReadyStatus(ctx, req, repair)
 }
 
 // handleDeletion handles cleanup when the CR is being deleted.
 // Adaptive repair is a cluster-level singleton -- it cannot be "deleted" via the API.
 // The finalizer simply removes itself without making any API calls.
-func (r *AxonOpsAdaptiveRepairReconciler) handleDeletion(ctx context.Context, repair *alertsv1alpha1.AxonOpsAdaptiveRepair) (ctrl.Result, error) {
+func (r *AxonOpsAdaptiveRepairReconciler) handleDeletion(ctx context.Context, repair *alertsv1alpha1.AxonOpsAdaptiveRepair) error {
 	log := logf.FromContext(ctx)
 
 	if !controllerutil.ContainsFinalizer(repair, adaptiveRepairFinalizer) {
-		return ctrl.Result{}, nil
+		return nil
 	}
 
 	log.Info("Removing finalizer for adaptive repair CR, no API cleanup needed (singleton resource)")
@@ -174,10 +174,10 @@ func (r *AxonOpsAdaptiveRepairReconciler) handleDeletion(ctx context.Context, re
 	controllerutil.RemoveFinalizer(repair, adaptiveRepairFinalizer)
 	if err := r.Update(ctx, repair); err != nil {
 		log.Error(err, "Failed to remove finalizer")
-		return ctrl.Result{}, err
+		return err
 	}
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 // buildAdaptiveRepairSettings converts the CRD spec to the API payload struct
@@ -240,10 +240,10 @@ func (r *AxonOpsAdaptiveRepairReconciler) settingsEqual(desired, current axonops
 }
 
 // updateReadyStatus re-fetches the CR and sets the Ready status
-func (r *AxonOpsAdaptiveRepairReconciler) updateReadyStatus(ctx context.Context, req ctrl.Request, repair *alertsv1alpha1.AxonOpsAdaptiveRepair) (ctrl.Result, error) {
+func (r *AxonOpsAdaptiveRepairReconciler) updateReadyStatus(ctx context.Context, req ctrl.Request, repair *alertsv1alpha1.AxonOpsAdaptiveRepair) error {
 	syncedGeneration := repair.Generation
 	if err := r.Get(ctx, req.NamespacedName, repair); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return client.IgnoreNotFound(err)
 	}
 
 	now := metav1.Now()
@@ -261,10 +261,10 @@ func (r *AxonOpsAdaptiveRepairReconciler) updateReadyStatus(ctx context.Context,
 
 	if err := r.Status().Update(ctx, repair); err != nil {
 		logf.FromContext(ctx).Error(err, "Failed to update status")
-		return ctrl.Result{}, err
+		return err
 	}
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 // setFailedCondition sets a failed condition on the adaptive repair CR

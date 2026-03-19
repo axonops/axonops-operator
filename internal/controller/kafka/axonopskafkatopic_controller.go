@@ -70,9 +70,9 @@ func (r *AxonOpsKafkaTopicReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}()
 	start := time.Now()
 	defer func() {
-		resultStr := "success"
+		resultStr := axonopsmetrics.ResultSuccess
 		if err != nil {
-			resultStr = "error"
+			resultStr = axonopsmetrics.ResultError
 			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
 		}
 		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopskafkatopic", resultStr).Observe(time.Since(start).Seconds())

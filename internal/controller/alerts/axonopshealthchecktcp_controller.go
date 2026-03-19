@@ -69,9 +69,9 @@ func (r *AxonOpsHealthcheckTCPReconciler) Reconcile(ctx context.Context, req ctr
 	}()
 	start := time.Now()
 	defer func() {
-		resultStr := "success"
+		resultStr := axonopsmetrics.ResultSuccess
 		if err != nil {
-			resultStr = "error"
+			resultStr = axonopsmetrics.ResultError
 			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
 		}
 		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopshealthchecktcp", resultStr).Observe(time.Since(start).Seconds())
