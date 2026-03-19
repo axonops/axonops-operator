@@ -1,0 +1,232 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: axonopskafkaacls.kafka.axonops.com
+spec:
+  group: kafka.axonops.com
+  names:
+    kind: AxonOpsKafkaACL
+    listKind: AxonOpsKafkaACLList
+    plural: axonopskafkaacls
+    shortNames:
+    - axacl
+    singular: axonopskafkaacl
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterName
+      name: Cluster
+      type: string
+    - jsonPath: .spec.resourceType
+      name: Resource
+      type: string
+    - jsonPath: .spec.resourceName
+      name: Name
+      type: string
+    - jsonPath: .spec.principal
+      name: Principal
+      type: string
+    - jsonPath: .spec.operation
+      name: Operation
+      type: string
+    - jsonPath: .spec.permissionType
+      name: Permission
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AxonOpsKafkaACL is the Schema for the axonopskafkaacls API.
+          Manages Kafka ACL entries through the AxonOps API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              AxonOpsKafkaACLSpec defines the desired state of AxonOpsKafkaACL.
+              Each CR represents a single Kafka ACL entry identified by all fields combined.
+            properties:
+              clusterName:
+                description: ClusterName is the Kafka cluster name in AxonOps
+                minLength: 1
+                type: string
+              connectionRef:
+                description: ConnectionRef is the name of an AxonOpsConnection in
+                  the same namespace.
+                minLength: 1
+                type: string
+              host:
+                default: '*'
+                description: Host is the client IP address. Defaults to "*" (all hosts).
+                type: string
+              operation:
+                description: Operation is the Kafka operation to allow or deny.
+                enum:
+                - ANY
+                - ALL
+                - READ
+                - WRITE
+                - CREATE
+                - DELETE
+                - ALTER
+                - DESCRIBE
+                - CLUSTER_ACTION
+                - DESCRIBE_CONFIGS
+                - ALTER_CONFIGS
+                - IDEMPOTENT_WRITE
+                - CREATE_TOKENS
+                - DESCRIBE_TOKENS
+                type: string
+              permissionType:
+                description: PermissionType controls whether to allow or deny the
+                  operation.
+                enum:
+                - ANY
+                - DENY
+                - ALLOW
+                type: string
+              principal:
+                description: Principal is the user or service identity (e.g., "User:alice",
+                  "User:*").
+                minLength: 1
+                type: string
+              resourceName:
+                description: ResourceName is the name of the Kafka resource (e.g.,
+                  topic name, group name, "*" for all).
+                type: string
+              resourcePatternType:
+                default: LITERAL
+                description: ResourcePatternType defines how the resource name is
+                  matched.
+                enum:
+                - ANY
+                - MATCH
+                - LITERAL
+                - PREFIXED
+                type: string
+              resourceType:
+                description: ResourceType is the Kafka resource type for this ACL.
+                enum:
+                - ANY
+                - TOPIC
+                - GROUP
+                - CLUSTER
+                - TRANSACTIONAL_ID
+                - DELEGATION_TOKEN
+                - USER
+                type: string
+            required:
+            - clusterName
+            - connectionRef
+            - operation
+            - permissionType
+            - principal
+            - resourceName
+            - resourceType
+            type: object
+          status:
+            description: AxonOpsKafkaACLStatus defines the observed state of AxonOpsKafkaACL.
+            properties:
+              conditions:
+                description: Conditions represent the current state of the resource.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  sync
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration reflects the generation most recently
+                  observed
+                format: int64
+                type: integer
+              synced:
+                description: Synced indicates the ACL has been created in the Kafka
+                  cluster
+                type: boolean
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
