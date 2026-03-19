@@ -1,0 +1,392 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: axonopsbackups.backups.axonops.com
+spec:
+  group: backups.axonops.com
+  names:
+    kind: AxonOpsBackup
+    listKind: AxonOpsBackupList
+    plural: axonopsbackups
+    shortNames:
+    - axbkp
+    singular: axonopsbackup
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterName
+      name: Cluster
+      type: string
+    - jsonPath: .spec.tag
+      name: Tag
+      type: string
+    - jsonPath: .spec.remote.type
+      name: Remote
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AxonOpsBackup is the Schema for the axonopsbackups API.
+          Manages Cassandra scheduled snapshot backups through the AxonOps API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              AxonOpsBackupSpec defines the desired state of AxonOpsBackup.
+              Manages Cassandra scheduled snapshots through the AxonOps API.
+            properties:
+              clusterName:
+                description: ClusterName is the Cassandra/DSE cluster name in AxonOps
+                minLength: 1
+                type: string
+              clusterType:
+                description: ClusterType is the cluster type. Only cassandra and dse
+                  support backups.
+                enum:
+                - cassandra
+                - dse
+                type: string
+              connectionRef:
+                description: ConnectionRef is the name of an AxonOpsConnection in
+                  the same namespace.
+                minLength: 1
+                type: string
+              datacenters:
+                description: Datacenters to include in the backup
+                items:
+                  type: string
+                minItems: 1
+                type: array
+                x-kubernetes-list-type: atomic
+              keyspaces:
+                description: |-
+                  Keyspaces optionally limits the backup to specific keyspaces.
+                  Mutually exclusive with Tables.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+              localRetention:
+                default: 10d
+                description: |-
+                  LocalRetention is how long to keep local snapshots (e.g., "10d", "24h", "2w").
+                  Passed directly to the AxonOps API.
+                type: string
+              nodes:
+                description: Nodes optionally limits the backup to specific node names.
+                  Empty means all nodes.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+              remote:
+                description: |-
+                  Remote configures remote storage for backup offloading.
+                  When nil, backups are local-only.
+                properties:
+                  azure:
+                    description: Azure configures Azure Blob storage (required when
+                      type=azure)
+                    properties:
+                      account:
+                        description: Account is the Azure storage account name
+                        type: string
+                      credentialsRef:
+                        description: |-
+                          CredentialsRef references a Secret containing key "azure_key".
+                          Takes precedence over inline Key. If neither is set and UseMSI is true, MSI is used.
+                        type: string
+                      endpoint:
+                        description: Endpoint is a custom Azure Blob endpoint
+                        type: string
+                      key:
+                        description: Key is the Azure storage account key (inline).
+                          Ignored if CredentialsRef is set.
+                        type: string
+                      msiClientID:
+                        description: MSIClientID is the MSI client ID (mutually exclusive
+                          with MSIObjectID and MSIResourceID)
+                        type: string
+                      msiObjectID:
+                        description: MSIObjectID is the MSI object ID (mutually exclusive
+                          with MSIClientID and MSIResourceID)
+                        type: string
+                      msiResourceID:
+                        description: MSIResourceID is the MSI resource ID (mutually
+                          exclusive with MSIObjectID and MSIClientID)
+                        type: string
+                      useMSI:
+                        description: UseMSI enables Azure Managed Service Identity
+                          authentication
+                        type: boolean
+                    required:
+                    - account
+                    type: object
+                  bandwidthLimit:
+                    description: BandwidthLimit restricts transfer bandwidth (e.g.,
+                      "100M")
+                    type: string
+                  path:
+                    description: Path is the remote storage path/prefix
+                    minLength: 1
+                    type: string
+                  retention:
+                    default: 60d
+                    description: Retention is the duration to keep remote backups
+                      (e.g., "60d")
+                    type: string
+                  s3:
+                    description: S3 configures AWS S3 storage (required when type=s3)
+                    properties:
+                      accessKeyID:
+                        description: |-
+                          AccessKeyID is the AWS access key ID (inline, for dev or vals-operator use).
+                          Ignored if CredentialsRef is set.
+                        type: string
+                      acl:
+                        default: private
+                        description: ACL is the S3 canned access control list
+                        enum:
+                        - private
+                        - public-read
+                        - public-read-write
+                        - authenticated-read
+                        - bucket-owner-read
+                        type: string
+                      credentialsRef:
+                        description: |-
+                          CredentialsRef references a Secret containing keys "access_key_id" and "secret_access_key".
+                          Takes precedence over inline credentials. If neither is set, IAM auth is used.
+                        type: string
+                      disableChecksum:
+                        description: DisableChecksum disables checksum verification
+                          during upload
+                        type: boolean
+                      encryption:
+                        default: AES256
+                        description: Encryption is the server-side encryption method
+                        enum:
+                        - none
+                        - AES256
+                        type: string
+                      noCheckBucket:
+                        description: NoCheckBucket disables bucket existence verification
+                        type: boolean
+                      region:
+                        description: Region is the AWS region
+                        type: string
+                      secretAccessKey:
+                        description: |-
+                          SecretAccessKey is the AWS secret access key (inline, for dev or vals-operator use).
+                          Ignored if CredentialsRef is set.
+                        type: string
+                      storageClass:
+                        default: STANDARD
+                        description: StorageClass is the S3 storage class
+                        enum:
+                        - STANDARD
+                        - reduced_redundancy
+                        - standard_ia
+                        - onezone_ia
+                        - glacier
+                        - deep_archive
+                        - intelligent_tiering
+                        type: string
+                    required:
+                    - region
+                    type: object
+                  sftp:
+                    description: SFTP configures SFTP storage (required when type=sftp)
+                    properties:
+                      credentialsRef:
+                        description: |-
+                          CredentialsRef references a Secret containing keys "ssh_user", "ssh_pass", and/or "key_file".
+                          Takes precedence over inline credentials.
+                        type: string
+                      host:
+                        description: Host is the SFTP server address (hostname or
+                          hostname:port)
+                        type: string
+                      keyFile:
+                        description: KeyFile is the path to the SSH private key (inline).
+                          Ignored if CredentialsRef is set.
+                        type: string
+                      password:
+                        description: Password is the SSH password (inline). Ignored
+                          if CredentialsRef is set.
+                        type: string
+                      user:
+                        description: User is the SSH username (inline). Ignored if
+                          CredentialsRef is set.
+                        type: string
+                    required:
+                    - host
+                    type: object
+                  tpsLimit:
+                    default: 50
+                    description: TPSLimit is the transactions-per-second limit during
+                      transfer
+                    type: integer
+                  transfers:
+                    default: 1
+                    description: Transfers is the number of parallel file transfers
+                    minimum: 1
+                    type: integer
+                  type:
+                    description: Type is the remote storage backend
+                    enum:
+                    - s3
+                    - sftp
+                    - azure
+                    type: string
+                required:
+                - path
+                - type
+                type: object
+              schedule:
+                default: true
+                description: Schedule enables scheduled (cron-based) backups. Defaults
+                  to true.
+                type: boolean
+              scheduleExpression:
+                default: 0 1 * * *
+                description: ScheduleExpression is the cron expression for scheduling
+                  (e.g., "0 1 * * *" for daily at 1am)
+                type: string
+              tables:
+                description: |-
+                  Tables optionally limits the backup to specific tables in "keyspace.table" format.
+                  Mutually exclusive with Keyspaces.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+              tag:
+                description: |-
+                  Tag uniquely identifies this backup configuration within the cluster.
+                  Used by the controller to match existing backups in AxonOps for idempotent updates.
+                minLength: 1
+                type: string
+              timeout:
+                default: 10h
+                description: Timeout is the maximum duration for the backup operation
+                  (e.g., "10h")
+                type: string
+            required:
+            - clusterName
+            - clusterType
+            - connectionRef
+            - datacenters
+            - tag
+            type: object
+          status:
+            description: AxonOpsBackupStatus defines the observed state of AxonOpsBackup.
+            properties:
+              conditions:
+                description: Conditions represent the current state of the AxonOpsBackup
+                  resource.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  sync with AxonOps
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration reflects the generation most recently
+                  observed
+                format: int64
+                type: integer
+              syncedBackupID:
+                description: SyncedBackupID is the ID assigned by the AxonOps API
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

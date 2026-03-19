@@ -1,0 +1,85 @@
+# Example 1: Local commitlog archiving
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsCommitlogArchive
+metadata:
+  name: commitlog-local
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cluster
+  clusterType: cassandra
+  remoteType: local
+  remotePath: /mnt/commitlogs
+  remoteRetention: "60d"
+  timeout: "10h"
+  datacenters:
+    - dc1
+
+---
+# Example 2: S3 commitlog archiving with explicit credentials
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsCommitlogArchive
+metadata:
+  name: commitlog-s3
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cluster
+  clusterType: cassandra
+  remoteType: s3
+  remotePath: s3://my-bucket/commitlogs
+  remoteRetention: "90d"
+  timeout: "20h"
+  datacenters:
+    - dc1
+    - dc2
+  s3:
+    region: us-east-1
+    # Reference to a Secret with "access_key_id" and "secret_access_key" keys
+    credentialsRef:
+      name: aws-s3-credentials
+    storageClass: STANDARD_IA
+    acl: private
+    encryption: AES256
+
+---
+# Example 3: S3 with IAM role auth (no explicit credentials)
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsCommitlogArchive
+metadata:
+  name: commitlog-s3-iam
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cluster
+  clusterType: cassandra
+  remoteType: s3
+  remotePath: s3://my-bucket/commitlogs
+  datacenters:
+    - dc1
+  s3:
+    region: eu-west-1
+    # No credentialsRef — uses IAM role/env auth
+
+---
+# Example 4: SFTP commitlog archiving with password auth
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsCommitlogArchive
+metadata:
+  name: commitlog-sftp
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cluster
+  clusterType: cassandra
+  remoteType: sftp
+  remotePath: /backup/commitlogs
+  remoteRetention: "30d"
+  datacenters:
+    - dc1
+  sftp:
+    host: sftp.example.com
+    user: backup-user
+    credentialsRef:
+      name: sftp-credentials
+      passwordKey: password

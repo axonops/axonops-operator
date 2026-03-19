@@ -369,3 +369,53 @@ type DashboardTemplatePutPayload struct {
 type DashboardTemplateGetResponse struct {
 	Dashboards []DashboardTemplateRaw `json:"dashboards"`
 }
+
+// CommitlogArchiveSettings represents a commitlog archive configuration returned by the API
+type CommitlogArchiveSettings struct {
+	RemoteType              string   `json:"remoteType"`
+	RemotePath              string   `json:"remotePath"`
+	RemoteRetentionDuration string   `json:"remoteRetentionDuration"`
+	Timeout                 string   `json:"timeout"`
+	BwLimit                 string   `json:"bwlimit"`
+	Datacenters             []string `json:"datacenters"`
+	Transfers               int32    `json:"transfers"`
+	RemoteConfig            string   `json:"remoteConfig"`
+}
+
+// CommitlogArchivePayload is the POST payload for creating/updating commitlog archive settings
+type CommitlogArchivePayload struct {
+	RemoteBackupsActive     bool     `json:"remoteBackupsActive"`
+	BackupMethod            string   `json:"backupMethod"`
+	Timeout                 string   `json:"timeout"`
+	BwLimit                 string   `json:"bwlimit"`
+	LocalRetentionDuration  string   `json:"localRetentionDuration"`
+	RemoteRetentionDuration string   `json:"remoteRetentionDuration"`
+	DelegateRemoteRetention bool     `json:"delegateRemoteRetention"`
+	RemoteType              string   `json:"remoteType"`
+	RemotePath              string   `json:"remotePath"`
+	Datacenters             []string `json:"datacenters"`
+	RemoteConfig            string   `json:"remoteConfig"`
+
+	Transfers int32 `json:"transfers"`
+
+	// S3 fields
+	AWSRegion               string `json:"AWSRegion"`
+	AWSStorageClass         string `json:"AWSStorageClass"`
+	AWSAccessKeyID          string `json:"AWSAccessKeyId"`
+	AWSSecretAccessKey      string `json:"AWSSecretAccessKey"`
+	AWSACL                  string `json:"AWSACL"`
+	AWSServerSideEncryption string `json:"AWSServerSideEncryption"`
+	AWSDisableChecksum      bool   `json:"AWSDisableChecksum"`
+
+	// SFTP fields
+	SFTPHost    *string `json:"SFTPHost"`
+	SFTPUser    *string `json:"SFTPUser"`
+	SFTPPass    *string `json:"SFTPPass"`
+	SFTPPort    *string `json:"SFTPPort"`
+	SFTPKeyFile *string `json:"SFTPKeyFile"`
+}
+
+// CommitlogArchiveDeletePayload is the DELETE payload
+type CommitlogArchiveDeletePayload struct {
+	Datacenters []string `json:"datacenters"`
+}

@@ -25,6 +25,7 @@ rules:
   - axonopsadaptiverepairs
   - axonopsalertendpoints
   - axonopsalertroutes
+  - axonopscommitlogarchives
   - axonopsdashboardtemplates
   - axonopshealthcheckhttps
   - axonopshealthcheckshells
@@ -46,6 +47,7 @@ rules:
   - axonopsadaptiverepairs/finalizers
   - axonopsalertendpoints/finalizers
   - axonopsalertroutes/finalizers
+  - axonopscommitlogarchives/finalizers
   - axonopsdashboardtemplates/finalizers
   - axonopshealthcheckhttps/finalizers
   - axonopshealthcheckshells/finalizers
@@ -61,6 +63,7 @@ rules:
   - axonopsadaptiverepairs/status
   - axonopsalertendpoints/status
   - axonopsalertroutes/status
+  - axonopscommitlogarchives/status
   - axonopsdashboardtemplates/status
   - axonopshealthcheckhttps/status
   - axonopshealthcheckshells/status

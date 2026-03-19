@@ -18,6 +18,7 @@ resources:
 - bases/kafka.axonops.com_axonopskafkaacls.yaml
 - bases/kafka.axonops.com_axonopskafkaconnectors.yaml
 - bases/alerts.axonops.com_axonopsdashboardtemplates.yaml
+- bases/alerts.axonops.com_axonopscommitlogarchives.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

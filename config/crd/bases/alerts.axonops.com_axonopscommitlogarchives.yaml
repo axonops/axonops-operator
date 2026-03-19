@@ -1,0 +1,285 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: axonopscommitlogarchives.alerts.axonops.com
+spec:
+  group: alerts.axonops.com
+  names:
+    kind: AxonOpsCommitlogArchive
+    listKind: AxonOpsCommitlogArchiveList
+    plural: axonopscommitlogarchives
+    singular: axonopscommitlogarchive
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterName
+      name: Cluster
+      type: string
+    - jsonPath: .spec.clusterType
+      name: Type
+      type: string
+    - jsonPath: .spec.remoteType
+      name: Remote
+      type: string
+    - jsonPath: .spec.remotePath
+      name: Path
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AxonOpsCommitlogArchive is the Schema for the axonopscommitlogarchives
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of AxonOpsCommitlogArchive
+            properties:
+              bwLimit:
+                description: BwLimit is the bandwidth limit (e.g. "10M", empty = unlimited)
+                type: string
+              clusterName:
+                description: ClusterName is the name of the cluster
+                minLength: 1
+                type: string
+              clusterType:
+                description: ClusterType is the type of the cluster (cassandra, dse)
+                enum:
+                - cassandra
+                - dse
+                type: string
+              connectionRef:
+                description: ConnectionRef is the name of an AxonOpsConnection in
+                  the same namespace.
+                minLength: 1
+                type: string
+              datacenters:
+                description: Datacenters is the list of datacenters where archiving
+                  is active
+                items:
+                  type: string
+                minItems: 1
+                type: array
+                x-kubernetes-list-type: atomic
+              remotePath:
+                description: RemotePath is the storage path (e.g. s3://bucket/path,
+                  /mnt/backups)
+                minLength: 1
+                type: string
+              remoteRetention:
+                default: 60d
+                description: RemoteRetention is the retention duration for archived
+                  commitlogs (e.g. "60d", "90d")
+                type: string
+              remoteType:
+                description: RemoteType is the storage backend type for commitlog
+                  archiving
+                enum:
+                - local
+                - s3
+                - sftp
+                type: string
+              s3:
+                description: S3 contains S3-specific configuration. Required when
+                  remoteType is "s3".
+                properties:
+                  acl:
+                    default: private
+                    description: 'ACL is the S3 object ACL (default: private)'
+                    type: string
+                  credentialsRef:
+                    description: |-
+                      CredentialsRef references a Secret containing "access_key_id" and "secret_access_key" keys.
+                      If omitted, IAM role/environment auth is used.
+                    properties:
+                      name:
+                        description: Name is the Secret name in the same namespace
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  disableChecksum:
+                    description: DisableChecksum disables S3 checksum validation
+                    type: boolean
+                  encryption:
+                    default: AES256
+                    description: 'Encryption is the server-side encryption type: "none"
+                      or "AES256" (default: AES256)'
+                    enum:
+                    - none
+                    - AES256
+                    type: string
+                  region:
+                    description: Region is the AWS region (e.g. "us-east-1")
+                    minLength: 1
+                    type: string
+                  storageClass:
+                    default: STANDARD
+                    description: 'StorageClass is the S3 storage class (default: STANDARD)'
+                    type: string
+                required:
+                - region
+                type: object
+              sftp:
+                description: SFTP contains SFTP-specific configuration. Required when
+                  remoteType is "sftp".
+                properties:
+                  credentialsRef:
+                    description: |-
+                      CredentialsRef references a Secret containing SSH credentials.
+                      Use passwordKey for password auth or keyFileKey for key-based auth.
+                    properties:
+                      keyFileKey:
+                        description: KeyFileKey is the key in the Secret for the SSH
+                          private key content
+                        type: string
+                      name:
+                        description: Name is the Secret name in the same namespace
+                        minLength: 1
+                        type: string
+                      passwordKey:
+                        description: PasswordKey is the key in the Secret for the
+                          SSH password
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  host:
+                    description: Host is the SFTP hostname
+                    minLength: 1
+                    type: string
+                  user:
+                    description: User is the SSH username
+                    minLength: 1
+                    type: string
+                required:
+                - host
+                - user
+                type: object
+              timeout:
+                default: 10h
+                description: Timeout is the archive operation timeout (e.g. "10h",
+                  "24h")
+                type: string
+              transfers:
+                default: 0
+                description: Transfers is the number of parallel transfers (0 = unlimited)
+                format: int32
+                minimum: 0
+                type: integer
+            required:
+            - clusterName
+            - clusterType
+            - connectionRef
+            - datacenters
+            - remotePath
+            - remoteType
+            type: object
+          status:
+            description: status defines the observed state of AxonOpsCommitlogArchive
+            properties:
+              conditions:
+                description: |-
+                  Conditions represent the current state of the resource.
+                  Condition types: "Ready", "Failed"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  sync with AxonOps
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration reflects the generation of the most
+                  recently observed spec
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -634,6 +634,98 @@ func (c *Client) CreateOrUpdateIntegration(ctx context.Context, clusterType, clu
 	return result, nil
 }
 
+// GetCommitlogArchiveSettings fetches commitlog archive settings for a cluster
+func (c *Client) GetCommitlogArchiveSettings(ctx context.Context, clusterType, clusterName string) ([]CommitlogArchiveSettings, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraCommitLogsSettings/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get commitlog archive settings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+
+	var result []CommitlogArchiveSettings
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode commitlog archive response: %w", err)
+	}
+
+	return result, nil
+}
+
+// CreateCommitlogArchiveSettings creates or updates commitlog archive settings
+func (c *Client) CreateCommitlogArchiveSettings(ctx context.Context, clusterType, clusterName string, payload CommitlogArchivePayload) error {
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraCommitLogsSettings/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal commitlog archive payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create commitlog archive settings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+
+	return nil
+}
+
+// DeleteCommitlogArchiveSettings deletes commitlog archive settings for a remoteType
+func (c *Client) DeleteCommitlogArchiveSettings(ctx context.Context, clusterType, clusterName string, datacenters []string) error {
+	reqURL := fmt.Sprintf("%s/api/v1/cassandraCommitLogsSettings/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+
+	payload := CommitlogArchiveDeletePayload{Datacenters: datacenters}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal delete payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete commitlog archive settings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+
+	return nil
+}
+
 // GetAdaptiveRepair fetches the current adaptive repair settings for a cluster
 func (c *Client) GetAdaptiveRepair(ctx context.Context, clusterType, clusterName string) (*AdaptiveRepairSettings, error) {
 	reqURL := fmt.Sprintf("%s/api/v1/adaptiveRepair/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
