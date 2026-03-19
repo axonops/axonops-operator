@@ -16,4 +16,5 @@ resources:
 - kafka_v1alpha1_axonopskafkatopic.yaml
 - kafka_v1alpha1_axonopskafkaacl.yaml
 - kafka_v1alpha1_axonopskafkaconnector.yaml
+- alerts_v1alpha1_axonopsdashboardtemplate.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

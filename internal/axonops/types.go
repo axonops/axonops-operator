@@ -16,6 +16,8 @@ limitations under the License.
 
 package axonops
 
+import "encoding/json"
+
 // MetricAlertRule represents an alert rule in AxonOps
 type MetricAlertRule struct {
 	ID            string                  `json:"id"` // always serialised; server uses it for create-vs-update
@@ -346,4 +348,24 @@ type KafkaConnectorsListResponse struct {
 // KafkaConnectorListEntry wraps a connector's info and status
 type KafkaConnectorListEntry struct {
 	Info KafkaConnectorResponse `json:"info"`
+}
+
+// DashboardTemplateRaw represents a single dashboard with opaque filters/panels JSON.
+// Used for the GET/PUT dashboard template API where panel structure is preserved as-is.
+type DashboardTemplateRaw struct {
+	Name    string          `json:"name"`
+	UUID    string          `json:"uuid,omitempty"`
+	Filters json.RawMessage `json:"filters,omitempty"`
+	Panels  json.RawMessage `json:"panels,omitempty"`
+}
+
+// DashboardTemplatePutPayload is the PUT payload for updating dashboard templates
+type DashboardTemplatePutPayload struct {
+	Type       string                 `json:"type"`
+	Dashboards []DashboardTemplateRaw `json:"dashboards"`
+}
+
+// DashboardTemplateGetResponse is the GET response for dashboard templates
+type DashboardTemplateGetResponse struct {
+	Dashboards []DashboardTemplateRaw `json:"dashboards"`
 }
