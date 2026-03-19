@@ -287,6 +287,73 @@ func (c *Client) ResolveDashboardPanel(ctx context.Context, clusterType, cluster
 	return "", fmt.Errorf("dashboard %q with chart %q not found", dashboardName, chartTitle)
 }
 
+// GetDashboardTemplates fetches all dashboard templates for a cluster using API v2.0
+func (c *Client) GetDashboardTemplates(ctx context.Context, clusterType, clusterName string) (*DashboardTemplateGetResponse, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s?dashver=2.0", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dashboard templates: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	var result DashboardTemplateGetResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode dashboard templates response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateDashboardTemplates replaces all dashboard templates for a cluster using API v2.0.
+// The full list of dashboards must be provided — the API replaces all dashboards on PUT.
+func (c *Client) UpdateDashboardTemplates(ctx context.Context, clusterType, clusterName string, payload DashboardTemplatePutPayload) error {
+	reqURL := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s?dashver=2.0", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal dashboard templates: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update dashboard templates: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
+	}
+
+	return nil
+}
+
 // setAuthHeader sets the authorization header on the request
 func (c *Client) setAuthHeader(req *http.Request) {
 	req.Header.Set("Authorization", fmt.Sprintf("%s %s", c.tokenType, c.apiKey))

@@ -1,0 +1,155 @@
+# Example 1: Inline dashboard with a simple 2-panel layout
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsDashboardTemplate
+metadata:
+  name: cpu-overview-inline
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cluster
+  clusterType: cassandra
+  dashboardName: CPU Overview
+  source:
+    inline:
+      dashboard:
+        filters:
+          - label: "data center"
+            name: "dc"
+            type: "query"
+            multi: true
+            query: "host_CPU_Percent_Merge"
+            regex: "dc=([^:]+)"
+          - label: "node"
+            name: "host_id"
+            type: "query"
+            multi: true
+            query: "host_CPU_Percent_Merge{dc=~'$dc'}"
+            regex: "host_id=([^:]+)"
+        panels:
+          - title: "CPU Metrics"
+            type: "row"
+            uuid: "row-1"
+            layout: { h: 1, w: 18, x: 0, y: 0, i: "row-1" }
+            details:
+              queries: []
+              thresholds:
+                - { color: "#4caf50", name: "default", value: 0 }
+          - title: "CPU Usage %"
+            type: "line-chart"
+            uuid: "panel-1"
+            group: "row-1"
+            layout: { h: 3, w: 9, x: 0, y: 1, i: "panel-1" }
+            details:
+              queries:
+                - query: "host_CPU_Percent_Merge{dc=~'$dc',host_id=~'$host_id'}"
+                  legend: "CPU Usage - $host_id"
+              isSmoothLines: true
+              lineThickness: 2
+              max: 100
+              min: 0
+              resolution: "low"
+              useCache: true
+              topK: 999
+              thresholds:
+                - { color: "#4caf50", name: "default", value: 0 }
+                - { color: "#fe9800", name: "warning", value: 70 }
+                - { color: "#f44336", name: "critical", value: 90 }
+              y:
+                unit: "percent"
+                yText: "percent (0-100)"
+                min: 0
+                max: 100
+
+---
+# Example 2: Dashboard from ConfigMap (for large dashboards)
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsDashboardTemplate
+metadata:
+  name: disk-io-from-configmap
+  namespace: default
+spec:
+  connectionRef: production
+  clusterName: production-cluster
+  clusterType: cassandra
+  dashboardName: Disk I/O
+  source:
+    configMapRef:
+      name: disk-io-dashboard
+      key: dashboard.json
+
+---
+# Example 3: Sample ConfigMap for the configMapRef example above
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: disk-io-dashboard
+  namespace: default
+data:
+  dashboard.json: |
+    {
+      "filters": [
+        {"label": "data center", "name": "dc", "type": "query", "multi": true, "query": "host_Disk_Read_Bytes", "regex": "dc=([^:]+)"}
+      ],
+      "panels": [
+        {
+          "title": "Disk Read Bytes",
+          "type": "line-chart",
+          "uuid": "disk-read-1",
+          "layout": {"h": 3, "w": 9, "x": 0, "y": 0, "i": "disk-read-1"},
+          "details": {
+            "queries": [{"query": "host_Disk_Read_Bytes{dc=~'$dc'}", "legend": "Read - $host_id"}],
+            "resolution": "low",
+            "useCache": true,
+            "y": {"unit": "bytes"}
+          }
+        },
+        {
+          "title": "Disk Write Bytes",
+          "type": "line-chart",
+          "uuid": "disk-write-1",
+          "layout": {"h": 3, "w": 9, "x": 9, "y": 0, "i": "disk-write-1"},
+          "details": {
+            "queries": [{"query": "host_Disk_Write_Bytes{dc=~'$dc'}", "legend": "Write - $host_id"}],
+            "resolution": "low",
+            "useCache": true,
+            "y": {"unit": "bytes"}
+          }
+        }
+      ]
+    }
+
+---
+# Example 4: DSE cluster dashboard
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsDashboardTemplate
+metadata:
+  name: dse-search-metrics
+  namespace: default
+spec:
+  connectionRef: dse-production
+  clusterName: dse-analytics-cluster
+  clusterType: dse
+  dashboardName: DSE Search Metrics
+  source:
+    inline:
+      dashboard:
+        filters:
+          - label: "data center"
+            name: "dc"
+            type: "query"
+            multi: true
+            query: "dse_solr_query_latency"
+            regex: "dc=([^:]+)"
+        panels:
+          - title: "Search Query Latency"
+            type: "line-chart"
+            uuid: "search-latency-1"
+            layout: { h: 3, w: 18, x: 0, y: 0, i: "search-latency-1" }
+            details:
+              queries:
+                - query: "dse_solr_query_latency{dc=~'$dc'}"
+                  legend: "Query Latency - $host_id"
+              resolution: "low"
+              useCache: true
+              y:
+                unit: "ms"
