@@ -131,8 +131,8 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 		log.Error(err, "Failed to get commitlog archive settings")
 		r.setFailedCondition(ctx, archive, ReasonAPIError, fmt.Sprintf("Failed to get settings: %v", err))
 		var apiErr *axonops.APIError
-		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		if errors.As(err, &apiErr) && !apiErr.IsRetryable() {
+			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
@@ -206,6 +206,10 @@ func (r *AxonOpsCommitlogArchiveReconciler) validateConfig(archive *alertsv1alph
 }
 
 func (r *AxonOpsCommitlogArchiveReconciler) buildPayload(ctx context.Context, archive *alertsv1alpha1.AxonOpsCommitlogArchive) (axonops.CommitlogArchivePayload, error) {
+	transfers := int32(0)
+	if archive.Spec.Transfers != nil {
+		transfers = *archive.Spec.Transfers
+	}
 	payload := axonops.CommitlogArchivePayload{
 		BackupMethod:            "Incremental",
 		Timeout:                 archive.Spec.Timeout,
@@ -214,6 +218,7 @@ func (r *AxonOpsCommitlogArchiveReconciler) buildPayload(ctx context.Context, ar
 		RemoteType:              archive.Spec.RemoteType,
 		RemotePath:              archive.Spec.RemotePath,
 		Datacenters:             archive.Spec.Datacenters,
+		Transfers:               transfers,
 	}
 
 	var configParts []string

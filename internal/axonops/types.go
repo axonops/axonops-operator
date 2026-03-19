@@ -396,6 +396,8 @@ type CommitlogArchivePayload struct {
 	Datacenters             []string `json:"datacenters"`
 	RemoteConfig            string   `json:"remoteConfig"`
 
+	Transfers int32 `json:"transfers"`
+
 	// S3 fields
 	AWSRegion               string `json:"AWSRegion"`
 	AWSStorageClass         string `json:"AWSStorageClass"`
