@@ -42,19 +42,6 @@ locals {
   zone = "ch-gva-2"
 }
 
-variable "exoscale_api_key" {
-  description = "Exoscale API key. Can also be set via the EXOSCALE_API_KEY environment variable."
-  type        = string
-  default     = null
-  sensitive   = true
-}
-
-variable "exoscale_api_secret" {
-  description = "Exoscale API secret."
-  type        = string
-  sensitive   = true
-}
-
 variable "cluster_name" {
   description = "K8s cluster name"
   type        = string
@@ -68,8 +55,6 @@ variable "exoscale_ssh_public_key" {
 }
 
 provider "exoscale" {
-  key    = var.exoscale_api_key
-  secret = var.exoscale_api_secret
 }
 
 resource "exoscale_ssh_key" "ssh_key" {
