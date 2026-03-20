@@ -5,6 +5,19 @@ terraform {
       version = ">= 0.62.0"
     }
   }
+
+  # Exoscale SOS (S3-compatible) remote state.
+  # Credentials and state key are passed via -backend-config in CI.
+  # To bootstrap: create the bucket once with `exo storage mb sos://axonops-operator-tfstate`
+  backend "s3" {
+    bucket                      = "axonops-operator-tfstate"
+    region                      = "ch-gva-2"
+    endpoint                    = "https://sos-ch-gva-2.exo.io"
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    force_path_style            = true
+  }
 }
 
 variable "exoscale_api_key" {

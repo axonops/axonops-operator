@@ -10,6 +10,10 @@ jobs:
     env:
       EXOSCALE_API_SECRET: ${{ secrets.EXOSCALE_API_SECRET }}
       EXOSCALE_API_KEY: ${{ secrets.EXOSCALE_API_KEY }}
+      # S3 backend credentials for Exoscale SOS state storage
+      AWS_ACCESS_KEY_ID: ${{ secrets.EXOSCALE_API_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.EXOSCALE_API_SECRET }}
+      TF_BACKEND_KEY: e2e/pr-${{ github.event.pull_request.number }}/terraform.tfstate
     steps:
       - name: Clone the code
         uses: actions/checkout@v5
@@ -27,8 +31,9 @@ jobs:
       - name: Create Kube cluster to test against
         working-directory: test/e2e/terraform
         run: |
-          terraform init
+          terraform init -backend-config="key=$TF_BACKEND_KEY"
           terraform apply -auto-approve -lock=true \
+            -var="cluster_name=k8s-${{ github.event.pull_request.number }}" \
             -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
           SERVER_IP=$(terraform output -raw server_ip)
           echo "SERVER_IP=$SERVER_IP" >> "$GITHUB_ENV"
@@ -111,9 +116,10 @@ jobs:
             --namespace axonops-e2e \
             --sort-by='.lastTimestamp' || true
 
-      # - name: Destroy Kube cluster
-      #   if: always()
-      #   working-directory: test/e2e/terraform
-      #   run: |
-      #     terraform destroy -auto-approve -lock=true \
-      #       -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+      - name: Destroy Kube cluster
+        if: always()
+        working-directory: test/e2e/terraform
+        run: |
+          terraform init -backend-config="key=$TF_BACKEND_KEY"
+          terraform destroy -auto-approve -lock=true \
+            -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
