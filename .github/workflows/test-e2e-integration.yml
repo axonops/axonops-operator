@@ -28,13 +28,6 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-
-      - name: Build and push operator image
-        run: |
-          OPERATOR_IMG="ttl.sh/axonops-operator-${{ github.run_id }}:2h"
-          make docker-build IMG="$OPERATOR_IMG"
-          docker push "$OPERATOR_IMG"
-          echo "OPERATOR_IMG=$OPERATOR_IMG" >> "$GITHUB_ENV"
       
       - name: Create Kube cluster to test against
         working-directory: test/e2e/terraform
@@ -76,6 +69,13 @@ jobs:
             oci://docker.io/envoyproxy/gateway-helm \
             --version v1.7.1 \
             --namespace envoy-gateway-system --create-namespace
+
+      - name: Build and push operator image
+        run: |
+          OPERATOR_IMG="ttl.sh/axonops-operator-${{ github.run_id }}:2h"
+          make docker-build IMG="$OPERATOR_IMG"
+          docker push "$OPERATOR_IMG"
+          echo "OPERATOR_IMG=$OPERATOR_IMG" >> "$GITHUB_ENV"
 
       - name: Install operator via Helm
         run: |
