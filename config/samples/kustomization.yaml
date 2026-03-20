@@ -18,4 +18,5 @@ resources:
 - kafka_v1alpha1_axonopskafkaconnector.yaml
 - alerts_v1alpha1_axonopsdashboardtemplate.yaml
 - alerts_v1alpha1_axonopscommitlogarchive.yaml
+- alerts_v1alpha1_axonopssilencewindow.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
