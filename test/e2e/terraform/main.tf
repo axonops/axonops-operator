@@ -4,6 +4,10 @@ terraform {
       source  = "exoscale/exoscale"
       version = ">= 0.62.0"
     }
+    aws = {
+      source  = "hashicorp/aws"
+      version = "6.37.0"
+    }
   }
 
   # Exoscale SOS (S3-compatible) remote state.
@@ -12,17 +16,24 @@ terraform {
   backend "s3" {
     bucket = "axonops-operator-tfstate"
     region = "ch-gva-2"
-
-    endpoints {
-      s3 = "https://sos-ch-gva-2.exo.io"
-    }
-
-    skip_credentials_validation = true
-    skip_metadata_api_check     = true
-    skip_region_validation      = true
-    skip_requesting_account_id  = true
-    force_path_style            = true
   }
+}
+
+provider "aws" {
+  endpoints {
+    s3 = "https://sos-${local.zone}.exo.io"
+  }
+
+  region     = local.zone
+
+  # Disable AWS-specific features
+  skip_credentials_validation = true
+  skip_region_validation      = true
+  skip_requesting_account_id  = true
+}
+
+locals {
+  zone = "ch-gva-2"
 }
 
 variable "exoscale_api_key" {
