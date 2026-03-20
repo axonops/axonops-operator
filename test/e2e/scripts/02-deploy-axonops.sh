@@ -3,7 +3,10 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-require_env_vars AXONOPS_ORG_ID TEST_NAMESPACE
+require_env_vars TEST_NAMESPACE
+
+# Ensure the test namespace exists (skipped when SKIP_CLUSTER_CREATE=true in CI).
+kubectl create namespace "${TEST_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Deploying AxonOpsServer CR in namespace '${TEST_NAMESPACE}' ..."
 
