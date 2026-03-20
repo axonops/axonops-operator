@@ -100,7 +100,8 @@ jobs:
             --namespace axonops-operator-system \
             deployment/axonops-operator-controller-manager \
             -c manager --tail=200 || true
-          kubectl get events \
+
+            kubectl get events \
             --namespace axonops-e2e \
             --sort-by='.lastTimestamp' || true
 
