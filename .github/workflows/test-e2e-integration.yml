@@ -63,13 +63,6 @@ jobs:
             --set crds.enabled=true \
             --wait --timeout 300s
 
-      - name: Install Envoy Gateway (Gateway API)
-        run: |
-          helm install eg \
-            oci://docker.io/envoyproxy/gateway-helm \
-            --version v1.7.1 \
-            --namespace envoy-gateway-system --create-namespace
-
       - name: Build and push operator image
         run: |
           OPERATOR_IMG="ttl.sh/axonops-operator-${{ github.run_id }}:2h"
