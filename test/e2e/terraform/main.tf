@@ -15,7 +15,7 @@ terraform {
   # To bootstrap: create the bucket once with `exo storage mb sos://axonops-operator-tfstate`
   backend "s3" {
     bucket                      = "axonops-operator-tfstate"
-    region                      = local.zone
+    region                      = "ch-gva-2"
     skip_region_validation      = true
     skip_credentials_validation = true
     skip_metadata_api_check     = true
