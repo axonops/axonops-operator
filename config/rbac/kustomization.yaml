@@ -22,6 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the axonops-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- alerts_axonopssilencewindow_admin_role.yaml
+- alerts_axonopssilencewindow_editor_role.yaml
+- alerts_axonopssilencewindow_viewer_role.yaml
 - alerts_axonopscommitlogarchive_admin_role.yaml
 - alerts_axonopscommitlogarchive_editor_role.yaml
 - alerts_axonopscommitlogarchive_viewer_role.yaml

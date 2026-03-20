@@ -1,0 +1,17 @@
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsSilenceWindow
+metadata:
+  name: maintenance-window
+  namespace: default
+spec:
+  connectionRef: my-axonops-connection
+  clusterName: production-cluster
+  clusterType: cassandra
+  duration: "3h"
+  active: true
+  recurring: true
+  cronExpression: "0 22 * * 0"
+  # Optional: limit to specific data centers
+  # datacenters:
+  #   - dc1
+  #   - dc2

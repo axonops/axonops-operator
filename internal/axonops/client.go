@@ -1239,3 +1239,87 @@ func (c *Client) DeleteKafkaConnector(ctx context.Context, clusterName, connectC
 	}
 	return nil
 }
+
+// GetSilenceWindows retrieves all silence windows for a cluster
+func (c *Client) GetSilenceWindows(ctx context.Context, clusterType, clusterName string) ([]SilenceWindow, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/silenceWindow/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get silence windows: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+
+	var result []SilenceWindow
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return result, nil
+}
+
+// CreateSilenceWindow creates a silence window
+func (c *Client) CreateSilenceWindow(ctx context.Context, clusterType, clusterName string, silence SilenceWindow) error {
+	reqURL := fmt.Sprintf("%s/api/v1/silenceWindow/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+
+	if silence.ID == "" {
+		silence.ID = uuid.New().String()
+	}
+
+	body, err := json.Marshal(silence)
+	if err != nil {
+		return fmt.Errorf("failed to marshal silence: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create silence window: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
+
+// DeleteSilenceWindow deletes a silence window by ID
+func (c *Client) DeleteSilenceWindow(ctx context.Context, clusterType, clusterName, silenceID string) error {
+	reqURL := fmt.Sprintf("%s/api/v1/silenceWindow/%s/%s/%s/%s",
+		c.baseURL, p(c.orgID), p(clusterType), p(clusterName), p(silenceID))
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete silence window: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}

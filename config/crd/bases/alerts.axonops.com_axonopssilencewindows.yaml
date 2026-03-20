@@ -1,0 +1,201 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: axonopssilencewindows.alerts.axonops.com
+spec:
+  group: alerts.axonops.com
+  names:
+    kind: AxonOpsSilenceWindow
+    listKind: AxonOpsSilenceWindowList
+    plural: axonopssilencewindows
+    shortNames:
+    - axsil
+    singular: axonopssilencewindow
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.clusterName
+      name: Cluster
+      type: string
+    - jsonPath: .spec.duration
+      name: Duration
+      type: string
+    - jsonPath: .spec.recurring
+      name: Recurring
+      type: boolean
+    - jsonPath: .spec.cronExpression
+      name: Cron
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AxonOpsSilenceWindow is the Schema for the axonopssilencewindows API.
+          Manages alert silence windows through the AxonOps API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              AxonOpsSilenceWindowSpec defines the desired state of AxonOpsSilenceWindow.
+              Manages alert silence windows through the AxonOps API.
+            properties:
+              active:
+                default: true
+                description: |-
+                  Active enables or disables the silence window. Defaults to true.
+                  When set to false, an existing silence is deleted from the API.
+                type: boolean
+              clusterName:
+                description: ClusterName is the cluster name in AxonOps
+                minLength: 1
+                type: string
+              clusterType:
+                description: ClusterType is the cluster type
+                enum:
+                - cassandra
+                - kafka
+                - dse
+                type: string
+              connectionRef:
+                description: ConnectionRef is the name of an AxonOpsConnection in
+                  the same namespace.
+                minLength: 1
+                type: string
+              cronExpression:
+                default: 0 * * * *
+                description: |-
+                  CronExpression defines the schedule for recurring silences (e.g., "0 1 * * *").
+                  Also used as the matching key to identify existing silences in the API.
+                type: string
+              datacenters:
+                description: |-
+                  Datacenters optionally limits silence to specific data centers.
+                  Empty means all data centers.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+              duration:
+                description: Duration is how long the silence lasts (e.g., "1h", "30m",
+                  "3h")
+                minLength: 1
+                type: string
+              recurring:
+                description: Recurring enables recurring silence on a cron schedule.
+                type: boolean
+            required:
+            - clusterName
+            - clusterType
+            - connectionRef
+            - duration
+            type: object
+          status:
+            description: AxonOpsSilenceWindowStatus defines the observed state of
+              AxonOpsSilenceWindow.
+            properties:
+              conditions:
+                description: Conditions represent the current state of the resource.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  sync
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration reflects the generation most recently
+                  observed
+                format: int64
+                type: integer
+              syncedSilenceID:
+                description: SyncedSilenceID is the ID assigned by the AxonOps API
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
