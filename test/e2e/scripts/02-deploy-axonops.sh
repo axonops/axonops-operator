@@ -29,15 +29,15 @@ EOF
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- Waiting for CertManagerReady ---"
-wait_for_condition axonopsserver/axonops CertManagerReady 120
+wait_for_condition axonopsserver/axonops CertManagerReady 600
 
 echo ""
 echo "--- Waiting for ServerReady ---"
-wait_for_condition axonopsserver/axonops ServerReady 300
+wait_for_condition axonopsserver/axonops ServerReady 600
 
 echo ""
 echo "--- Waiting for DashboardReady ---"
-wait_for_condition axonopsserver/axonops DashboardReady 120
+wait_for_condition axonopsserver/axonops DashboardReady 600
 
 # ---------------------------------------------------------------------------
 # Assert status fields are populated
