@@ -21,12 +21,17 @@ rules:
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsadaptiverepairs
+  - axonopsalertendpoints
   - axonopsalertroutes
+  - axonopscommitlogarchives
+  - axonopsdashboardtemplates
   - axonopshealthcheckhttps
   - axonopshealthcheckshells
   - axonopshealthchecktcps
   - axonopslogalerts
   - axonopsmetricalerts
+  - axonopsscheduledrepairs
   verbs:
   - create
   - delete
@@ -38,23 +43,33 @@ rules:
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsadaptiverepairs/finalizers
+  - axonopsalertendpoints/finalizers
   - axonopsalertroutes/finalizers
+  - axonopscommitlogarchives/finalizers
+  - axonopsdashboardtemplates/finalizers
   - axonopshealthcheckhttps/finalizers
   - axonopshealthcheckshells/finalizers
   - axonopshealthchecktcps/finalizers
   - axonopslogalerts/finalizers
   - axonopsmetricalerts/finalizers
+  - axonopsscheduledrepairs/finalizers
   verbs:
   - update
 - apiGroups:
   - alerts.axonops.com
   resources:
+  - axonopsadaptiverepairs/status
+  - axonopsalertendpoints/status
   - axonopsalertroutes/status
+  - axonopscommitlogarchives/status
+  - axonopsdashboardtemplates/status
   - axonopshealthcheckhttps/status
   - axonopshealthcheckshells/status
   - axonopshealthchecktcps/status
   - axonopslogalerts/status
   - axonopsmetricalerts/status
+  - axonopsscheduledrepairs/status
   verbs:
   - get
   - patch
@@ -72,6 +87,32 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - backups.axonops.com
+  resources:
+  - axonopsbackups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - backups.axonops.com
+  resources:
+  - axonopsbackups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - backups.axonops.com
+  resources:
+  - axonopsbackups/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - cert-manager.io
   resources:
@@ -142,6 +183,38 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopskafkaacls
+  - axonopskafkaconnectors
+  - axonopskafkatopics
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopskafkaacls/finalizers
+  - axonopskafkaconnectors/finalizers
+  - axonopskafkatopics/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kafka.axonops.com
+  resources:
+  - axonopskafkaacls/status
+  - axonopskafkaconnectors/status
+  - axonopskafkatopics/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - networking.k8s.io
   resources:
