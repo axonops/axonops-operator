@@ -29,7 +29,7 @@ EOF
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- Waiting for CertManagerReady ---"
-wait_for_condition axonopsserver/axonops CertManagerReady 600
+wait_for_condition axonopsserver/axonops CertManagerReady 120
 
 echo ""
 echo "--- Waiting for ServerReady ---"
