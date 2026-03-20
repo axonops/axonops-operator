@@ -49,10 +49,15 @@ variable "exoscale_api_key" {
   sensitive   = true
 }
 
-variable "exoscale_api_secret" {
-  description = "Exoscale API secret. Can also be set via the EXOSCALE_API_SECRET environment variable."
+variable "cluster_name" {
+  description = "K8s cluster name"
   type        = string
-  default     = null
+  default     = "k8s"
+}
+
+variable "exoscale_ssh_public_key" {
+  description = "SSH public key allowing access to these instances"
+  type        = string
   sensitive   = true
 }
 
@@ -77,6 +82,7 @@ module "k3s" {
   ssh_key_name      = "github-ssh-key"
   agent_count       = 3
   ssh_allowed_cidrs = ["0.0.0.0/0"]
+  cluster_name      = var.cluster_name
 }
 
 output "server_ip" {
