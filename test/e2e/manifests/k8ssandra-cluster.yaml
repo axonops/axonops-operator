@@ -1,0 +1,61 @@
+apiVersion: k8ssandra.io/v1alpha1
+kind: K8ssandraCluster
+metadata:
+  annotations:
+  name: ${AXONOPS_CLUSTER_NAME}
+  namespace: ${K8SSANDRA_NAMESPACE}
+spec:
+  auth: true
+  cassandra:
+    datacenters:
+    - config:
+        jvmOptions:
+          gc: G1GC
+          heap_initial_size: 1G
+          heap_max_size: 1G
+      containers:
+      - env:
+        - name: AXON_AGENT_KEY
+          value: not-used-on-prems
+        - name: AXON_AGENT_ORG
+          value: "${AXONOPS_ORG_ID}"
+        - name: AXON_AGENT_SERVER_HOST
+          value: "${AXON_AGENT_SERVER_HOST}"
+        - name: AXON_AGENT_SERVER_PORT
+          value: "1888"
+        - name: AXON_AGENT_TLS_MODE
+          value: disabled
+        name: cassandra
+      extraVolumes:
+        pvcs:
+        - mountPath: /var/lib/axonops
+          name: axonops-data
+          pvcSpec:
+            accessModes:
+            - ReadWriteOnce
+            resources:
+              requests:
+                storage: 512Mi
+      metadata:
+        name: testdc1
+      size: 1
+      stopped: false
+      storageConfig:
+        cassandraDataVolumeClaimSpec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+    resources:
+      limits:
+        cpu: 1
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+    serverImage: ghcr.io/axonops/k8ssandra/cassandra:5.0.6-v0.1.113-1.4.3
+    serverType: cassandra
+    serverVersion: 5.0.6
+    softPodAntiAffinity: true
+  secretsProvider: internal
