@@ -1,0 +1,19 @@
+apiVersion: alerts.axonops.com/v1alpha1
+kind: AxonOpsLogCollector
+metadata:
+  name: gc-log-collector
+  namespace: axonops
+spec:
+  connectionRef: axonops-connection
+  clusterName: production
+  clusterType: cassandra
+  name: GC Log Collector
+  filename: /var/log/cassandra/gc.log.0.current
+  interval: "5s"
+  timeout: "1m"
+  dateFormat: "yyyy-MM-ddTHH:mm:ssZ"
+  infoRegex: ""
+  warningRegex: ""
+  errorRegex: ""
+  debugRegex: ""
+  readonly: true
