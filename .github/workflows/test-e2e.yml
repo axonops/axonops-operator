@@ -1,32 +1,37 @@
 name: E2E Tests
 
 on:
-  push:
   pull_request:
 
 jobs:
   test-e2e:
-    name: Run on Ubuntu
+    name: E2E tests
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
         uses: actions/checkout@v5
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: hashicorp/setup-terraform@v3
         with:
-          go-version-file: go.mod
+          terraform_wrapper: false
 
-      - name: Install the latest version of kind
-        run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-$(go env GOARCH)
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+      - name: Create Kube cluster to test against
+        uses: op5dev/tf-via-pr@v13
+        with:
+          working-directory: test/e2e/terraform
+          command: "apply"
+          arg-lock: true
+          arg-auto-approve: true
+          plan-encrypt: ${{ secrets.PASSPHRASE }}
+          arg-var: "exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
 
-      - name: Verify kind installation
-        run: kind version
-
-      - name: Running Test e2e
-        run: |
-          go mod tidy
-          make test-e2e
+      - name: Destroy Kube cluster
+        if: always()
+        uses: op5dev/tf-via-pr@v13
+        with:
+          working-directory: test/e2e/terraform
+          command: "destroy"
+          arg-lock: true
+          arg-auto-approve: true
+          plan-encrypt: ${{ secrets.PASSPHRASE }}
+          arg-var: "exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
