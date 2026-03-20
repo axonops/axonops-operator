@@ -117,10 +117,10 @@ jobs:
             --namespace axonops-e2e \
             --sort-by='.lastTimestamp' || true
 
-      - name: Destroy Kube cluster
-        if: always()
-        working-directory: test/e2e/terraform
-        run: |
-          terraform init -backend-config="key=$TF_BACKEND_KEY"
-          terraform destroy -auto-approve -lock=true \
-            -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+      # - name: Destroy Kube cluster
+      #   if: always()
+      #   working-directory: test/e2e/terraform
+      #   run: |
+      #     terraform init -backend-config="key=$TF_BACKEND_KEY"
+      #     terraform destroy -auto-approve -lock=true \
+      #       -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
