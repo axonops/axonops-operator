@@ -10,9 +10,10 @@ jobs:
     env:
       EXOSCALE_API_SECRET: ${{ secrets.EXOSCALE_API_SECRET }}
       EXOSCALE_API_KEY: ${{ secrets.EXOSCALE_API_KEY }}
-      # S3 backend credentials for Exoscale SOS state storage
+      # S3 backend credentials and endpoint for Exoscale SOS state storage
       AWS_ACCESS_KEY_ID: ${{ secrets.EXOSCALE_API_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.EXOSCALE_API_SECRET }}
+      AWS_ENDPOINT_URL_S3: https://sos-ch-gva-2.exo.io
       TF_BACKEND_KEY: e2e/pr-${{ github.event.pull_request.number }}/terraform.tfstate
     steps:
       - name: Clone the code

@@ -14,7 +14,13 @@ terraform {
   # Credentials and state key are passed via -backend-config in CI.
   # To bootstrap: create the bucket once with `exo storage mb sos://axonops-operator-tfstate`
   backend "s3" {
-    bucket = "axonops-operator-tfstate"
+    bucket                      = "axonops-operator-tfstate"
+    region                      = local.zone
+    skip_region_validation      = true
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    force_path_style            = true
+    endpoint                    = "https://sos-ch-gva-2.exo.io"
   }
 }
 
@@ -23,7 +29,7 @@ provider "aws" {
     s3 = "https://sos-${local.zone}.exo.io"
   }
 
-  region     = local.zone
+  region = local.zone
 
   # Disable AWS-specific features
   skip_credentials_validation = true
