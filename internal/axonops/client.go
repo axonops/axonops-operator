@@ -1240,6 +1240,66 @@ func (c *Client) DeleteKafkaConnector(ctx context.Context, clusterName, connectC
 	return nil
 }
 
+// GetLogCollectors retrieves all log collectors for a cluster
+func (c *Client) GetLogCollectors(ctx context.Context, clusterType, clusterName string) ([]LogCollector, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/logcollectors/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get log collectors: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+
+	var result []LogCollector
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return result, nil
+}
+
+// PutLogCollectors replaces the full list of log collectors for a cluster.
+// The AxonOps API expects a form-encoded body with field "addlogs".
+func (c *Client) PutLogCollectors(ctx context.Context, clusterType, clusterName string, collectors []LogCollector) error {
+	reqURL := fmt.Sprintf("%s/api/v1/logcollectors/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+
+	jsonData, err := json.Marshal(collectors)
+	if err != nil {
+		return fmt.Errorf("failed to marshal log collectors: %w", err)
+	}
+
+	formData := url.Values{}
+	formData.Set("addlogs", string(jsonData))
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to put log collectors: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
+
 // GetSilenceWindows retrieves all silence windows for a cluster
 func (c *Client) GetSilenceWindows(ctx context.Context, clusterType, clusterName string) ([]SilenceWindow, error) {
 	reqURL := fmt.Sprintf("%s/api/v1/silenceWindow/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))

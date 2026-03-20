@@ -30,6 +30,7 @@ rules:
   - axonopshealthcheckshells
   - axonopshealthchecktcps
   - axonopslogalerts
+  - axonopslogcollectors
   - axonopsmetricalerts
   - axonopsscheduledrepairs
   - axonopssilencewindows
@@ -53,6 +54,7 @@ rules:
   - axonopshealthcheckshells/finalizers
   - axonopshealthchecktcps/finalizers
   - axonopslogalerts/finalizers
+  - axonopslogcollectors/finalizers
   - axonopsmetricalerts/finalizers
   - axonopsscheduledrepairs/finalizers
   - axonopssilencewindows/finalizers
@@ -70,6 +72,7 @@ rules:
   - axonopshealthcheckshells/status
   - axonopshealthchecktcps/status
   - axonopslogalerts/status
+  - axonopslogcollectors/status
   - axonopsmetricalerts/status
   - axonopsscheduledrepairs/status
   - axonopssilencewindows/status
