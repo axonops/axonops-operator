@@ -1,0 +1,120 @@
+name: E2E Integration Testing
+
+on:
+  pull_request:
+
+jobs:
+  test-e2e:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    env:
+      EXOSCALE_API_SECRET: ${{ secrets.EXOSCALE_API_SECRET }}
+      EXOSCALE_API_KEY: ${{ secrets.EXOSCALE_API_KEY }}
+      # S3 backend credentials and endpoint for Exoscale SOS state storage
+      AWS_ACCESS_KEY_ID: ${{ secrets.EXOSCALE_API_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.EXOSCALE_API_SECRET }}
+      AWS_ENDPOINT_URL_S3: https://sos-ch-gva-2.exo.io
+      TF_BACKEND_KEY: e2e/pr-${{ github.event.pull_request.number }}/terraform.tfstate
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Build and push operator image
+        run: |
+          OPERATOR_IMG="ttl.sh/axonops-operator-${{ github.run_id }}:2h"
+          make docker-build IMG="$OPERATOR_IMG"
+          docker push "$OPERATOR_IMG"
+          echo "OPERATOR_IMG=$OPERATOR_IMG" >> "$GITHUB_ENV"
+      
+      - name: Create Kube cluster to test against
+        working-directory: test/e2e/terraform
+        run: |
+          terraform init -backend-config="key=$TF_BACKEND_KEY"
+          terraform apply -auto-approve -lock=true \
+            -var="cluster_name=k8s-${{ github.event.pull_request.number }}" \
+            -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+          SERVER_IP=$(terraform output -raw server_ip)
+          echo "SERVER_IP=$SERVER_IP" >> "$GITHUB_ENV"
+
+      - name: Fetch kubeconfig from cluster
+        run: |
+          ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts
+          for i in $(seq 1 20); do
+            ssh ubuntu@"$SERVER_IP" "sudo test -f /etc/rancher/k3s/k3s.yaml" 2>/dev/null && break
+            echo "Waiting for k3s to be ready ($i/20)..."
+            sleep 15
+          done
+          ssh ubuntu@"$SERVER_IP" \
+            "sudo cat /etc/rancher/k3s/k3s.yaml | sed 's/127.0.0.1/$SERVER_IP/g'" \
+            > /tmp/kubeconfig.yaml
+          echo "KUBECONFIG=/tmp/kubeconfig.yaml" >> "$GITHUB_ENV"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install cert-manager
+        run: |
+          helm upgrade --install cert-manager \
+            oci://quay.io/jetstack/charts/cert-manager \
+            --namespace cert-manager --create-namespace \
+            --set crds.enabled=true \
+            --wait --timeout 300s
+
+      - name: Install Envoy Gateway (Gateway API)
+        run: |
+          helm install eg \
+            oci://docker.io/envoyproxy/gateway-helm \
+            --version v1.7.1 \
+            --namespace envoy-gateway-system --create-namespace
+
+      - name: Install operator via Helm
+        run: |
+          helm upgrade --install axonops-operator ./charts/axonops-operator/ \
+            --namespace axonops-operator-system --create-namespace \
+            --set manager.image.repository="${OPERATOR_IMG%:*}" \
+            --set manager.image.tag="${OPERATOR_IMG#*:}" \
+            --wait --timeout 300s
+          kubectl wait --for=condition=Available \
+            deployment/axonops-operator-controller-manager \
+            --namespace axonops-operator-system --timeout=300s
+
+      - name: Run E2E tests
+        env:
+          SKIP_CLUSTER_CREATE: "true"
+          SKIP_TEARDOWN: "true"
+          AXONOPS_HOST: ${{ secrets.AXONOPS_HOST }}
+          AXONOPS_ORG_ID: ${{ secrets.AXONOPS_ORG_ID }}
+          AXONOPS_CLUSTER_NAME: e2e-test-cluster
+          AXONOPS_KAFKA_CLUSTER: e2e-kafka-cluster
+          TEST_NAMESPACE: axonops-e2e
+          OPERATOR_IMG: ${{ env.OPERATOR_IMG }}
+        run: bash test/e2e/run-e2e.sh
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          kubectl logs \
+            --namespace axonops-operator-system \
+            deployment/axonops-operator-controller-manager \
+            -c manager --tail=200 || true
+          kubectl get events \
+            --namespace axonops-e2e \
+            --sort-by='.lastTimestamp' || true
+
+      - name: Destroy Kube cluster
+        if: always()
+        working-directory: test/e2e/terraform
+        run: |
+          terraform init -backend-config="key=$TF_BACKEND_KEY"
+          terraform destroy -auto-approve -lock=true \
+            -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
