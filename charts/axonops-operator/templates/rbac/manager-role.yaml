@@ -32,6 +32,7 @@ rules:
   - axonopslogalerts
   - axonopsmetricalerts
   - axonopsscheduledrepairs
+  - axonopssilencewindows
   verbs:
   - create
   - delete
@@ -54,6 +55,7 @@ rules:
   - axonopslogalerts/finalizers
   - axonopsmetricalerts/finalizers
   - axonopsscheduledrepairs/finalizers
+  - axonopssilencewindows/finalizers
   verbs:
   - update
 - apiGroups:
@@ -70,6 +72,7 @@ rules:
   - axonopslogalerts/status
   - axonopsmetricalerts/status
   - axonopsscheduledrepairs/status
+  - axonopssilencewindows/status
   verbs:
   - get
   - patch
