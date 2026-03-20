@@ -64,7 +64,7 @@ resource "exoscale_ssh_key" "ssh_key" {
 
 module "k3s" {
   source            = "github.com/digitalis-io/terraform-exoscale-k3s"
-  ssh_key_name      = "github-ssh-key"
+  ssh_key_name      = exoscale_ssh_key.ssh_key.name
   agent_count       = 3
   ssh_allowed_cidrs = ["0.0.0.0/0"]
   cluster_name      = var.cluster_name
