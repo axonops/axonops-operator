@@ -19,7 +19,8 @@ terraform {
     skip_region_validation      = true
     skip_credentials_validation = true
     skip_metadata_api_check     = true
-    force_path_style            = true
+    use_path_style              = true
+    skip_requesting_account_id  = true
     endpoint                    = "https://sos-ch-gva-2.exo.io"
   }
 }
