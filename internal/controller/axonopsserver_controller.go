@@ -353,6 +353,13 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		}
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "CertManagerReady",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: server.Generation,
+			Reason:             "IssuerReady",
+			Message:            "cert-manager is available and ClusterIssuer is ready",
+		})
 	}
 
 	var timeSeriesSecretName, searchSecretName string
