@@ -49,16 +49,16 @@ variable "exoscale_api_key" {
   sensitive   = true
 }
 
+variable "exoscale_api_secret" {
+  description = "Exoscale API secret."
+  type        = string
+  sensitive   = true
+}
+
 variable "cluster_name" {
   description = "K8s cluster name"
   type        = string
   default     = "k8s"
-}
-
-variable "exoscale_ssh_public_key" {
-  description = "SSH public key allowing access to these instances"
-  type        = string
-  sensitive   = true
 }
 
 variable "exoscale_ssh_public_key" {
@@ -73,7 +73,7 @@ provider "exoscale" {
 }
 
 resource "exoscale_ssh_key" "ssh_key" {
-  name       = "github-ssh-key"
+  name       = "${var.cluster_name}-ssh-key"
   public_key = var.exoscale_ssh_public_key
 }
 
