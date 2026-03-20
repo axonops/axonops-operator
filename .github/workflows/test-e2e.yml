@@ -16,22 +16,15 @@ jobs:
           terraform_wrapper: false
 
       - name: Create Kube cluster to test against
-        uses: op5dev/tf-via-pr@v13
-        with:
-          working-directory: test/e2e/terraform
-          command: "apply"
-          arg-lock: true
-          arg-auto-approve: true
-          plan-encrypt: ${{ secrets.PASSPHRASE }}
-          arg-var: "exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+        working-directory: test/e2e/terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve -lock=true \
+            -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
 
       - name: Destroy Kube cluster
         if: always()
-        uses: op5dev/tf-via-pr@v13
-        with:
-          working-directory: test/e2e/terraform
-          command: "destroy"
-          arg-lock: true
-          arg-auto-approve: true
-          plan-encrypt: ${{ secrets.PASSPHRASE }}
-          arg-var: "exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+        working-directory: test/e2e/terraform
+        run: |
+          terraform destroy -auto-approve -lock=true \
+            -var="exoscale_ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
