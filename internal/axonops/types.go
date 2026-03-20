@@ -419,3 +419,13 @@ type CommitlogArchivePayload struct {
 type CommitlogArchiveDeletePayload struct {
 	Datacenters []string `json:"datacenters"`
 }
+
+// SilenceWindow represents a silence window entry from the AxonOps API
+type SilenceWindow struct {
+	ID          string   `json:"ID"`
+	Active      bool     `json:"Active"`
+	CronExpr    string   `json:"CronExpr"`
+	IsRecurring bool     `json:"IsRecurring"`
+	Duration    string   `json:"Duration"`
+	DCs         []string `json:"DCs"`
+}
