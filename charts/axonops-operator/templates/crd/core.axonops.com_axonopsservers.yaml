@@ -14,7 +14,11 @@ spec:
     singular: axonopsserver
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.pause
+      name: Paused
+      type: boolean
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: AxonOpsServer is the Schema for the axonopsservers API; it's
@@ -171,6 +175,13 @@ spec:
                   InitImage is the container image used for init containers (e.g., volume permission fixing).
                   Defaults to "docker.io/library/busybox:1.37.0" if not specified. Must be pinned to a specific version.
                 type: string
+              pause:
+                default: false
+                description: |-
+                  Pause stops the controller from reconciling this AxonOpsServer resource.
+                  Existing owned resources (StatefulSets, Deployments, Services, Secrets,
+                  Certificates) are left untouched. Deletion still proceeds normally.
+                type: boolean
               search:
                 description: Search configures the axondb-search component
                 properties:

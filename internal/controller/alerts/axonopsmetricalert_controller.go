@@ -105,6 +105,9 @@ func (r *AxonOpsMetricAlertReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	// Resolve AxonOps API client from connection or environment
 	apiClient, err := ResolveAPIClient(ctx, r.Client, alert.Namespace, alert.Spec.ConnectionRef)
+	if errors.Is(err, ErrConnectionPaused) {
+		return HandleConnectionPaused(ctx, r.Client, alert, &alert.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{

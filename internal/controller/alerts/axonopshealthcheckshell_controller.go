@@ -103,6 +103,9 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 
 	// Resolve AxonOps API client
 	apiClient, err := ResolveAPIClient(ctx, r.Client, healthcheck.Namespace, healthcheck.Spec.ConnectionRef)
+	if errors.Is(err, ErrConnectionPaused) {
+		return HandleConnectionPaused(ctx, r.Client, healthcheck, &healthcheck.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		r.setFailedCondition(ctx, healthcheck, ReasonConnectionError, fmt.Sprintf("Failed to resolve connection: %v", err))

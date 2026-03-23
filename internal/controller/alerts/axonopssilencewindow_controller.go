@@ -98,6 +98,9 @@ func (r *AxonOpsSilenceWindowReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	apiClient, err := ResolveAPIClient(ctx, r.Client, silence.Namespace, silence.Spec.ConnectionRef)
+	if errors.Is(err, ErrConnectionPaused) {
+		return HandleConnectionPaused(ctx, r.Client, silence, &silence.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&silence.Status.Conditions, metav1.Condition{

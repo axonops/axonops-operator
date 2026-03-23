@@ -124,6 +124,9 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Resolve AxonOps API client
 	apiClient, err := common.ResolveAPIClient(ctx, r.Client, backup.Namespace, backup.Spec.ConnectionRef)
+	if errors.Is(err, common.ErrConnectionPaused) {
+		return common.HandleConnectionPaused(ctx, r.Client, backup, &backup.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&backup.Status.Conditions, metav1.Condition{

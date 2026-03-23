@@ -237,6 +237,40 @@ func (c *Client) DeleteMetricAlertRule(ctx context.Context, clusterType, cluster
 	return nil
 }
 
+// GetDashboards fetches all dashboards with their panels for a cluster.
+// This uses the same endpoint as ResolveDashboardPanel but returns the full
+// parsed response instead of resolving a single panel.
+func (c *Client) GetDashboards(ctx context.Context, clusterType, clusterName string) ([]Dashboard, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dashboards: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	var result DashboardTemplateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode dashboard response: %w", err)
+	}
+
+	return result.Dashboards, nil
+}
+
 // ResolveDashboardPanel resolves a dashboard and chart name to a panel UUID (correlation ID)
 func (c *Client) ResolveDashboardPanel(ctx context.Context, clusterType, clusterName, dashboardName, chartTitle string) (string, error) {
 	reqURL := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))

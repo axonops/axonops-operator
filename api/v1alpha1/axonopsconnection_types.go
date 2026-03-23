@@ -22,6 +22,13 @@ import (
 
 // AxonOpsConnectionSpec defines the desired state of AxonOpsConnection
 type AxonOpsConnectionSpec struct {
+	// Pause prevents all controllers that depend on this connection from making
+	// AxonOps API calls. Dependant resources retain their current status fields.
+	// Deletion of dependant resources still runs finalizers.
+	// +optional
+	// +kubebuilder:default=false
+	Pause bool `json:"pause,omitempty"`
+
 	// OrgID is the organization ID for AxonOps
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -103,6 +110,7 @@ type AxonOpsConnectionStatus struct {
 // +kubebuilder:printcolumn:name="OrgID",type=string,JSONPath=`.spec.orgId`
 // +kubebuilder:printcolumn:name="Host",type=string,JSONPath=`.spec.host`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Paused",type=boolean,JSONPath=`.spec.pause`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // AxonOpsConnection is the Schema for the axonopsconnections API
