@@ -48,7 +48,8 @@ Kubernetes operator.`,
 	pf.StringVar(&opts.ClusterType, "cluster-type", "cassandra", "Cluster type (cassandra, kafka, dse)")
 	pf.BoolVar(&opts.TLSSkipVerify, "tls-skip-verify", false, "Skip TLS certificate verification")
 	pf.StringVar(&opts.Namespace, "namespace", "default", "Kubernetes namespace for generated resources")
-	pf.StringVar(&opts.ConnectionName, "connection-name", "axonops-connection", "Name for the generated AxonOpsConnection resource")
+	pf.StringVar(&opts.ConnectionName, "connection-name", "axonops-connection",
+		"Name for the generated AxonOpsConnection resource")
 
 	// Export command
 	exportCmd := &cobra.Command{

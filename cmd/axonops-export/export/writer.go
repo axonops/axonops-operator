@@ -54,9 +54,13 @@ func writeDryRun(resources []Resource, w io.Writer) error {
 	for _, r := range resources {
 		counts[r.Kind]++
 	}
-	fmt.Fprintf(w, "Dry run — %d resources would be exported:\n", len(resources))
+	if _, err := fmt.Fprintf(w, "Dry run — %d resources would be exported:\n", len(resources)); err != nil {
+		return err
+	}
 	for kind, n := range counts {
-		fmt.Fprintf(w, "  %s: %d\n", kind, n)
+		if _, err := fmt.Fprintf(w, "  %s: %d\n", kind, n); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -95,7 +99,7 @@ func writeDir(resources []Resource, dir string) error {
 	return nil
 }
 
-func writeStream(resources []Resource, output string) error {
+func writeStream(resources []Resource, output string) (retErr error) {
 	var w io.Writer
 	if output == "-" || output == "" {
 		w = os.Stdout
@@ -104,19 +108,27 @@ func writeStream(resources []Resource, output string) error {
 		if err != nil {
 			return fmt.Errorf("creating output file: %w", err)
 		}
-		defer f.Close()
+		defer func() {
+			if err := f.Close(); err != nil && retErr == nil {
+				retErr = fmt.Errorf("closing output file: %w", err)
+			}
+		}()
 		w = f
 	}
 
 	for i, r := range resources {
 		if i > 0 {
-			fmt.Fprintln(w, "---")
+			if _, err := fmt.Fprintln(w, "---"); err != nil {
+				return fmt.Errorf("writing separator: %w", err)
+			}
 		}
 		data, err := marshalYAML(r.Object)
 		if err != nil {
 			return fmt.Errorf("marshalling %s/%s: %w", r.Kind, r.Name, err)
 		}
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			return fmt.Errorf("writing %s/%s: %w", r.Kind, r.Name, err)
+		}
 	}
 	return nil
 }

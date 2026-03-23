@@ -33,7 +33,10 @@ func TestToDNSLabel(t *testing.T) {
 		{"--leading--trailing--", "leading-trailing"},
 		{"special!@#$chars", "specialchars"},
 		{"", "unnamed"},
-		{"a very long name that exceeds sixty three characters limit for dns labels in kubernetes", "a-very-long-name-that-exceeds-sixty-three-characters-limit-for"},
+		{
+			"a very long name that exceeds sixty three characters limit for dns labels in kubernetes",
+			"a-very-long-name-that-exceeds-sixty-three-characters-limit-for",
+		},
 		{"trailing-dash-at-63-chars--------------------------------------------x", "trailing-dash-at-63-chars-x"},
 	}
 
