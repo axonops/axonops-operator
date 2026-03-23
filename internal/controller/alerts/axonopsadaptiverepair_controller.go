@@ -107,6 +107,9 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 
 	// Resolve AxonOps API client
 	apiClient, err := ResolveAPIClient(ctx, r.Client, repair.Namespace, repair.Spec.ConnectionRef)
+	if errors.Is(err, ErrConnectionPaused) {
+		return HandleConnectionPaused(ctx, r.Client, repair, &repair.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		r.setFailedCondition(ctx, repair, ReasonConnectionError, fmt.Sprintf("Failed to resolve connection: %v", err))

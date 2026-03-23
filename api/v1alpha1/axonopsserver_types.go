@@ -53,6 +53,13 @@ type AxonOpsTLSConfig struct {
 // AxonOpsServerSpec defines the desired state of AxonOpsServer
 // All components are enabled by default. Set component.enabled=false to disable.
 type AxonOpsServerSpec struct {
+	// Pause stops the controller from reconciling this AxonOpsServer resource.
+	// Existing owned resources (StatefulSets, Deployments, Services, Secrets,
+	// Certificates) are left untouched. Deletion still proceeds normally.
+	// +optional
+	// +kubebuilder:default=false
+	Pause bool `json:"pause,omitempty"`
+
 	// Server configures the axon-server component
 	// +optional
 	Server *AxonServerComponent `json:"server,omitempty"`
@@ -120,6 +127,7 @@ type AxonOpsServerStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Paused",type=boolean,JSONPath=`.spec.pause`
 
 // AxonOpsServer is the Schema for the axonopsservers API; it's the top-level resource for AxonOpsSever, TimeSeries and SearchDB
 type AxonOpsServer struct {

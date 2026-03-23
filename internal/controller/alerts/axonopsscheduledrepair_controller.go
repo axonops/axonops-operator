@@ -114,6 +114,9 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	apiClient, err := ResolveAPIClient(ctx, r.Client, repair.Namespace, repair.Spec.ConnectionRef)
+	if errors.Is(err, ErrConnectionPaused) {
+		return HandleConnectionPaused(ctx, r.Client, repair, &repair.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{

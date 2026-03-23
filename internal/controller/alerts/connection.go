@@ -19,6 +19,8 @@ package alerts
 import (
 	"context"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/axonops/axonops-operator/internal/axonops"
@@ -27,9 +29,23 @@ import (
 
 // Condition reasons shared across controller groups (re-exported from common)
 const (
-	ReasonConnectionError = common.ReasonConnectionError
-	ReasonAPIError        = common.ReasonAPIError
+	ReasonConnectionError  = common.ReasonConnectionError
+	ReasonAPIError         = common.ReasonAPIError
+	ReasonConnectionPaused = common.ReasonConnectionPaused
 )
+
+// ErrConnectionPaused is re-exported from common for use in alert controllers.
+var ErrConnectionPaused = common.ErrConnectionPaused
+
+// HandleConnectionPaused delegates to the common pause handler.
+func HandleConnectionPaused(ctx context.Context, c client.Client, obj client.Object, conditions *[]metav1.Condition) (ctrl.Result, error) {
+	return common.HandleConnectionPaused(ctx, c, obj, conditions)
+}
+
+// ClearPausedCondition delegates to the common pause condition remover.
+func ClearPausedCondition(conditions *[]metav1.Condition) {
+	common.ClearPausedCondition(conditions)
+}
 
 // Condition reasons specific to alert and route resources
 const (
