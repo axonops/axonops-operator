@@ -61,7 +61,7 @@ func TestConvertFilters(t *testing.T) {
 		{Name: "keyspace", Value: []string{"system"}},
 		{Name: "group_by", Value: []string{"host_id"}},
 		{Name: "unknown_filter", Value: []string{"val"}}, // Should be ignored
-		{Name: "rack", Value: []string{}},                 // Empty value, should be skipped
+		{Name: "rack", Value: []string{}},                // Empty value, should be skipped
 	}
 
 	got := convertFilters(apiFilters)
