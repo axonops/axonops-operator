@@ -46,3 +46,30 @@ spec:
   # server:
   #   nodeSelector:
   #     role: infra
+
+  # Example: hostPath storage (single-node / bare-metal, no StorageClass required)
+  # See hostpath-storage-example.yaml for the full annotated example.
+  # timeSeries:
+  #   storageConfig: {}
+  #   extraVolumes:
+  #     - name: timeseries-data
+  #       hostPath:
+  #         path: /data/axon-timeseries
+  #         type: DirectoryOrCreate
+  #   extraVolumeMounts:
+  #     - name: timeseries-data
+  #       mountPath: /var/lib/cassandra
+  #   nodeSelector:
+  #     kubernetes.io/hostname: my-node
+  # search:
+  #   storageConfig: {}
+  #   extraVolumes:
+  #     - name: search-data
+  #       hostPath:
+  #         path: /data/axon-search
+  #         type: DirectoryOrCreate
+  #   extraVolumeMounts:
+  #     - name: search-data
+  #       mountPath: /var/lib/opensearch
+  #   nodeSelector:
+  #     kubernetes.io/hostname: my-node

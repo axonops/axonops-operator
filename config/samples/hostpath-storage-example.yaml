@@ -1,0 +1,54 @@
+# AxonOpsServer with hostPath storage for single-node / dev clusters
+#
+# Use this pattern when you do not have a StorageClass available (e.g., bare-metal
+# single-node clusters, Kind, or on-premises environments without a provisioner).
+#
+# Prerequisites on the host node:
+#   sudo mkdir -p /data/axon-timeseries /data/axon-search
+#   sudo chown -R 999:999 /data/axon-timeseries /data/axon-search
+#
+# Alternatively, use `type: DirectoryOrCreate` (shown below) and set permissions
+# via an initContainer or by relying on the component's own init logic.
+#
+# WARNING: hostPath volumes are node-local. Pods must be scheduled to the same
+# node where the data directories reside. Use nodeSelector or nodeName accordingly.
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsServer
+metadata:
+  name: axonops-hostpath
+  namespace: axonops
+spec:
+  server:
+    orgName: "my-organisation"
+
+  timeSeries:
+    # Disable the default PersistentVolumeClaim — hostPath replaces it
+    storageConfig: {}
+    extraVolumes:
+      - name: timeseries-data
+        hostPath:
+          path: /data/axon-timeseries
+          type: DirectoryOrCreate
+    extraVolumeMounts:
+      - name: timeseries-data
+        mountPath: /var/lib/cassandra
+    # Pin pods to the node that holds the data directory
+    nodeSelector:
+      kubernetes.io/hostname: my-node
+
+  search:
+    # Disable the default PersistentVolumeClaim — hostPath replaces it
+    storageConfig: {}
+    extraVolumes:
+      - name: search-data
+        hostPath:
+          path: /data/axon-search
+          type: DirectoryOrCreate
+    extraVolumeMounts:
+      - name: search-data
+        mountPath: /var/lib/opensearch
+    # Pin pods to the node that holds the data directory
+    nodeSelector:
+      kubernetes.io/hostname: my-node
+
+  dashboard: {}
