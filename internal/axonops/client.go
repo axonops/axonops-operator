@@ -89,13 +89,16 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 		o.timeout = DefaultTimeout
 	}
 
-	// Ensure host is properly formatted (remove protocol if included)
+	// Ensure host is properly formatted (remove protocol if included).
+	// Preserve both the path component (e.g. /dashboard for SAML hosts) and
+	// the scheme from the URL so the caller's protocol is not silently overridden.
 	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
 		u, err := url.Parse(host)
 		if err != nil {
 			return nil, fmt.Errorf("invalid host URL: %w", err)
 		}
-		host = u.Host
+		protocol = u.Scheme
+		host = u.Host + u.Path
 	}
 
 	baseURL := fmt.Sprintf("%s://%s", protocol, host)

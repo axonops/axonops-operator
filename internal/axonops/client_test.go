@@ -162,6 +162,31 @@ func TestNewClient_NegativeTimeout(t *testing.T) {
 	}
 }
 
+func TestNewClient_SAMLHostPathPreserved(t *testing.T) {
+	// When a full URL with path (e.g. SAML host "https://org.axonopsdev.com/dashboard")
+	// is passed as host, the /dashboard path must be preserved in baseURL.
+	var receivedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"metricrules":[]}`))
+	}))
+	defer server.Close()
+
+	// Simulate BuildHostURL output for SAML mode: full URL with /dashboard suffix
+	samlHost := server.URL + "/dashboard"
+	client, err := NewClient(samlHost, "", "myorg", "key", "Bearer", false)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	_, _ = client.GetMetricAlertRules(context.Background(), "cassandra", "mycluster")
+
+	if !strings.HasPrefix(receivedPath, "/dashboard/") {
+		t.Errorf("SAML /dashboard path was stripped: got path %q, want prefix /dashboard/", receivedPath)
+	}
+}
+
 func TestNewClient_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
