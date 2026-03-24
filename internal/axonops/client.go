@@ -89,13 +89,16 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 		o.timeout = DefaultTimeout
 	}
 
-	// Ensure host is properly formatted (remove protocol if included)
+	// Ensure host is properly formatted (remove protocol if included).
+	// Preserve both the path component (e.g. /dashboard for SAML hosts) and
+	// the scheme from the URL so the caller's protocol is not silently overridden.
 	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
 		u, err := url.Parse(host)
 		if err != nil {
 			return nil, fmt.Errorf("invalid host URL: %w", err)
 		}
-		host = u.Host
+		protocol = u.Scheme
+		host = u.Host + u.Path
 	}
 
 	baseURL := fmt.Sprintf("%s://%s", protocol, host)
@@ -235,6 +238,40 @@ func (c *Client) DeleteMetricAlertRule(ctx context.Context, clusterType, cluster
 	}
 
 	return nil
+}
+
+// GetDashboards fetches all dashboards with their panels for a cluster.
+// This uses the same endpoint as ResolveDashboardPanel but returns the full
+// parsed response instead of resolving a single panel.
+func (c *Client) GetDashboards(ctx context.Context, clusterType, clusterName string) ([]Dashboard, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/dashboardtemplate/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dashboards: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+		}
+	}
+
+	var result DashboardTemplateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode dashboard response: %w", err)
+	}
+
+	return result.Dashboards, nil
 }
 
 // ResolveDashboardPanel resolves a dashboard and chart name to a panel UUID (correlation ID)
@@ -1234,6 +1271,66 @@ func (c *Client) DeleteKafkaConnector(ctx context.Context, clusterName, connectC
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		respBody, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
+
+// GetLogCollectors retrieves all log collectors for a cluster
+func (c *Client) GetLogCollectors(ctx context.Context, clusterType, clusterName string) ([]LogCollector, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/logcollectors/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get log collectors: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+
+	var result []LogCollector
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return result, nil
+}
+
+// PutLogCollectors replaces the full list of log collectors for a cluster.
+// The AxonOps API expects a form-encoded body with field "addlogs".
+func (c *Client) PutLogCollectors(ctx context.Context, clusterType, clusterName string, collectors []LogCollector) error {
+	reqURL := fmt.Sprintf("%s/api/v1/logcollectors/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
+
+	jsonData, err := json.Marshal(collectors)
+	if err != nil {
+		return fmt.Errorf("failed to marshal log collectors: %w", err)
+	}
+
+	formData := url.Values{}
+	formData.Set("addlogs", string(jsonData))
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", reqURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to put log collectors: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
 		respBody, _ := io.ReadAll(resp.Body)
 		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}

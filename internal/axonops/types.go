@@ -420,6 +420,32 @@ type CommitlogArchiveDeletePayload struct {
 	Datacenters []string `json:"datacenters"`
 }
 
+// LogCollector represents a log collector entry from the AxonOps API
+type LogCollector struct {
+	UUID         string                   `json:"uuid"`
+	ID           string                   `json:"id"`
+	Name         string                   `json:"name"`
+	Interval     string                   `json:"interval"`
+	Timeout      string                   `json:"timeout"`
+	Filename     string                   `json:"filename"`
+	DateFormat   string                   `json:"dateFormat"`
+	InfoRegex    string                   `json:"infoRegex"`
+	WarningRegex string                   `json:"warningRegex"`
+	ErrorRegex   string                   `json:"errorRegex"`
+	DebugRegex   string                   `json:"debugRegex"`
+	Readonly     bool                     `json:"readonly"`
+	Integrations LogCollectorIntegrations `json:"integrations"`
+}
+
+// LogCollectorIntegrations holds integration override settings for a log collector
+type LogCollectorIntegrations struct {
+	OverrideError   bool   `json:"OverrideError"`
+	OverrideInfo    bool   `json:"OverrideInfo"`
+	OverrideWarning bool   `json:"OverrideWarning"`
+	Routing         any    `json:"Routing"`
+	Type            string `json:"Type"`
+}
+
 // SilenceWindow represents a silence window entry from the AxonOps API
 type SilenceWindow struct {
 	ID          string   `json:"ID"`

@@ -270,7 +270,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	log.Info("Reconciling AxonOpsServer", "name", req.NamespacedName)
 
-	// Handle deletion
+	// Handle deletion — always proceed regardless of pause state
 	if !server.DeletionTimestamp.IsZero() {
 		if controllerutil.ContainsFinalizer(server, axonOpsServerFinalizer) {
 			// Clean up TLS secrets created by cert-manager (they don't get auto-deleted)
@@ -305,6 +305,28 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		log.Info("Added finalizer")
 		// Re-fetch after update
 		if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	// Check if reconciliation is paused
+	if server.Spec.Pause {
+		log.Info("Reconciliation paused, skipping", "name", req.NamespacedName)
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:    "Paused",
+			Status:  metav1.ConditionTrue,
+			Reason:  "ReconciliationPaused",
+			Message: "Reconciliation is paused",
+		})
+		if err := r.Status().Update(ctx, server); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+	// Clear Paused condition if it was previously set
+	if meta.FindStatusCondition(server.Status.Conditions, "Paused") != nil {
+		meta.RemoveStatusCondition(&server.Status.Conditions, "Paused")
+		if err := r.Status().Update(ctx, server); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -496,6 +518,10 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
+	// Track which components were successfully reconciled so conditions can be
+	// applied after the re-fetch below (setting them here would be discarded).
+	var serverReconciled, dashboardReconciled bool
+
 	// Ensure Server workload (if component is enabled)
 	if r.isComponentEnabled(server.Spec.Server) {
 		// Create ServiceAccount, Services, Config Secret, and StatefulSet for Server
@@ -503,13 +529,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			log.Error(err, "Failed to reconcile Server workload")
 			return ctrl.Result{}, err
 		}
-		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-			Type:               "ServerReady",
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: server.Generation,
-			Reason:             "Reconciled",
-			Message:            "Server component reconciled successfully",
-		})
+		serverReconciled = true
 	} else {
 		// Server disabled — clean up any existing resources
 		if err := r.cleanupServerResources(ctx, server); err != nil {
@@ -544,13 +564,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			log.Error(err, "Failed to reconcile Dashboard workload")
 			return ctrl.Result{}, err
 		}
-		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-			Type:               "DashboardReady",
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: server.Generation,
-			Reason:             "Reconciled",
-			Message:            "Dashboard component reconciled successfully",
-		})
+		dashboardReconciled = true
 	} else {
 		// Dashboard disabled — clean up any existing resources
 		if err := r.cleanupDashboardResources(ctx, server); err != nil {
@@ -569,6 +583,29 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		server.Status.SearchSecretName != searchSecretName ||
 		server.Status.TimeSeriesCertSecretName != timeSeriesCertSecretName ||
 		server.Status.SearchCertSecretName != searchCertSecretName
+
+	// Set ServerReady and DashboardReady conditions — must be done after the
+	// re-fetch above, otherwise SetStatusCondition changes are discarded.
+	if serverReconciled {
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "ServerReady",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: server.Generation,
+			Reason:             "Reconciled",
+			Message:            "Server component reconciled successfully",
+		})
+		statusChanged = true
+	}
+	if dashboardReconciled {
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "DashboardReady",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: server.Generation,
+			Reason:             "Reconciled",
+			Message:            "Dashboard component reconciled successfully",
+		})
+		statusChanged = true
+	}
 
 	// Set TimeSeries mode condition
 	if r.isComponentEnabled(server.Spec.TimeSeries) {

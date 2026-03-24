@@ -98,6 +98,9 @@ func (r *AxonOpsKafkaACLReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	apiClient, err := common.ResolveAPIClient(ctx, r.Client, acl.Namespace, acl.Spec.ConnectionRef)
+	if errors.Is(err, common.ErrConnectionPaused) {
+		return common.HandleConnectionPaused(ctx, r.Client, acl, &acl.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		r.setFailedCondition(ctx, acl, "FailedToResolveConnection", fmt.Sprintf("Failed to resolve connection: %v", err))

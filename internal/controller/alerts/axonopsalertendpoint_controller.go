@@ -146,6 +146,9 @@ func (r *AxonOpsAlertEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Resolve API client
 	apiClient, err := ResolveAPIClient(ctx, r.Client, endpoint.Namespace, endpoint.Spec.ConnectionRef)
+	if errors.Is(err, ErrConnectionPaused) {
+		return HandleConnectionPaused(ctx, r.Client, endpoint, &endpoint.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve API client")
 		meta.SetStatusCondition(&endpoint.Status.Conditions, metav1.Condition{

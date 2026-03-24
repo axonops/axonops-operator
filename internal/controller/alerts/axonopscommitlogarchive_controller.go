@@ -101,6 +101,9 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 	}
 
 	apiClient, err := ResolveAPIClient(ctx, r.Client, archive.Namespace, archive.Spec.ConnectionRef)
+	if errors.Is(err, ErrConnectionPaused) {
+		return HandleConnectionPaused(ctx, r.Client, archive, &archive.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		r.setFailedCondition(ctx, archive, ReasonConnectionError, fmt.Sprintf("Failed to resolve connection: %v", err))

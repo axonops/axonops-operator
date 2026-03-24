@@ -4,38 +4,40 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.1
-  name: axonopsconnections.core.axonops.com
+  name: axonopslogcollectors.alerts.axonops.com
 spec:
-  group: core.axonops.com
+  group: alerts.axonops.com
   names:
-    kind: AxonOpsConnection
-    listKind: AxonOpsConnectionList
-    plural: axonopsconnections
+    kind: AxonOpsLogCollector
+    listKind: AxonOpsLogCollectorList
+    plural: axonopslogcollectors
     shortNames:
-    - axconn
-    singular: axonopsconnection
+    - axlog
+    singular: axonopslogcollector
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.orgId
-      name: OrgID
+    - jsonPath: .spec.clusterName
+      name: Cluster
       type: string
-    - jsonPath: .spec.host
-      name: Host
+    - jsonPath: .spec.filename
+      name: Filename
+      type: string
+    - jsonPath: .spec.interval
+      name: Interval
       type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
-    - jsonPath: .spec.pause
-      name: Paused
-      type: boolean
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: AxonOpsConnection is the Schema for the axonopsconnections API
+        description: |-
+          AxonOpsLogCollector is the Schema for the axonopslogcollectors API.
+          Manages log collector configurations through the AxonOps API.
         properties:
           apiVersion:
             description: |-
@@ -55,82 +57,74 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of AxonOpsConnection
+            description: |-
+              AxonOpsLogCollectorSpec defines the desired state of AxonOpsLogCollector.
+              Manages log collector configurations for Cassandra/DSE clusters through the AxonOps API.
             properties:
-              apiKeyRef:
-                description: APIKeyRef references a Secret containing the API key
-                properties:
-                  key:
-                    description: 'Key is the key in the Secret containing the API
-                      key (default: "api_key")'
-                    type: string
-                  name:
-                    description: Name is the name of the Secret in the same namespace
-                    minLength: 1
-                    type: string
-                required:
-                - name
-                type: object
-              host:
-                default: dash.axonops.cloud
-                description: Host is the AxonOps server hostname/URL (e.g., "dash.axonops.cloud"
-                  or "axonops.example.com")
-                type: string
-              orgId:
-                description: OrgID is the organization ID for AxonOps
+              clusterName:
+                description: ClusterName is the cluster name in AxonOps
                 minLength: 1
                 type: string
-              pause:
-                default: false
-                description: |-
-                  Pause prevents all controllers that depend on this connection from making
-                  AxonOps API calls. Dependant resources retain their current status fields.
-                  Deletion of dependant resources still runs finalizers.
-                type: boolean
-              protocol:
-                default: https
-                description: Protocol is the protocol to use (http or https)
+              clusterType:
+                description: ClusterType is the cluster type
                 enum:
-                - http
-                - https
+                - cassandra
+                - dse
                 type: string
+              connectionRef:
+                description: ConnectionRef is the name of an AxonOpsConnection in
+                  the same namespace.
+                minLength: 1
+                type: string
+              dateFormat:
+                default: yyyy-MM-dd HH:mm:ss,SSS
+                description: DateFormat is the log date format string
+                type: string
+              debugRegex:
+                description: DebugRegex is the regex pattern for DEBUG level log lines
+                type: string
+              errorRegex:
+                description: ErrorRegex is the regex pattern for ERROR level log lines
+                type: string
+              filename:
+                description: Filename is the log file path to collect. Used as the
+                  unique identifier.
+                minLength: 1
+                type: string
+              infoRegex:
+                description: InfoRegex is the regex pattern for INFO level log lines
+                type: string
+              interval:
+                default: 5s
+                description: Interval is the polling interval (e.g., "5s", "10s")
+                type: string
+              name:
+                description: Name is the display name of the log collector in AxonOps
+                minLength: 1
+                type: string
+              readonly:
+                description: Readonly enables read-only mode for the log collector
+                type: boolean
               timeout:
-                description: |-
-                  Timeout is the HTTP client timeout for API requests (e.g. "30s", "2m").
-                  If not provided, defaults to 30s. Recommended values: 30s for low-latency
-                  networks, 60s-120s for cross-region or high-latency connections.
+                default: 1m
+                description: Timeout is the operation timeout (e.g., "1m", "2m")
                 type: string
-              tlsSkipVerify:
-                description: |-
-                  TLSSkipVerify disables TLS certificate verification
-                  Should only be used for testing
-                type: boolean
-              tokenType:
-                default: Bearer
-                description: TokenType is the token type for authentication (Bearer
-                  or AxonApi)
-                enum:
-                - Bearer
-                - AxonApi
+              warningRegex:
+                description: WarningRegex is the regex pattern for WARNING level log
+                  lines
                 type: string
-              useSaml:
-                description: |-
-                  UseSAML indicates if SAML is enabled (changes host URL pattern)
-                  If not provided, defaults to false
-                type: boolean
             required:
-            - apiKeyRef
-            - orgId
+            - clusterName
+            - clusterType
+            - connectionRef
+            - filename
+            - name
             type: object
           status:
-            description: status defines the observed state of AxonOpsConnection
+            description: AxonOpsLogCollectorStatus defines the observed state of AxonOpsLogCollector.
             properties:
               conditions:
-                description: |-
-                  Conditions represent the current state of the AxonOpsConnection resource
-                  Standard condition types include:
-                  - "Ready": the connection is valid and secret is readable
-                  - "Failed": the connection failed (e.g., secret not found)
+                description: Conditions represent the current state of the resource.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -189,16 +183,19 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              lastValidationTime:
-                description: LastValidationTime is the timestamp of the last successful
-                  validation
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  sync
                 format: date-time
                 type: string
               observedGeneration:
-                description: ObservedGeneration reflects the generation of the most
-                  recently observed AxonOpsConnection
+                description: ObservedGeneration reflects the generation most recently
+                  observed
                 format: int64
                 type: integer
+              syncedUUID:
+                description: SyncedUUID is the UUID of the collector in AxonOps
+                type: string
             type: object
         required:
         - spec

@@ -110,6 +110,9 @@ func (r *AxonOpsDashboardTemplateReconciler) Reconcile(ctx context.Context, req 
 
 	// Resolve AxonOps API client
 	apiClient, err := ResolveAPIClient(ctx, r.Client, dashboard.Namespace, dashboard.Spec.ConnectionRef)
+	if errors.Is(err, ErrConnectionPaused) {
+		return HandleConnectionPaused(ctx, r.Client, dashboard, &dashboard.Status.Conditions)
+	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		r.setFailedCondition(ctx, dashboard, ReasonConnectionError, fmt.Sprintf("Failed to resolve connection: %v", err))

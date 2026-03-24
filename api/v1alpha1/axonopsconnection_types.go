@@ -22,6 +22,13 @@ import (
 
 // AxonOpsConnectionSpec defines the desired state of AxonOpsConnection
 type AxonOpsConnectionSpec struct {
+	// Pause prevents all controllers that depend on this connection from making
+	// AxonOps API calls. Dependant resources retain their current status fields.
+	// Deletion of dependant resources still runs finalizers.
+	// +optional
+	// +kubebuilder:default=false
+	Pause bool `json:"pause,omitempty"`
+
 	// OrgID is the organization ID for AxonOps
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -32,20 +39,20 @@ type AxonOpsConnectionSpec struct {
 	APIKeyRef AxonOpsSecretKeyRef `json:"apiKeyRef"`
 
 	// Host is the AxonOps server hostname/URL (e.g., "dash.axonops.cloud" or "axonops.example.com")
-	// If not provided, defaults to SaaS (dash.axonops.cloud)
 	// +optional
+	// +kubebuilder:default="dash.axonops.cloud"
 	Host string `json:"host,omitempty"`
 
 	// Protocol is the protocol to use (http or https)
-	// If not provided, defaults to https
 	// +optional
 	// +kubebuilder:validation:Enum=http;https
+	// +kubebuilder:default="https"
 	Protocol string `json:"protocol,omitempty"`
 
 	// TokenType is the token type for authentication (Bearer or AxonApi)
-	// If not provided, defaults to Bearer
 	// +optional
 	// +kubebuilder:validation:Enum=Bearer;AxonApi
+	// +kubebuilder:default="Bearer"
 	TokenType string `json:"tokenType,omitempty"`
 
 	// TLSSkipVerify disables TLS certificate verification
@@ -103,6 +110,7 @@ type AxonOpsConnectionStatus struct {
 // +kubebuilder:printcolumn:name="OrgID",type=string,JSONPath=`.spec.orgId`
 // +kubebuilder:printcolumn:name="Host",type=string,JSONPath=`.spec.host`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Paused",type=boolean,JSONPath=`.spec.pause`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // AxonOpsConnection is the Schema for the axonopsconnections API
