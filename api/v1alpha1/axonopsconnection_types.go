@@ -39,20 +39,20 @@ type AxonOpsConnectionSpec struct {
 	APIKeyRef AxonOpsSecretKeyRef `json:"apiKeyRef"`
 
 	// Host is the AxonOps server hostname/URL (e.g., "dash.axonops.cloud" or "axonops.example.com")
-	// If not provided, defaults to SaaS (dash.axonops.cloud)
 	// +optional
+	// +kubebuilder:default="dash.axonops.cloud"
 	Host string `json:"host,omitempty"`
 
 	// Protocol is the protocol to use (http or https)
-	// If not provided, defaults to https
 	// +optional
 	// +kubebuilder:validation:Enum=http;https
+	// +kubebuilder:default="https"
 	Protocol string `json:"protocol,omitempty"`
 
 	// TokenType is the token type for authentication (Bearer or AxonApi)
-	// If not provided, defaults to Bearer
 	// +optional
 	// +kubebuilder:validation:Enum=Bearer;AxonApi
+	// +kubebuilder:default="Bearer"
 	TokenType string `json:"tokenType,omitempty"`
 
 	// TLSSkipVerify disables TLS certificate verification

@@ -72,9 +72,9 @@ spec:
                 - name
                 type: object
               host:
-                description: |-
-                  Host is the AxonOps server hostname/URL (e.g., "dash.axonops.cloud" or "axonops.example.com")
-                  If not provided, defaults to SaaS (dash.axonops.cloud)
+                default: dash.axonops.cloud
+                description: Host is the AxonOps server hostname/URL (e.g., "dash.axonops.cloud"
+                  or "axonops.example.com")
                 type: string
               orgId:
                 description: OrgID is the organization ID for AxonOps
@@ -88,9 +88,8 @@ spec:
                   Deletion of dependant resources still runs finalizers.
                 type: boolean
               protocol:
-                description: |-
-                  Protocol is the protocol to use (http or https)
-                  If not provided, defaults to https
+                default: https
+                description: Protocol is the protocol to use (http or https)
                 enum:
                 - http
                 - https
@@ -107,9 +106,9 @@ spec:
                   Should only be used for testing
                 type: boolean
               tokenType:
-                description: |-
-                  TokenType is the token type for authentication (Bearer or AxonApi)
-                  If not provided, defaults to Bearer
+                default: Bearer
+                description: TokenType is the token type for authentication (Bearer
+                  or AxonApi)
                 enum:
                 - Bearer
                 - AxonApi
