@@ -127,6 +127,7 @@ type AxonOpsServerStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Paused",type=boolean,JSONPath=`.spec.pause`
 
 // AxonOpsServer is the Schema for the axonopsservers API; it's the top-level resource for AxonOpsSever, TimeSeries and SearchDB
