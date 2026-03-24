@@ -1,14 +1,64 @@
 apiVersion: v2
 name: axonops-operator
-description: A Helm chart to distribute axonops-operator
+description: Kubernetes operator for managing the AxonOps observability stack (server, dashboard, storage, alerts, backups, Kafka)
 type: application
 
 version: 0.1.0
 appVersion: "0.1.0"
 
+home: https://axonops.com
+sources:
+  - https://github.com/axonops/axonops-operator
+maintainers:
+  - name: AxonOps
+    email: support@axonops.com
+    url: https://axonops.com
+icon: https://digitalis-marketplace-assets.s3.us-east-1.amazonaws.com/axonops-small-logo.png
+
 keywords:
   - kubernetes
   - operator
+  - axonops
+  - cassandra
+  - observability
+  - monitoring
+  - kafka
+  - alerts
+  - backups
 
 annotations:
-  kubebuilder.io/generated-by: kubebuilder
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/operator: "true"
+  artifacthub.io/operatorCapabilities: Full Lifecycle
+  artifacthub.io/crds: |
+    - kind: AxonOpsServer
+      version: v1alpha1
+      name: axonopsservers.core.axonops.com
+      description: Deploys the AxonOps server stack (server, dashboard, timeseries DB, search)
+    - kind: AxonOpsConnection
+      version: v1alpha1
+      name: axonopsconnections.core.axonops.com
+      description: Shared API authentication configuration
+    - kind: AxonOpsMetricAlert
+      version: v1alpha1
+      name: axonopsmetricalerts.alerts.axonops.com
+      description: Metric threshold alert rules
+    - kind: AxonOpsLogAlert
+      version: v1alpha1
+      name: axonopslogalerts.alerts.axonops.com
+      description: Log pattern alert rules
+    - kind: AxonOpsBackup
+      version: v1alpha1
+      name: axonopsbackups.backups.axonops.com
+      description: Cassandra scheduled snapshot backups (S3/SFTP/Azure)
+    - kind: AxonOpsKafkaTopic
+      version: v1alpha1
+      name: axonopskafkatopics.kafka.axonops.com
+      description: Kafka topic lifecycle management
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://docs.axonops.com
+    - name: Source
+      url: https://github.com/axonops/axonops-operator
+    - name: Container Image
+      url: https://github.com/axonops/axonops-operator/pkgs/container/axonops-operator
