@@ -1,6 +1,0 @@
-# Artifact Hub repository metadata
-# https://artifacthub.io/docs/topics/repositories/
-repositoryID: # assigned by ArtifactHub after registration
-owners:
-  - name: axonops
-    email: support@axonops.com

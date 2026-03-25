@@ -66,13 +66,29 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 
 ## Installation
 
-**Install from Helm Chart (local):**
+**Install from OCI registry (recommended):**
 
-A Helm chart is available under `charts/axonops-operator/`. To install from the local chart:
+The Helm chart is published as an OCI artifact on GitHub Container Registry. Install with:
 
 ```bash
-helm upgrade --install -n axonops-operator-system axonops-operator --create-namespace \
-  ./charts/axonops-operator/
+helm upgrade --install axonops-operator \
+  oci://ghcr.io/axonops/charts/axonops-operator \
+  --version 0.0.3 \
+  --namespace axonops-operator-system --create-namespace
+```
+
+To see available versions:
+
+```bash
+helm show all oci://ghcr.io/axonops/charts/axonops-operator
+```
+
+**Install from local chart source:**
+
+```bash
+helm upgrade --install axonops-operator \
+  ./charts/axonops-operator/ \
+  --namespace axonops-operator-system --create-namespace
 ```
 
 **Install from source with Kustomize:**
