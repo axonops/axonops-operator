@@ -77,11 +77,7 @@ helm upgrade --install axonops-operator \
   --namespace axonops-operator-system --create-namespace
 ```
 
-To see available versions:
-
-```bash
-helm show all oci://ghcr.io/axonops/charts/axonops-operator
-```
+To see available versions, check the [releases page](https://github.com/axonops/axonops-operator/releases) or the [package registry](https://github.com/axonops/axonops-operator/pkgs/container/charts%2Faxonops-operator).
 
 **Install from local chart source:**
 
