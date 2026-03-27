@@ -44,7 +44,8 @@ Kubernetes operator.`,
 	pf.StringVar(&opts.Protocol, "protocol", "https", "Protocol (http or https)")
 	pf.StringVar(&opts.OrgID, "org-id", "", "Organization ID (required)")
 	pf.StringVar(&opts.APIKey, "api-key", "", "API key (required)")
-	pf.StringVar(&opts.TokenType, "token-type", "", "Auth token type (Bearer for cloud, AxonApi for self-hosted; auto-detected from host if omitted)")
+	pf.StringVar(&opts.TokenType, "token-type", "",
+		"Auth token type (Bearer for cloud, AxonApi for self-hosted; auto-detected from host if omitted)")
 	pf.StringVar(&opts.ClusterName, "cluster-name", "", "Cluster name to export from (required)")
 	pf.StringVar(&opts.ClusterType, "cluster-type", "cassandra", "Cluster type (cassandra, kafka, dse)")
 	pf.BoolVar(&opts.TLSSkipVerify, "tls-skip-verify", false, "Skip TLS certificate verification")
