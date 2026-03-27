@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package alerts
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -35,6 +34,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -124,7 +124,7 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: repair.Generation,
 			Reason:             "FailedToResolveConnection",
-			Message:            fmt.Sprintf("Failed to resolve connection: %v", err),
+			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		repair.Status.ObservedGeneration = repair.Generation
 		if err := r.Status().Update(ctx, repair); err != nil {
@@ -163,7 +163,7 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: repair.Generation,
 			Reason:             "SyncFailed",
-			Message:            fmt.Sprintf("Failed to sync with AxonOps: %v", err),
+			Message:            common.SafeConditionMsg("Failed to sync with AxonOps", err),
 		})
 		repair.Status.ObservedGeneration = repair.Generation
 		if err := r.Status().Update(ctx, repair); err != nil {

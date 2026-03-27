@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -115,7 +116,7 @@ func (r *AxonOpsDashboardTemplateReconciler) Reconcile(ctx context.Context, req 
 	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
-		r.setFailedCondition(ctx, dashboard, ReasonConnectionError, fmt.Sprintf("Failed to resolve connection: %v", err))
+		r.setFailedCondition(ctx, dashboard, ReasonConnectionError, common.SafeConditionMsg("Failed to resolve connection", err))
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -153,7 +154,7 @@ func (r *AxonOpsDashboardTemplateReconciler) Reconcile(ctx context.Context, req 
 	existing, err := apiClient.GetDashboardTemplates(ctx, dashboard.Spec.ClusterType, dashboard.Spec.ClusterName)
 	if err != nil {
 		log.Error(err, "Failed to get dashboard templates from AxonOps")
-		r.setFailedCondition(ctx, dashboard, ReasonAPIError, fmt.Sprintf("Failed to get dashboards: %v", err))
+		r.setFailedCondition(ctx, dashboard, ReasonAPIError, common.SafeConditionMsg("Failed to get dashboards", err))
 		var apiErr *axonops.APIError
 		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -178,7 +179,7 @@ func (r *AxonOpsDashboardTemplateReconciler) Reconcile(ctx context.Context, req 
 	}
 	if err := apiClient.UpdateDashboardTemplates(ctx, dashboard.Spec.ClusterType, dashboard.Spec.ClusterName, payload); err != nil {
 		log.Error(err, "Failed to update dashboard templates")
-		r.setFailedCondition(ctx, dashboard, ReasonAPIError, fmt.Sprintf("Failed to update dashboards: %v", err))
+		r.setFailedCondition(ctx, dashboard, ReasonAPIError, common.SafeConditionMsg("Failed to update dashboards", err))
 		var apiErr *axonops.APIError
 		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -245,7 +246,7 @@ func (r *AxonOpsDashboardTemplateReconciler) resolveSource(ctx context.Context, 
 				return nil, nil, fmt.Errorf("configmap not found: %s", src.ConfigMapRef.Name)
 			}
 			log.Error(err, "Failed to get ConfigMap")
-			r.setFailedCondition(ctx, dashboard, "ConfigMapNotFound", fmt.Sprintf("Failed to get ConfigMap: %v", err))
+			r.setFailedCondition(ctx, dashboard, "ConfigMapNotFound", common.SafeConditionMsg("Failed to get ConfigMap", err))
 			return nil, nil, err
 		}
 
@@ -263,7 +264,7 @@ func (r *AxonOpsDashboardTemplateReconciler) resolveSource(ctx context.Context, 
 		Panels  json.RawMessage `json:"panels"`
 	}
 	if err := json.Unmarshal(rawJSON, &parsed); err != nil {
-		r.setFailedCondition(ctx, dashboard, "InvalidDashboardJSON", fmt.Sprintf("Failed to parse dashboard JSON: %v", err))
+		r.setFailedCondition(ctx, dashboard, "InvalidDashboardJSON", common.SafeConditionMsg("Failed to parse dashboard JSON", err))
 		return nil, nil, fmt.Errorf("invalid dashboard JSON: %w", err)
 	}
 

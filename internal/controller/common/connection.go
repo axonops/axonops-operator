@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package common
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -148,4 +149,15 @@ func HandleConnectionPaused(ctx context.Context, c client.Client, obj client.Obj
 // ClearPausedCondition removes the Paused condition if it exists.
 func ClearPausedCondition(conditions *[]metav1.Condition) {
 	meta.RemoveStatusCondition(conditions, "Paused")
+}
+
+// SafeConditionMsg builds a status condition message that does not include raw
+// API response bodies. For APIErrors only the HTTP status code is shown; for
+// all other errors the full error message is included.
+func SafeConditionMsg(prefix string, err error) string {
+	var apiErr *axonops.APIError
+	if errors.As(err, &apiErr) {
+		return fmt.Sprintf("%s: %s", prefix, apiErr.SafeMessage())
+	}
+	return fmt.Sprintf("%s: %v", prefix, err)
 }

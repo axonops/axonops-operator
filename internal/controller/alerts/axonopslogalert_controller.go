@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -115,7 +116,7 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
 			Reason:             "FailedToResolveConnection",
-			Message:            fmt.Sprintf("Failed to resolve connection: %v", err),
+			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		alert.Status.ObservedGeneration = alert.Generation
 		if err := r.Status().Update(ctx, alert); err != nil {
@@ -154,7 +155,7 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
 			Reason:             "SyncFailed",
-			Message:            fmt.Sprintf("Failed to sync with AxonOps: %v", err),
+			Message:            common.SafeConditionMsg("Failed to sync with AxonOps", err),
 		})
 		alert.Status.ObservedGeneration = alert.Generation
 		if err := r.Status().Update(ctx, alert); err != nil {

@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package alerts
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,6 +35,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -105,7 +105,7 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cr.Generation,
 			Reason:             "FailedToResolveConnection",
-			Message:            fmt.Sprintf("Failed to resolve connection: %v", err),
+			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		cr.Status.ObservedGeneration = cr.Generation
 		if err := r.Status().Update(ctx, cr); err != nil {
@@ -132,7 +132,7 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cr.Generation,
 			Reason:             "SyncFailed",
-			Message:            fmt.Sprintf("Failed to get log collectors: %v", err),
+			Message:            common.SafeConditionMsg("Failed to get log collectors", err),
 		})
 		cr.Status.ObservedGeneration = cr.Generation
 		if err := r.Status().Update(ctx, cr); err != nil {
@@ -189,7 +189,7 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cr.Generation,
 			Reason:             "SyncFailed",
-			Message:            fmt.Sprintf("Failed to sync log collectors: %v", err),
+			Message:            common.SafeConditionMsg("Failed to sync log collectors", err),
 		})
 		cr.Status.ObservedGeneration = cr.Generation
 		if err := r.Status().Update(ctx, cr); err != nil {

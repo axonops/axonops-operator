@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -1482,7 +1482,7 @@ func (r *AxonOpsServerReconciler) ensureServiceAccount(ctx context.Context, serv
 		}
 
 		sa.Labels = r.buildLabels(server, component)
-		sa.AutomountServiceAccountToken = ptr(true)
+		sa.AutomountServiceAccountToken = ptr(false)
 		return nil
 	}, "serviceaccount")
 

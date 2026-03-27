@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package alerts
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"time"
 
@@ -36,6 +35,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -112,7 +112,7 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
-		r.setFailedCondition(ctx, repair, ReasonConnectionError, fmt.Sprintf("Failed to resolve connection: %v", err))
+		r.setFailedCondition(ctx, repair, ReasonConnectionError, common.SafeConditionMsg("Failed to resolve connection", err))
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -129,7 +129,7 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 	currentSettings, err := apiClient.GetAdaptiveRepair(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName)
 	if err != nil {
 		log.Error(err, "Failed to get adaptive repair settings from AxonOps")
-		r.setFailedCondition(ctx, repair, ReasonAPIError, fmt.Sprintf("Failed to get adaptive repair settings: %v", err))
+		r.setFailedCondition(ctx, repair, ReasonAPIError, common.SafeConditionMsg("Failed to get adaptive repair settings", err))
 		var apiErr *axonops.APIError
 		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -150,7 +150,7 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 	// Update settings via API
 	if err := apiClient.UpdateAdaptiveRepair(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName, desired); err != nil {
 		log.Error(err, "Failed to update adaptive repair settings")
-		r.setFailedCondition(ctx, repair, ReasonAPIError, fmt.Sprintf("Failed to update adaptive repair settings: %v", err))
+		r.setFailedCondition(ctx, repair, ReasonAPIError, common.SafeConditionMsg("Failed to update adaptive repair settings", err))
 		var apiErr *axonops.APIError
 		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
