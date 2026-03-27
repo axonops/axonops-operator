@@ -52,9 +52,9 @@ type MetricAlertFilter struct {
 type MetricAlertIntegrations struct {
 	Type            string             `json:"Type,omitempty"`
 	Routing         []IntegrationRoute `json:"Routing,omitempty"`
-	OverrideInfo    bool     `json:"OverrideInfo,omitempty"`
-	OverrideWarning bool     `json:"OverrideWarning,omitempty"`
-	OverrideError   bool     `json:"OverrideError,omitempty"`
+	OverrideInfo    bool               `json:"OverrideInfo,omitempty"`
+	OverrideWarning bool               `json:"OverrideWarning,omitempty"`
+	OverrideError   bool               `json:"OverrideError,omitempty"`
 }
 
 // DashboardTemplateResponse represents the response from the dashboard template API

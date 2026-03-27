@@ -81,8 +81,8 @@ type Client struct {
 type ClientOption func(*clientOptions)
 
 type clientOptions struct {
-	timeout  time.Duration
-	verbose  bool
+	timeout time.Duration
+	verbose bool
 }
 
 // WithTimeout sets the HTTP client timeout. Values <= 0 are ignored and the
