@@ -506,6 +506,12 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("AxonOps API error (status %d): %s", e.StatusCode, e.Body)
 }
 
+// SafeMessage returns a credential-safe summary of the error, omitting the response body.
+// Use this for status condition messages; use Error() only for logs and debugging.
+func (e *APIError) SafeMessage() string {
+	return fmt.Sprintf("AxonOps API error (status %d)", e.StatusCode)
+}
+
 // IsRetryable returns true if the error is retryable (server error)
 func (e *APIError) IsRetryable() bool {
 	return e.StatusCode >= 500
