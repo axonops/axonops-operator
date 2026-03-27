@@ -134,7 +134,7 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: backup.Generation,
 			Reason:             "FailedToResolveConnection",
-			Message:            fmt.Sprintf("Failed to resolve connection: %v", err),
+			Message:            safeConditionMessage("Failed to resolve connection", err),
 		})
 		backup.Status.ObservedGeneration = backup.Generation
 		if err := r.Status().Update(ctx, backup); err != nil {
@@ -161,7 +161,7 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: backup.Generation,
 			Reason:             "PayloadBuildError",
-			Message:            fmt.Sprintf("Failed to build backup payload: %v", err),
+			Message:            safeConditionMessage("Failed to build backup payload", err),
 		})
 		backup.Status.ObservedGeneration = backup.Generation
 		if err := r.Status().Update(ctx, backup); err != nil {
@@ -190,7 +190,7 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: backup.Generation,
 			Reason:             "SyncFailed",
-			Message:            fmt.Sprintf("Failed to sync with AxonOps: %v", err),
+			Message:            safeConditionMessage("Failed to sync with AxonOps", err),
 		})
 		backup.Status.ObservedGeneration = backup.Generation
 		if err := r.Status().Update(ctx, backup); err != nil {
@@ -488,6 +488,18 @@ func (r *AxonOpsBackupReconciler) resolveAzureCredentials(ctx context.Context, n
 		return azure.Key, nil
 	}
 	return "", nil // MSI auth
+}
+
+// safeConditionMessage builds a status condition message that never includes the raw
+// error body. For APIErrors only the HTTP status code is included; for all other errors
+// the prefix alone is used. This prevents inline S3/SFTP/Azure credentials from leaking
+// into status.conditions[].message via API response bodies.
+func safeConditionMessage(prefix string, err error) string {
+	var apiErr *axonops.APIError
+	if errors.As(err, &apiErr) {
+		return fmt.Sprintf("%s: %s", prefix, apiErr.SafeMessage())
+	}
+	return prefix
 }
 
 // formatRemoteConfig builds a rclone-style newline-delimited "key = value" string.

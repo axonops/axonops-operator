@@ -81,8 +81,8 @@ type Client struct {
 type ClientOption func(*clientOptions)
 
 type clientOptions struct {
-	timeout  time.Duration
-	verbose  bool
+	timeout time.Duration
+	verbose bool
 }
 
 // WithTimeout sets the HTTP client timeout. Values <= 0 are ignored and the
@@ -504,6 +504,12 @@ type APIError struct {
 // Error implements the error interface
 func (e *APIError) Error() string {
 	return fmt.Sprintf("AxonOps API error (status %d): %s", e.StatusCode, e.Body)
+}
+
+// SafeMessage returns a credential-safe summary of the error, omitting the response body.
+// Use this for status condition messages; use Error() only for logs and debugging.
+func (e *APIError) SafeMessage() string {
+	return fmt.Sprintf("AxonOps API error (status %d)", e.StatusCode)
 }
 
 // IsRetryable returns true if the error is retryable (server error)

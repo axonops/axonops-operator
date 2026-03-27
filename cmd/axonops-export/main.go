@@ -40,7 +40,8 @@ Kubernetes operator.`,
 
 	// Persistent flags (shared across subcommands)
 	pf := root.PersistentFlags()
-	pf.StringVar(&opts.Host, "host", "", "AxonOps host (default: auto-detected from org-id; SaaS uses dash.axonops.cloud/{org-id})")
+	pf.StringVar(&opts.Host, "host", "",
+		"AxonOps host (default: auto-detected from org-id; SaaS uses dash.axonops.cloud/{org-id})")
 	pf.StringVar(&opts.Protocol, "protocol", "https", "Protocol (http or https)")
 	pf.StringVar(&opts.OrgID, "org-id", "", "Organization ID (required)")
 	pf.StringVar(&opts.APIKey, "api-key", "", "API key (required)")

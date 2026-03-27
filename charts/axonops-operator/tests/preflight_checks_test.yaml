@@ -1,0 +1,45 @@
+suite: pre-flight dependency checks
+# Tests for the axonops-operator.verify-dependencies helper template.
+#
+# IMPORTANT: helm-unittest has no access to a live cluster, so the `lookup`
+# function always returns an empty dict (identical to `helm template` behaviour).
+# This means only the happy-path / template-mode scenarios can be tested here.
+# The negative paths (CRD absent → `fail` triggered) are covered by the
+# integration tests in .github/workflows/test-chart.yml against a Kind cluster.
+templates:
+  - manager/manager.yaml
+tests:
+  - it: preflight check does not block install when dependencies are disabled (default values)
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+
+  - it: preflight check allows render when certManager.enable is true (lookup returns empty, simulating helm template mode)
+    set:
+      certManager.enable: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+
+  - it: preflight check allows render when prometheus.enable is true (lookup returns empty, simulating helm template mode)
+    set:
+      prometheus.enable: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+
+  - it: preflight check allows render when both certManager.enable and prometheus.enable are true
+    set:
+      certManager.enable: true
+      prometheus.enable: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
