@@ -140,6 +140,28 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	- $(CONTAINER_TOOL) buildx rm axonops-operator-builder
 	rm Dockerfile.cross
 
+## Target platforms for axonops-export binary releases
+EXPORT_PLATFORMS ?= linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
+
+.PHONY: build-export
+build-export: ## Build axonops-export binary.
+	go build -o bin/axonops-export ./cmd/axonops-export
+
+.PHONY: build-export-all
+build-export-all: ## Cross-compile axonops-export for all platforms.
+	@mkdir -p dist
+	@for platform in $(EXPORT_PLATFORMS); do \
+		os=$${platform%/*}; \
+		arch=$${platform#*/}; \
+		ext=""; \
+		if [ "$$os" = "windows" ]; then ext=".exe"; fi; \
+		output="dist/axonops-export-$${os}-$${arch}$${ext}"; \
+		echo "Building $$output ..."; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath \
+			-ldflags="-s -w" \
+			-o "$$output" ./cmd/axonops-export || exit 1; \
+	done
+
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist

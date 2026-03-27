@@ -83,7 +83,7 @@ func ResolveAPIClient(ctx context.Context, c client.Client, namespace, connectio
 
 	tokenType := conn.Spec.TokenType
 	if tokenType == "" {
-		tokenType = "Bearer"
+		tokenType = axonops.DefaultTokenType(conn.Spec.Host)
 	}
 
 	fullHost := BuildHostURL(conn.Spec.Host, conn.Spec.OrgID, conn.Spec.UseSAML)

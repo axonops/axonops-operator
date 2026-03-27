@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
+	"github.com/axonops/axonops-operator/internal/axonops"
 )
 
 // buildConnectionResources generates the Secret and AxonOpsConnection resources.
@@ -66,6 +67,11 @@ func buildConnectionResources(opts *Options) []Resource {
 	}
 	if opts.Protocol != "https" {
 		conn.Spec.Protocol = opts.Protocol
+	}
+	// Only emit tokenType when it differs from the operator's auto-detected default,
+	// so the generated manifest is minimal for cloud users and explicit for self-hosted.
+	if opts.TokenType != "" && opts.TokenType != axonops.DefaultTokenType(opts.Host) {
+		conn.Spec.TokenType = opts.TokenType
 	}
 
 	return []Resource{

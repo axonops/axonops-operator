@@ -72,8 +72,7 @@ The Helm chart is published as an OCI artifact on GitHub Container Registry. Ins
 
 ```bash
 helm upgrade --install axonops-operator \
-  oci://ghcr.io/axonops/charts/axonops-operator \
-  --version 0.0.3 \
+  oci://ghcr.io/axonops/charts/axonops-operator:0.0.3 \
   --namespace axonops-operator-system --create-namespace
 ```
 

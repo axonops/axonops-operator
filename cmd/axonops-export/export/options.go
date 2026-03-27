@@ -25,6 +25,7 @@ type Options struct {
 	Protocol      string
 	OrgID         string
 	APIKey        string
+	TokenType     string
 	TLSSkipVerify bool
 
 	// Scope

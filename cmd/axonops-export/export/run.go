@@ -30,10 +30,17 @@ func Run(ctx context.Context, opts *Options) error {
 		return err
 	}
 
+	// Resolve token type: explicit flag overrides auto-detection.
+	tokenType := opts.TokenType
+	if tokenType == "" {
+		tokenType = axonops.DefaultTokenType(opts.Host)
+	}
+	opts.TokenType = tokenType
+
 	// Create API client
 	client, err := axonops.NewClient(
 		opts.Host, opts.Protocol,
-		opts.OrgID, opts.APIKey, "Bearer",
+		opts.OrgID, opts.APIKey, tokenType,
 		opts.TLSSkipVerify,
 	)
 	if err != nil {

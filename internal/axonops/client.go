@@ -36,6 +36,37 @@ const (
 	DefaultTimeout = 30 * time.Second
 )
 
+// cloudHosts are the AxonOps SaaS hosts that use Bearer token authentication.
+var cloudHosts = []string{
+	"dash.axonops.cloud",
+	"dash.axonopsdev.com",
+}
+
+// DefaultTokenType returns the default auth token type for the given host.
+// Cloud hosts (dash.axonops.cloud, dash.axonopsdev.com) use "Bearer".
+// Self-hosted instances use "AxonApi".
+// An empty host is treated as the default cloud host.
+func DefaultTokenType(host string) string {
+	if host == "" {
+		return "Bearer"
+	}
+	// Strip protocol if present so callers can pass either form.
+	h := host
+	if i := strings.Index(h, "://"); i >= 0 {
+		h = h[i+3:]
+	}
+	// Strip path component.
+	if i := strings.Index(h, "/"); i >= 0 {
+		h = h[:i]
+	}
+	for _, cloud := range cloudHosts {
+		if strings.EqualFold(h, cloud) {
+			return "Bearer"
+		}
+	}
+	return "AxonApi"
+}
+
 // Client manages communication with the AxonOps API
 type Client struct {
 	httpClient *http.Client
@@ -77,7 +108,7 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 		protocol = "https"
 	}
 	if tokenType == "" {
-		tokenType = "Bearer"
+		tokenType = DefaultTokenType(host)
 	}
 
 	// Apply options
