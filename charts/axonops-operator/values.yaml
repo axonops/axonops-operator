@@ -12,16 +12,59 @@ manager:
   replicas: 1
 
   image:
-    repository: controller
-    tag: latest
+    repository: ghcr.io/axonops/axonops-operator
+    tag: ""
     pullPolicy: IfNotPresent
 
-  ## Arguments
+  ## Arguments passed to the manager binary.
+  ##
+  ## Available flags:
+  ##   --leader-elect                        Enable leader election (recommended for multi-replica deployments)
+  ##   --metrics-bind-address=:8443          Address the metrics endpoint binds to (:8443 HTTPS, :8080 HTTP, 0 disabled)
+  ##   --metrics-secure=true                 Serve metrics over HTTPS (default: true)
+  ##   --metrics-cert-path=<dir>             Directory containing the metrics server TLS certificate
+  ##   --metrics-cert-name=tls.crt           Metrics server certificate filename (default: tls.crt)
+  ##   --metrics-cert-key=tls.key            Metrics server key filename (default: tls.key)
+  ##   --health-probe-bind-address=:8081     Address the liveness/readiness probe endpoint binds to
+  ##   --webhook-cert-path=<dir>             Directory containing the webhook TLS certificate
+  ##   --webhook-cert-name=tls.crt           Webhook certificate filename (default: tls.crt)
+  ##   --webhook-cert-key=tls.key            Webhook key filename (default: tls.key)
+  ##   --cluster-issuer=axonops-selfsigned   cert-manager ClusterIssuer name for TLS certificates
+  ##   --enable-http2                        Enable HTTP/2 for metrics and webhook servers (disabled by default for security)
+  ##   --watch-namespaces=ns1,ns2            Comma-separated list of namespaces to watch (default: all namespaces)
+  ##   --zap-log-level=info                  Log level: debug, info, error, or an integer value (default: info)
+  ##   --zap-encoder=json                    Log encoding: json or console (default: json in production)
+  ##   --zap-devel                           Enable development mode (more verbose, non-JSON logs)
   ##
   args:
     - --leader-elect
 
-  ## Environment variables
+  ## Environment variables for the manager container.
+  ##
+  ## Available variables:
+  ##   DISABLE_METRICS=true
+  ##     Disable the Prometheus metrics endpoint entirely.
+  ##
+  ##   OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+  ##     Enable OpenTelemetry tracing by pointing to an OTLP collector.
+  ##     When unset, tracing is disabled.
+  ##
+  ##   OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+  ##     OTLP exporter protocol: grpc (default) or http/protobuf.
+  ##     Can also be set per-signal via OTEL_EXPORTER_OTLP_TRACES_PROTOCOL.
+  ##
+  ##   OTEL_EXPORTER_OTLP_INSECURE=true
+  ##     Disable TLS for the OTLP exporter (useful when collector is in-cluster).
+  ##
+  ##   OTEL_EXPORTER_OTLP_HEADERS=key=value,key2=value2
+  ##     Additional headers sent with every OTLP request (e.g. for auth tokens).
+  ##
+  ## Example:
+  ## env:
+  ##   - name: OTEL_EXPORTER_OTLP_ENDPOINT
+  ##     value: "http://otel-collector.monitoring:4317"
+  ##   - name: OTEL_EXPORTER_OTLP_INSECURE
+  ##     value: "true"
   ##
   env: []
 
