@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,14 +36,11 @@ type panelInfo struct {
 
 // exportMetricAlerts fetches metric alert rules from the AxonOps API and
 // converts them to AxonOpsMetricAlert CRD resources.
+// Log alert rules (expr starts with "events{") are excluded.
 func exportMetricAlerts(ctx context.Context, client *axonops.Client, opts *Options) ([]Resource, error) {
 	rules, err := client.GetMetricAlertRules(ctx, opts.ClusterType, opts.ClusterName)
 	if err != nil {
 		return nil, fmt.Errorf("fetching metric alert rules: %w", err)
-	}
-
-	if len(rules) == 0 {
-		return nil, nil
 	}
 
 	// Build a reverse lookup: correlationId → (dashboard, chart)
@@ -55,10 +52,152 @@ func exportMetricAlerts(ctx context.Context, client *axonops.Client, opts *Optio
 
 	var resources []Resource
 	for _, rule := range rules {
+		if isLogAlertExpr(rule.Expr) {
+			continue // log alerts handled separately
+		}
 		r := metricAlertRuleToResource(rule, opts, panelIndex)
 		resources = append(resources, r)
 	}
 	return resources, nil
+}
+
+// exportLogAlerts fetches alert rules whose expression matches the log events
+// format ("events{...}") and converts them to AxonOpsLogAlert CRD resources.
+func exportLogAlerts(ctx context.Context, client *axonops.Client, opts *Options) ([]Resource, error) {
+	rules, err := client.GetMetricAlertRules(ctx, opts.ClusterType, opts.ClusterName)
+	if err != nil {
+		return nil, fmt.Errorf("fetching log alert rules: %w", err)
+	}
+
+	var resources []Resource
+	for _, rule := range rules {
+		if !isLogAlertExpr(rule.Expr) {
+			continue
+		}
+		r := logAlertRuleToResource(rule, opts)
+		resources = append(resources, r)
+	}
+	return resources, nil
+}
+
+// isLogAlertExpr returns true when the expression belongs to a log alert.
+// Log alert expressions start with "events{".
+func isLogAlertExpr(expr string) bool {
+	return strings.HasPrefix(strings.TrimSpace(expr), "events{")
+}
+
+// logAlertRuleToResource converts a log-alert MetricAlertRule to an AxonOpsLogAlert resource.
+func logAlertRuleToResource(rule axonops.MetricAlertRule, opts *Options) Resource {
+	name := toDNSLabel(rule.Alert)
+
+	alert := &alertsv1alpha1.AxonOpsLogAlert{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "alerts.axonops.com/v1alpha1",
+			Kind:       "AxonOpsLogAlert",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: opts.Namespace,
+		},
+		Spec: alertsv1alpha1.AxonOpsLogAlertSpec{
+			ConnectionRef: opts.ConnectionName,
+			ClusterName:   opts.ClusterName,
+			ClusterType:   opts.ClusterType,
+			Name:          rule.Alert,
+			Operator:      rule.Operator,
+			WarningValue:  rule.WarningValue,
+			CriticalValue: rule.CriticalValue,
+			Duration:      rule.For,
+		},
+	}
+
+	// Parse expr "events{message="x",level="y",source="z",type="t"}"
+	content, level, source, logType := parseLogEventsExpr(rule.Expr)
+	alert.Spec.Content = content
+	alert.Spec.Level = level
+	alert.Spec.Source = source
+	alert.Spec.LogType = logType
+
+	if rule.Annotations.Summary != "" || rule.Annotations.Description != "" {
+		alert.Spec.Annotations = &alertsv1alpha1.LogAlertAnnotations{
+			Summary:     rule.Annotations.Summary,
+			Description: rule.Annotations.Description,
+		}
+	}
+
+	// Filters
+	if len(rule.Filters) > 0 {
+		f := &alertsv1alpha1.LogAlertFilters{}
+		for _, af := range rule.Filters {
+			switch af.Name {
+			case "dc":
+				f.DataCenter = af.Value
+			case "rack":
+				f.Rack = af.Value
+			case "host_id":
+				f.HostID = af.Value
+			}
+		}
+		alert.Spec.Filters = f
+	}
+
+	return Resource{Kind: "AxonOpsLogAlert", Name: name, Object: alert}
+}
+
+// parseLogEventsExpr parses content, level, source, logType from an events expression.
+// Format: events{message="x",level="y",source="z",type="t"}
+func parseLogEventsExpr(expr string) (content, level, source, logType string) {
+	// Strip outer "events{...}"
+	inner := expr
+	if i := strings.Index(inner, "{"); i >= 0 {
+		inner = inner[i+1:]
+	}
+	if i := strings.LastIndex(inner, "}"); i >= 0 {
+		inner = inner[:i]
+	}
+
+	// Simple key="value" parser (handles escaped quotes inside values)
+	for len(inner) > 0 {
+		eqIdx := strings.Index(inner, "=")
+		if eqIdx < 0 {
+			break
+		}
+		key := strings.TrimSpace(inner[:eqIdx])
+		rest := inner[eqIdx+1:]
+		if len(rest) == 0 || rest[0] != '"' {
+			break
+		}
+		rest = rest[1:] // skip opening quote
+		// Find closing unescaped quote
+		var valBuf strings.Builder
+		i := 0
+		for i < len(rest) {
+			if rest[i] == '\\' && i+1 < len(rest) {
+				valBuf.WriteByte(rest[i+1])
+				i += 2
+				continue
+			}
+			if rest[i] == '"' {
+				i++
+				break
+			}
+			valBuf.WriteByte(rest[i])
+			i++
+		}
+		val := valBuf.String()
+		switch key {
+		case "message":
+			content = val
+		case "level":
+			level = strings.ReplaceAll(val, "|", ",")
+		case "source":
+			source = strings.ReplaceAll(val, "|", ",")
+		case "type":
+			logType = strings.ReplaceAll(val, "|", ",")
+		}
+		inner = strings.TrimLeft(rest[i:], ",")
+	}
+	return content, level, source, logType
 }
 
 // buildPanelIndex fetches all dashboards and builds a map from panel UUID to dashboard+chart info.
