@@ -44,6 +44,13 @@ spec:
         - --metrics-bind-address=0
         {{- end }}
         - --health-probe-bind-address=:8081
+        {{- if not .Values.operator.watchAllNamespaces }}
+        {{- if .Values.operator.watchNamespaces }}
+        - --watch-namespaces={{ join "," .Values.operator.watchNamespaces }}
+        {{- else }}
+        - --watch-namespaces={{ .Release.Namespace }}
+        {{- end }}
+        {{- end }}
         {{- range .Values.manager.args }}
         - {{ . }}
         {{- end }}

@@ -115,6 +115,25 @@ manager:
   ##
   tolerations: []
 
+## Operator-level behaviour settings
+##
+operator:
+  ## When true (default) the operator watches all namespaces in the cluster.
+  ## Set to false to restrict the operator to specific namespaces.
+  ##
+  ## Example — watch only two namespaces:
+  ##   helm install axonops-operator ... \
+  ##     --set operator.watchAllNamespaces=false \
+  ##     --set operator.watchNamespaces={production,staging}
+  ##
+  watchAllNamespaces: true
+
+  ## List of namespaces to watch when watchAllNamespaces is false.
+  ## When empty and watchAllNamespaces is false, the operator watches
+  ## only the release namespace ({{ .Release.Namespace }}).
+  ##
+  watchNamespaces: []
+
 ## Helper RBAC roles for managing custom resources
 ##
 rbacHelpers:
