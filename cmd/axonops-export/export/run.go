@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -113,16 +113,30 @@ func Run(ctx context.Context, opts *Options) error {
 	// Always generate AxonOpsConnection + Secret first
 	resources = append(resources, buildConnectionResources(opts)...)
 
-	// Export metric alerts
-	metricAlerts, err := exportMetricAlerts(ctx, client, opts)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to export metric alerts: %v\n", err)
-	} else {
-		resources = append(resources, metricAlerts...)
-		fmt.Fprintf(os.Stderr, "  found %d metric alert(s)\n", len(metricAlerts))
+	type exportJob struct {
+		label string
+		fn    func(context.Context, *axonops.Client, *Options) ([]Resource, error)
+	}
+	jobs := []exportJob{
+		{"metric alerts", exportMetricAlerts},
+		{"log alerts", exportLogAlerts},
+		{"healthchecks", exportHealthchecks},
+		{"integrations", exportIntegrations},
+		{"adaptive repair", exportAdaptiveRepair},
+		{"scheduled repairs", exportScheduledRepairs},
+		{"backups", exportBackups},
+		{"silence windows", exportSilenceWindows},
 	}
 
-	// Future: export log alerts, healthchecks, alert routes, etc.
+	for _, job := range jobs {
+		items, err := job.fn(ctx, client, opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to export %s: %v\n", job.label, err)
+			continue
+		}
+		resources = append(resources, items...)
+		fmt.Fprintf(os.Stderr, "  found %d %s\n", len(items), job.label)
+	}
 
 	if len(resources) == 0 {
 		fmt.Fprintln(os.Stderr, "No resources to export")

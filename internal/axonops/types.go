@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -177,13 +177,17 @@ type ScheduledSnapshotResponse struct {
 	ScheduledSnapshots []ScheduledSnapshot `json:"ScheduledSnapshots"`
 }
 
-// ScheduledSnapshot represents a single scheduled snapshot entry
+// ScheduledSnapshot represents a single scheduled snapshot entry.
+// The API returns Params as a heterogeneous JSON array: the first element is an
+// object containing the backup configuration (including BackupDetails as a
+// nested JSON string), and the remaining elements are plain strings (orgID,
+// clusterType, clusterName, snapshotID). We use RawMessage to handle this.
 type ScheduledSnapshot struct {
-	ID     string          `json:"ID"`
-	Params []SnapshotParam `json:"Params"`
+	ID     string            `json:"ID"`
+	Params []json.RawMessage `json:"Params"`
 }
 
-// SnapshotParam wraps the backup details JSON string
+// SnapshotParam wraps the backup details JSON string (first element of Params array).
 type SnapshotParam struct {
 	BackupDetails string `json:"BackupDetails"`
 }
