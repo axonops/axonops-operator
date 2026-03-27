@@ -21,6 +21,10 @@ These agents are mandatory gates, not optional tools. Do not skip them.
 ### Before creating any GitHub issue:
 Run the **issue-writer** agent. Every issue must have: summary, detailed requirements, numbered acceptance criteria, specific testing requirements (named tests, not "add tests"), documentation requirements, dependencies, and labels. If any section is missing or vague, rewrite it before creating.
 
+### Before pushing to GitHub
+
+Run `make lint` and fix **all** linting issues. Do not push code with lint errors.
+
 ### After completing any feature:
 1. **code-reviewer** — on all changed files
 2. **security-reviewer** — on any code touching TLS, HTTP, credentials, or external input
