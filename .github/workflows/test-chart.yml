@@ -2,7 +2,19 @@ name: Test Chart
 
 on:
   push:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'charts/**'
+      - 'Makefile'
   pull_request:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'charts/**'
+      - 'Makefile'
 
 jobs:
   test-e2e:

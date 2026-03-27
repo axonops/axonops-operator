@@ -2,7 +2,19 @@ name: E2E Tests
 
 on:
   push:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'test/**'
+      - 'Makefile'
   pull_request:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'test/**'
+      - 'Makefile'
 
 jobs:
   test-e2e:
