@@ -37,7 +37,7 @@ kubectl get crd | grep axonops.com
 
 ## Custom Resource Definitions
 
-The operator introduces 18 CRDs across four API groups.
+The operator introduces 19 CRDs across four API groups.
 
 ### `core.axonops.com/v1alpha1`
 
@@ -62,6 +62,7 @@ The operator introduces 18 CRDs across four API groups.
 | `AxonOpsScheduledRepair` | Cron-based Cassandra scheduled repairs |
 | `AxonOpsCommitlogArchive` | Commitlog archive settings |
 | `AxonOpsSilenceWindow` | Alert silence windows |
+| `AxonOpsLogCollector` | Log collector configuration |
 
 ### `backups.axonops.com/v1alpha1`
 
