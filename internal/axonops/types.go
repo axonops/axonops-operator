@@ -50,8 +50,8 @@ type MetricAlertFilter struct {
 
 // MetricAlertIntegrations represents alert notification integrations
 type MetricAlertIntegrations struct {
-	Type            string   `json:"Type,omitempty"`
-	Routing         []string `json:"Routing,omitempty"`
+	Type            string             `json:"Type,omitempty"`
+	Routing         []IntegrationRoute `json:"Routing,omitempty"`
 	OverrideInfo    bool     `json:"OverrideInfo,omitempty"`
 	OverrideWarning bool     `json:"OverrideWarning,omitempty"`
 	OverrideError   bool     `json:"OverrideError,omitempty"`

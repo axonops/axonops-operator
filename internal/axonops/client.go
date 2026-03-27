@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -80,7 +81,8 @@ type Client struct {
 type ClientOption func(*clientOptions)
 
 type clientOptions struct {
-	timeout time.Duration
+	timeout  time.Duration
+	verbose  bool
 }
 
 // WithTimeout sets the HTTP client timeout. Values <= 0 are ignored and the
@@ -89,6 +91,61 @@ func WithTimeout(d time.Duration) ClientOption {
 	return func(o *clientOptions) {
 		o.timeout = d
 	}
+}
+
+// WithVerbose enables request/response logging to stderr. The Authorization
+// header value is redacted so credentials are not exposed in logs.
+func WithVerbose() ClientOption {
+	return func(o *clientOptions) {
+		o.verbose = true
+	}
+}
+
+// verboseTransport wraps an http.RoundTripper and logs each request and
+// response to stderr. The Authorization header value is replaced with
+// "[REDACTED]" to avoid leaking credentials.
+type verboseTransport struct {
+	base http.RoundTripper
+}
+
+func (t *verboseTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	fmt.Fprintf(os.Stderr, "> %s %s\n", req.Method, req.URL)
+	for k, vv := range req.Header {
+		for _, v := range vv {
+			if strings.EqualFold(k, "Authorization") {
+				// print scheme only, not the token
+				parts := strings.SplitN(v, " ", 2)
+				fmt.Fprintf(os.Stderr, "> %s: %s [REDACTED]\n", k, parts[0])
+			} else {
+				fmt.Fprintf(os.Stderr, "> %s: %s\n", k, v)
+			}
+		}
+	}
+
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "< error: %v\n", err)
+		return resp, err
+	}
+
+	fmt.Fprintf(os.Stderr, "< %s\n", resp.Status)
+	for k, vv := range resp.Header {
+		for _, v := range vv {
+			fmt.Fprintf(os.Stderr, "< %s: %s\n", k, v)
+		}
+	}
+
+	// Buffer the body so it can be both logged and re-read by the caller.
+	body, readErr := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if readErr != nil {
+		fmt.Fprintf(os.Stderr, "< (error reading body: %v)\n", readErr)
+	} else {
+		fmt.Fprintf(os.Stderr, "< %s\n", string(body))
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+
+	return resp, nil
 }
 
 // NewClient creates a new AxonOps API client.
@@ -134,13 +191,18 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 
 	baseURL := fmt.Sprintf("%s://%s", protocol, host)
 
-	httpClient := &http.Client{
-		Timeout: o.timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: tlsSkipVerify,
-			},
+	var transport http.RoundTripper = &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: tlsSkipVerify,
 		},
+	}
+	if o.verbose {
+		transport = &verboseTransport{base: transport}
+	}
+
+	httpClient := &http.Client{
+		Timeout:   o.timeout,
+		Transport: transport,
 	}
 
 	return &Client{

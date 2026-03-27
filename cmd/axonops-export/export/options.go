@@ -38,6 +38,9 @@ type Options struct {
 	OutputDir      string
 	Output         string
 	DryRun         bool
+
+	// Debug
+	Verbose bool
 }
 
 // Validate checks that required fields are set.

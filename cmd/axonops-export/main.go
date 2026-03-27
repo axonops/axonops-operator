@@ -40,7 +40,7 @@ Kubernetes operator.`,
 
 	// Persistent flags (shared across subcommands)
 	pf := root.PersistentFlags()
-	pf.StringVar(&opts.Host, "host", "dash.axonops.cloud", "AxonOps host")
+	pf.StringVar(&opts.Host, "host", "", "AxonOps host (default: auto-detected from org-id; SaaS uses dash.axonops.cloud/{org-id})")
 	pf.StringVar(&opts.Protocol, "protocol", "https", "Protocol (http or https)")
 	pf.StringVar(&opts.OrgID, "org-id", "", "Organization ID (required)")
 	pf.StringVar(&opts.APIKey, "api-key", "", "API key (required)")
@@ -49,6 +49,7 @@ Kubernetes operator.`,
 	pf.StringVar(&opts.ClusterName, "cluster-name", "", "Cluster name to export from (required)")
 	pf.StringVar(&opts.ClusterType, "cluster-type", "cassandra", "Cluster type (cassandra, kafka, dse)")
 	pf.BoolVar(&opts.TLSSkipVerify, "tls-skip-verify", false, "Skip TLS certificate verification")
+	pf.BoolVar(&opts.Verbose, "verbose", false, "Log HTTP requests and responses to stderr (auth header redacted)")
 	pf.StringVar(&opts.Namespace, "namespace", "default", "Kubernetes namespace for generated resources")
 	pf.StringVar(&opts.ConnectionName, "connection-name", "axonops-connection",
 		"Name for the generated AxonOpsConnection resource")
