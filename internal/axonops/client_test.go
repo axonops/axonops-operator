@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package axonops
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -184,6 +185,49 @@ func TestNewClient_SAMLHostPathPreserved(t *testing.T) {
 
 	if !strings.HasPrefix(receivedPath, "/dashboard/") {
 		t.Errorf("SAML /dashboard path was stripped: got path %q, want prefix /dashboard/", receivedPath)
+	}
+}
+
+func TestAPIError_SafeMessage_OmitsBody(t *testing.T) {
+	e := &APIError{StatusCode: 500, Body: "internal secret details"}
+	safe := e.SafeMessage()
+	if strings.Contains(safe, "internal secret details") {
+		t.Errorf("SafeMessage() must not include response body, got: %q", safe)
+	}
+	if !strings.Contains(safe, "500") {
+		t.Errorf("SafeMessage() must include status code, got: %q", safe)
+	}
+}
+
+func TestAPIError_Error_IncludesBody(t *testing.T) {
+	e := &APIError{StatusCode: 403, Body: "forbidden response body"}
+	full := e.Error()
+	if !strings.Contains(full, "forbidden response body") {
+		t.Errorf("Error() should include body for debug logging, got: %q", full)
+	}
+}
+
+func TestAPIError_SafeMessage_OmitsOrgID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"org-secret-id not found"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "http", "org-secret-id", "key", "Bearer", false)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	_, apiErr := client.GetMetricAlertRules(context.Background(), "cassandra", "cluster")
+	var ae *APIError
+	if !errors.As(apiErr, &ae) {
+		t.Fatalf("expected *APIError, got %T", apiErr)
+	}
+
+	safe := ae.SafeMessage()
+	if strings.Contains(safe, "org-secret-id") {
+		t.Errorf("SafeMessage() must not contain orgID, got: %q", safe)
 	}
 }
 

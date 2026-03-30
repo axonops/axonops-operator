@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package kafka
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -103,7 +102,7 @@ func (r *AxonOpsKafkaACLReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
-		r.setFailedCondition(ctx, acl, "FailedToResolveConnection", fmt.Sprintf("Failed to resolve connection: %v", err))
+		r.setFailedCondition(ctx, acl, "FailedToResolveConnection", common.SafeConditionMsg("Failed to resolve connection", err))
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -120,7 +119,7 @@ func (r *AxonOpsKafkaACLReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if err := apiClient.CreateKafkaACL(ctx, acl.Spec.ClusterName, aclPayload); err != nil {
 		log.Error(err, "Failed to create Kafka ACL")
-		r.setFailedCondition(ctx, acl, "CreateFailed", fmt.Sprintf("Failed to create ACL: %v", err))
+		r.setFailedCondition(ctx, acl, "CreateFailed", common.SafeConditionMsg("Failed to create ACL", err))
 		var apiErr *axonops.APIError
 		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil

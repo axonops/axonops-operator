@@ -110,7 +110,7 @@ axonops-operator/
 ├── examples/
 │   ├── axonops/                   # Full AxonOpsServer examples
 │   └── k8ssandra/                 # K8ssandra-specific examples
-├── charts/axonops-operator/       # Helm chart (future)
+├── charts/axonops-operator/       # Helm chart (published to GHCR)
 ├── cmd/main.go                    # Manager entry point
 ├── Makefile
 └── PROJECT                        # Kubebuilder metadata — do not edit
@@ -132,9 +132,30 @@ axonops-operator/
 | `AxonOpsMetricAlert` | Metric threshold alert rules |
 | `AxonOpsLogAlert` | Log pattern alert rules |
 | `AxonOpsAlertRoute` | Alert routing and notification channel configuration |
+| `AxonOpsAlertEndpoint` | Integration endpoint definitions (PagerDuty, Slack, etc.) |
 | `AxonOpsHealthcheckHTTP` | HTTP endpoint healthchecks |
 | `AxonOpsHealthcheckShell` | Shell script healthchecks |
 | `AxonOpsHealthcheckTCP` | TCP port healthchecks |
+| `AxonOpsDashboardTemplate` | Declarative dashboard management |
+| `AxonOpsAdaptiveRepair` | Adaptive Cassandra repair scheduling |
+| `AxonOpsScheduledRepair` | Cron-based Cassandra scheduled repairs |
+| `AxonOpsCommitlogArchive` | Commitlog archive settings |
+| `AxonOpsSilenceWindow` | Alert silence windows |
+| `AxonOpsLogCollector` | Log collector configuration |
+
+**`backups.axonops.com`** (`api/backups/v1alpha1/`)
+
+| Kind | Purpose |
+|---|---|
+| `AxonOpsBackup` | Cassandra scheduled snapshot backups (S3/SFTP/Azure) |
+
+**`kafka.axonops.com`** (`api/kafka/v1alpha1/`)
+
+| Kind | Purpose |
+|---|---|
+| `AxonOpsKafkaTopic` | Kafka topic lifecycle management |
+| `AxonOpsKafkaACL` | Kafka ACL entry management |
+| `AxonOpsKafkaConnector` | Kafka Connect connector management |
 
 ---
 
@@ -437,14 +458,15 @@ Add RBAC markers in the controller file alongside the `Reconcile` method. `make 
 The `AxonAuthentication` struct defines credential priority for database components:
 
 1. `SecretRef` — reference to an existing Kubernetes Secret (highest priority)
-2. Explicit `username` / `password` fields in the CR
-3. Auto-generated random credentials via `generateRandomPassword` (default fallback)
+2. Auto-generated random credentials via `generateRandomPassword` (default fallback)
+
+> **Note:** Inline `username` / `password` fields are not yet supported. Use `secretRef` or rely on auto-generation.
 
 The generated password meets complexity requirements: at least one uppercase letter, one digit, and one special character.
 
 ### AxonOpsConnection for alert CRDs
 
-Alert CRDs (`AxonOpsMetricAlert`, `AxonOpsLogAlert`, etc.) do not embed API credentials directly. Instead they reference an `AxonOpsConnection` CR by name. The shared resolver lives at `internal/controller/alerts/connection.go`.
+Alert CRDs (`AxonOpsMetricAlert`, `AxonOpsLogAlert`, etc.) do not embed API credentials directly. Instead they reference an `AxonOpsConnection` CR by name. The shared resolver lives at `internal/controller/common/connection.go`.
 
 ---
 

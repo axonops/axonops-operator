@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package alerts
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,6 +35,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -108,7 +108,7 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
-		r.setFailedCondition(ctx, healthcheck, ReasonConnectionError, fmt.Sprintf("Failed to resolve connection: %v", err))
+		r.setFailedCondition(ctx, healthcheck, ReasonConnectionError, common.SafeConditionMsg("Failed to resolve connection", err))
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -125,7 +125,7 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 	allHealthchecks, err := apiClient.GetHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName)
 	if err != nil {
 		log.Error(err, "Failed to get healthchecks from AxonOps")
-		r.setFailedCondition(ctx, healthcheck, ReasonAPIError, fmt.Sprintf("Failed to get healthchecks: %v", err))
+		r.setFailedCondition(ctx, healthcheck, ReasonAPIError, common.SafeConditionMsg("Failed to get healthchecks", err))
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -152,7 +152,7 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 	// Update all healthchecks via bulk PUT
 	if err := apiClient.UpdateHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName, allHealthchecks); err != nil {
 		log.Error(err, "Failed to update healthchecks")
-		r.setFailedCondition(ctx, healthcheck, ReasonAPIError, fmt.Sprintf("Failed to update healthchecks: %v", err))
+		r.setFailedCondition(ctx, healthcheck, ReasonAPIError, common.SafeConditionMsg("Failed to update healthchecks", err))
 		var apiErr *axonops.APIError
 		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil

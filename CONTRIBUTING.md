@@ -101,7 +101,6 @@ PR body should include:
 
 ```bash
 go mod download
-make install-tools  # if needed
 ```
 
 ### Run Tests
@@ -167,6 +166,9 @@ api/
 internal/
   ├── controller/            # AxonOpsServer controller
   ├── controller/alerts/     # Alert controllers
+  ├── controller/backups/    # Backup controllers
+  ├── controller/kafka/      # Kafka controllers
+  ├── controller/common/     # Shared helpers (connection resolver, SafeConditionMsg)
   └── axonops/               # AxonOps API client
 ```
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -106,7 +107,7 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
-		r.setFailedCondition(ctx, archive, ReasonConnectionError, fmt.Sprintf("Failed to resolve connection: %v", err))
+		r.setFailedCondition(ctx, archive, ReasonConnectionError, common.SafeConditionMsg("Failed to resolve connection", err))
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -125,14 +126,14 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 
 	payload, err := r.buildPayload(ctx, archive)
 	if err != nil {
-		r.setFailedCondition(ctx, archive, "SecretNotFound", fmt.Sprintf("Failed to build payload: %v", err))
+		r.setFailedCondition(ctx, archive, "SecretNotFound", common.SafeConditionMsg("Failed to build payload", err))
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	existing, err := apiClient.GetCommitlogArchiveSettings(ctx, archive.Spec.ClusterType, archive.Spec.ClusterName)
 	if err != nil {
 		log.Error(err, "Failed to get commitlog archive settings")
-		r.setFailedCondition(ctx, archive, ReasonAPIError, fmt.Sprintf("Failed to get settings: %v", err))
+		r.setFailedCondition(ctx, archive, ReasonAPIError, common.SafeConditionMsg("Failed to get settings", err))
 		var apiErr *axonops.APIError
 		if errors.As(err, &apiErr) && !apiErr.IsRetryable() {
 			return ctrl.Result{}, nil
@@ -146,7 +147,7 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 			log.Info("Deleting existing commitlog archive settings before update", "remoteType", archive.Spec.RemoteType)
 			if err := apiClient.DeleteCommitlogArchiveSettings(ctx, archive.Spec.ClusterType, archive.Spec.ClusterName, archive.Spec.Datacenters); err != nil {
 				log.Error(err, "Failed to delete existing settings")
-				r.setFailedCondition(ctx, archive, ReasonAPIError, fmt.Sprintf("Failed to delete existing settings: %v", err))
+				r.setFailedCondition(ctx, archive, ReasonAPIError, common.SafeConditionMsg("Failed to delete existing settings", err))
 				var apiErr *axonops.APIError
 				if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 					return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -159,7 +160,7 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 
 	if err := apiClient.CreateCommitlogArchiveSettings(ctx, archive.Spec.ClusterType, archive.Spec.ClusterName, payload); err != nil {
 		log.Error(err, "Failed to create commitlog archive settings")
-		r.setFailedCondition(ctx, archive, ReasonAPIError, fmt.Sprintf("Failed to create settings: %v", err))
+		r.setFailedCondition(ctx, archive, ReasonAPIError, common.SafeConditionMsg("Failed to create settings", err))
 		var apiErr *axonops.APIError
 		if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil

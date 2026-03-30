@@ -1,15 +1,32 @@
-Thank you for installing {{ .Chart.Name }}.
+Thank you for installing {{ .Chart.Name }} {{ .Chart.Version }}.
 
-Your release is named {{ .Release.Name }}.
+Your release is named {{ .Release.Name }} and is running in namespace {{ .Release.Namespace }}.
 
-The controller and CRDs have been installed in namespace {{ .Release.Namespace }}.
-
-To verify the installation:
+To verify the operator is running:
 
   kubectl get pods -n {{ .Release.Namespace }}
-  kubectl get customresourcedefinitions
 
-To learn more about the release, try:
+To verify the CRDs were installed:
 
-  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
-  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+  kubectl get customresourcedefinitions | grep axonops.com
+
+Next steps:
+
+  1. Create an AxonOpsConnection with your API credentials:
+
+       kubectl apply -f https://raw.githubusercontent.com/axonops/axonops-operator/main/config/samples/core_v1alpha1_axonopsconnection.yaml
+
+  2. Deploy the full AxonOps stack with an AxonOpsServer:
+
+       kubectl apply -f https://raw.githubusercontent.com/axonops/axonops-operator/main/config/samples/core_v1alpha1_axonopsserver.yaml
+
+  3. Or apply all sample resources at once:
+
+       kubectl apply -k https://github.com/axonops/axonops-operator/config/samples
+
+For full documentation and examples visit:
+  https://github.com/axonops/axonops-operator
+
+To check the release status:
+
+  helm status {{ .Release.Name }} -n {{ .Release.Namespace }}

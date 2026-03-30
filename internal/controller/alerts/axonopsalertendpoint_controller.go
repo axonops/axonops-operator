@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -155,7 +156,7 @@ func (r *AxonOpsAlertEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 			Type:               condTypeReady,
 			Status:             metav1.ConditionFalse,
 			Reason:             ReasonConnectionError,
-			Message:            fmt.Sprintf("Failed to resolve AxonOps connection: %v", err),
+			Message:            common.SafeConditionMsg("Failed to resolve AxonOps connection", err),
 			ObservedGeneration: endpoint.Generation,
 		})
 		if statusErr := r.Status().Update(ctx, endpoint); statusErr != nil {
@@ -183,7 +184,7 @@ func (r *AxonOpsAlertEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 			Type:               condTypeReady,
 			Status:             metav1.ConditionFalse,
 			Reason:             ReasonAPIError,
-			Message:            fmt.Sprintf("Failed to create/update integration: %v", err),
+			Message:            common.SafeConditionMsg("Failed to create/update integration", err),
 			ObservedGeneration: endpoint.Generation,
 		})
 		if statusErr := r.Status().Update(ctx, endpoint); statusErr != nil {

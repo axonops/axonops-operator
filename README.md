@@ -39,6 +39,8 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 | `AxonOpsAdaptiveRepair` | Adaptive repair scheduling |
 | `AxonOpsScheduledRepair` | Scheduled repair management |
 | `AxonOpsCommitlogArchive` | Commitlog archive management |
+| `AxonOpsSilenceWindow` | Alert silence windows |
+| `AxonOpsLogCollector` | Log collector configuration |
 
 ### `backups.axonops.com/v1alpha1`
 
@@ -72,7 +74,8 @@ The Helm chart is published as an OCI artifact on GitHub Container Registry. Ins
 
 ```bash
 helm upgrade --install axonops-operator \
-  oci://ghcr.io/axonops/charts/axonops-operator:0.0.3 \
+  oci://ghcr.io/axonops/charts/axonops-operator \
+  --version 0.1.0 \
   --namespace axonops-operator-system --create-namespace
 ```
 
@@ -240,7 +243,7 @@ Pre-built sample resources are available under `config/samples/`:
 kubectl apply -k config/samples/
 ```
 
-For more detailed examples including alert configuration, K8ssandra integration, and full-stack deployments, see the [`examples/`](examples/) directory.
+For more detailed examples including alert configuration, K8ssandra integration, and full-stack deployments, see the [`examples/`](examples/README.md) directory.
 
 ---
 
@@ -280,6 +283,6 @@ make undeploy                       # Remove the operator from the cluster
 
 ## License
 
-Copyright 2026 AxonOps Ltd.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the [Apache License, Version 2.0](LICENSE).

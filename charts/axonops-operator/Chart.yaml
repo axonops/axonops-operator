@@ -47,6 +47,50 @@ annotations:
       version: v1alpha1
       name: axonopslogalerts.alerts.axonops.com
       description: Log pattern alert rules
+    - kind: AxonOpsAlertRoute
+      version: v1alpha1
+      name: axonopsalertroutes.alerts.axonops.com
+      description: Alert routing and notification channel configuration
+    - kind: AxonOpsAlertEndpoint
+      version: v1alpha1
+      name: axonopsalertendpoints.alerts.axonops.com
+      description: Alert notification endpoints (email, Slack, PagerDuty, etc.)
+    - kind: AxonOpsHealthcheckHTTP
+      version: v1alpha1
+      name: axonopshealthcheckhttps.alerts.axonops.com
+      description: HTTP endpoint healthchecks
+    - kind: AxonOpsHealthcheckTCP
+      version: v1alpha1
+      name: axonopshealthchecktcps.alerts.axonops.com
+      description: TCP port healthchecks
+    - kind: AxonOpsHealthcheckShell
+      version: v1alpha1
+      name: axonopshealthcheckshells.alerts.axonops.com
+      description: Shell script healthchecks
+    - kind: AxonOpsDashboardTemplate
+      version: v1alpha1
+      name: axonopsdashboardtemplates.alerts.axonops.com
+      description: Declarative dashboard management
+    - kind: AxonOpsAdaptiveRepair
+      version: v1alpha1
+      name: axonopsadaptiverepairs.alerts.axonops.com
+      description: Adaptive repair scheduling
+    - kind: AxonOpsScheduledRepair
+      version: v1alpha1
+      name: axonopsscheduledrepairs.alerts.axonops.com
+      description: Cron-based scheduled repair management
+    - kind: AxonOpsCommitlogArchive
+      version: v1alpha1
+      name: axonopscommitlogarchives.alerts.axonops.com
+      description: Commitlog archive settings
+    - kind: AxonOpsSilenceWindow
+      version: v1alpha1
+      name: axonopssilencewindows.alerts.axonops.com
+      description: Alert silence windows
+    - kind: AxonOpsLogCollector
+      version: v1alpha1
+      name: axonopslogcollectors.alerts.axonops.com
+      description: Log collector configuration
     - kind: AxonOpsBackup
       version: v1alpha1
       name: axonopsbackups.backups.axonops.com
@@ -55,6 +99,14 @@ annotations:
       version: v1alpha1
       name: axonopskafkatopics.kafka.axonops.com
       description: Kafka topic lifecycle management
+    - kind: AxonOpsKafkaACL
+      version: v1alpha1
+      name: axonopskafkaacls.kafka.axonops.com
+      description: Kafka ACL entry management
+    - kind: AxonOpsKafkaConnector
+      version: v1alpha1
+      name: axonopskafkaconnectors.kafka.axonops.com
+      description: Kafka Connect connector management
   artifacthub.io/links: |
     - name: Documentation
       url: https://docs.axonops.com

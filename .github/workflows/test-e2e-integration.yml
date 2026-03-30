@@ -2,6 +2,14 @@ name: E2E Integration Testing
 
 on:
   pull_request:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+
+concurrency:
+  group: e2e-integration
+  cancel-in-progress: false
 
 jobs:
   test-e2e:

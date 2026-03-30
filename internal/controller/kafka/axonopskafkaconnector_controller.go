@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package kafka
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -102,7 +101,7 @@ func (r *AxonOpsKafkaConnectorReconciler) Reconcile(ctx context.Context, req ctr
 	}
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
-		r.setFailedCondition(ctx, connector, "FailedToResolveConnection", fmt.Sprintf("Failed to resolve connection: %v", err))
+		r.setFailedCondition(ctx, connector, "FailedToResolveConnection", common.SafeConditionMsg("Failed to resolve connection", err))
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -124,7 +123,7 @@ func (r *AxonOpsKafkaConnectorReconciler) Reconcile(ctx context.Context, req ctr
 		resp, err := apiClient.CreateKafkaConnector(ctx, connector.Spec.ClusterName, connector.Spec.ConnectClusterName, createReq)
 		if err != nil {
 			log.Error(err, "Failed to create Kafka connector")
-			r.setFailedCondition(ctx, connector, "CreateFailed", fmt.Sprintf("Failed to create connector: %v", err))
+			r.setFailedCondition(ctx, connector, "CreateFailed", common.SafeConditionMsg("Failed to create connector", err))
 			var apiErr *axonops.APIError
 			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -139,7 +138,7 @@ func (r *AxonOpsKafkaConnectorReconciler) Reconcile(ctx context.Context, req ctr
 		// Connector exists — update config only
 		if err := apiClient.UpdateKafkaConnectorConfig(ctx, connector.Spec.ClusterName, connector.Spec.ConnectClusterName, connector.Spec.Name, connector.Spec.Config); err != nil {
 			log.Error(err, "Failed to update Kafka connector config")
-			r.setFailedCondition(ctx, connector, "UpdateFailed", fmt.Sprintf("Failed to update connector config: %v", err))
+			r.setFailedCondition(ctx, connector, "UpdateFailed", common.SafeConditionMsg("Failed to update connector config", err))
 			var apiErr *axonops.APIError
 			if errors.As(err, &apiErr) && apiErr.IsRetryable() {
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil

@@ -1,5 +1,5 @@
 /*
-Copyright 2026.
+© 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package alerts
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,6 +35,7 @@ import (
 
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
+	"github.com/axonops/axonops-operator/internal/controller/common"
 	axonopsmetrics "github.com/axonops/axonops-operator/internal/metrics"
 )
 
@@ -108,7 +108,7 @@ func (r *AxonOpsSilenceWindowReconciler) Reconcile(ctx context.Context, req ctrl
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: silence.Generation,
 			Reason:             "FailedToResolveConnection",
-			Message:            fmt.Sprintf("Failed to resolve connection: %v", err),
+			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		silence.Status.ObservedGeneration = silence.Generation
 		if err := r.Status().Update(ctx, silence); err != nil {
@@ -166,7 +166,7 @@ func (r *AxonOpsSilenceWindowReconciler) Reconcile(ctx context.Context, req ctrl
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: silence.Generation,
 				Reason:             "SyncFailed",
-				Message:            fmt.Sprintf("Failed to sync with AxonOps: %v", err),
+				Message:            common.SafeConditionMsg("Failed to sync with AxonOps", err),
 			})
 			silence.Status.ObservedGeneration = silence.Generation
 			if err := r.Status().Update(ctx, silence); err != nil {
