@@ -47,7 +47,7 @@ Feature: Helm chart for AxonOps operator installation
     When the user runs "helm upgrade axonops-operator <chart-path> --set image.tag=v1.1.0"
     Then the operator manager Deployment should be updated with the new image
     And the CRDs should be updated to the v1.1.0 schema
-    And existing AxonOpsServer and alert CRs should remain functional
+    And existing AxonOpsPlatform and alert CRs should remain functional
 
   Scenario: Rollback operator to previous version
     Given an AxonOps operator upgraded to a problematic version

@@ -306,13 +306,13 @@ func main() {
 		setupLog.Info("Fallback AxonOps environment variables detected (AXONOPS_API_KEY, AXONOPS_ORG_ID)")
 	}
 
-	if err := (&controller.AxonOpsServerReconciler{
+	if err := (&controller.AxonOpsPlatformReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		ClusterIssuerName: certManagerClusterIssuerName,
 		RESTMapper:        mgr.GetRESTMapper(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "AxonOpsServer")
+		setupLog.Error(err, "Failed to create controller", "controller", "AxonOpsPlatform")
 		os.Exit(1)
 	}
 	if err := (&alertscontroller.AxonOpsMetricAlertReconciler{

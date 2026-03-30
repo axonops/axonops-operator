@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 02-deploy-axonops.sh — Deploy AxonOpsServer CR and verify all components come up.
+# 02-deploy-axonops.sh — Deploy AxonOpsPlatform CR and verify all components come up.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -8,11 +8,11 @@ require_env_vars TEST_NAMESPACE
 # Ensure the test namespace exists (skipped when SKIP_CLUSTER_CREATE=true in CI).
 kubectl create namespace "${TEST_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
-echo "Deploying AxonOpsServer CR in namespace '${TEST_NAMESPACE}' ..."
+echo "Deploying AxonOpsPlatform CR in namespace '${TEST_NAMESPACE}' ..."
 
 kubectl apply -f - <<EOF
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   name: axonops
   namespace: ${TEST_NAMESPACE}
@@ -29,25 +29,25 @@ EOF
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- Waiting for CertManagerReady ---"
-wait_for_condition axonopsserver/axonops CertManagerReady 120
+wait_for_condition axonopsplatform/axonops CertManagerReady 120
 
 echo ""
 echo "--- Waiting for ServerReady ---"
-wait_for_condition axonopsserver/axonops ServerReady 600
+wait_for_condition axonopsplatform/axonops ServerReady 600
 
 echo ""
 echo "--- Waiting for DashboardReady ---"
-wait_for_condition axonopsserver/axonops DashboardReady 600
+wait_for_condition axonopsplatform/axonops DashboardReady 600
 
 # ---------------------------------------------------------------------------
 # Assert status fields are populated
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- Asserting status fields ---"
-assert_jsonpath_nonempty axonopsserver/axonops '{.status.timeSeriesSecretName}'
-assert_jsonpath_nonempty axonopsserver/axonops '{.status.searchSecretName}'
-assert_jsonpath_nonempty axonopsserver/axonops '{.status.timeSeriesCertSecretName}'
-assert_jsonpath_nonempty axonopsserver/axonops '{.status.searchCertSecretName}'
+assert_jsonpath_nonempty axonopsplatform/axonops '{.status.timeSeriesSecretName}'
+assert_jsonpath_nonempty axonopsplatform/axonops '{.status.searchSecretName}'
+assert_jsonpath_nonempty axonopsplatform/axonops '{.status.timeSeriesCertSecretName}'
+assert_jsonpath_nonempty axonopsplatform/axonops '{.status.searchCertSecretName}'
 
 # ---------------------------------------------------------------------------
 # Assert created Kubernetes resources
@@ -74,9 +74,9 @@ assert_exists service/axondb-search-headless
 assert_exists service/axon-dash
 
 # Auth Secrets
-TIMESERIES_SECRET=$(kubectl get axonopsserver/axonops -n "${TEST_NAMESPACE}" \
+TIMESERIES_SECRET=$(kubectl get axonopsplatform/axonops -n "${TEST_NAMESPACE}" \
   -o jsonpath='{.status.timeSeriesSecretName}' 2>/dev/null || true)
-SEARCH_SECRET=$(kubectl get axonopsserver/axonops -n "${TEST_NAMESPACE}" \
+SEARCH_SECRET=$(kubectl get axonopsplatform/axonops -n "${TEST_NAMESPACE}" \
   -o jsonpath='{.status.searchSecretName}' 2>/dev/null || true)
 
 if [[ -n "${TIMESERIES_SECRET}" ]]; then
@@ -92,9 +92,9 @@ else
 fi
 
 # TLS Certificate Secrets
-TIMESERIES_CERT=$(kubectl get axonopsserver/axonops -n "${TEST_NAMESPACE}" \
+TIMESERIES_CERT=$(kubectl get axonopsplatform/axonops -n "${TEST_NAMESPACE}" \
   -o jsonpath='{.status.timeSeriesCertSecretName}' 2>/dev/null || true)
-SEARCH_CERT=$(kubectl get axonopsserver/axonops -n "${TEST_NAMESPACE}" \
+SEARCH_CERT=$(kubectl get axonopsplatform/axonops -n "${TEST_NAMESPACE}" \
   -o jsonpath='{.status.searchCertSecretName}' 2>/dev/null || true)
 
 if [[ -n "${TIMESERIES_CERT}" ]]; then
@@ -141,4 +141,4 @@ else
 fi
 
 echo ""
-echo "AxonOpsServer deployment complete"
+echo "AxonOpsPlatform deployment complete"

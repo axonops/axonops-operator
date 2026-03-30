@@ -9,9 +9,9 @@ stringData:
   AXONOPS_SEARCH_PASSWORD: "your-secure-password-here"
 ---
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
-  name: axonops-server
+  name: axonops
   namespace: default
 spec:
   # Configure external OpenSearch/Elasticsearch

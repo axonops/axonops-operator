@@ -1,6 +1,6 @@
 ## Append samples of your project ##
 resources:
-- core_v1alpha1_axonopsserver.yaml
+- core_v1alpha1_axonopsplatform.yaml
 - alerts_v1alpha1_axonopsmetricalert.yaml
 - alerts_v1alpha1_axonopsalertroute.yaml
 - kafka_v1alpha1_axonopshealthcheckhttp.yaml

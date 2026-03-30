@@ -1,4 +1,4 @@
-# AxonOpsServer with hostPath storage for single-node / dev clusters
+# AxonOpsPlatform with hostPath storage for single-node / dev clusters
 #
 # Use this pattern when you do not have a StorageClass available (e.g., bare-metal
 # single-node clusters, Kind, or on-premises environments without a provisioner).
@@ -13,7 +13,7 @@
 # WARNING: hostPath volumes are node-local. Pods must be scheduled to the same
 # node where the data directories reside. Use nodeSelector or nodeName accordingly.
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   name: axonops-hostpath
   namespace: axonops

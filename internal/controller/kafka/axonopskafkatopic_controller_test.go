@@ -208,6 +208,95 @@ var _ = Describe("AxonOpsKafkaTopic Controller", func() {
 		})
 	})
 
+	Context("Reconcile_Create_APIBodyError", func() {
+		It("should set Failed condition and not mark Synced when API returns 200 with error body", func() {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"error":"available kafka nodes not found"}`))
+			}))
+			defer server.Close()
+			connBody := connName + "-body-err"
+			cleanup := createTestConnectionAndSecret(ctx, connBody, server)
+			defer cleanup()
+
+			cr := newTopicCR("topic-body-error-test")
+			cr.Spec.ConnectionRef = connBody
+			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
+			defer func() {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: testNamespace}, cr); err == nil {
+					controllerutil.RemoveFinalizer(cr, kafkaTopicFinalizerName)
+					_ = k8sClient.Update(ctx, cr)
+					_ = k8sClient.Delete(ctx, cr)
+				}
+			}()
+
+			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
+			reconciler := &AxonOpsKafkaTopicReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+
+			// First reconcile adds finalizer
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second reconcile attempts create and hits body-level error
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
+			Expect(cr.Status.Synced).To(BeFalse())
+
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			Expect(failedCond).NotTo(BeNil())
+			Expect(failedCond.Reason).To(Equal("CreateFailed"))
+			Expect(failedCond.Message).To(ContainSubstring("available kafka nodes not found"))
+
+			readyCond := meta.FindStatusCondition(cr.Status.Conditions, "Ready")
+			Expect(readyCond).To(BeNil())
+		})
+	})
+
+	Context("Reconcile_Create_ServerError_IncludesAPIMessage", func() {
+		It("should include the API error message in the Failed condition when server returns 500", func() {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error":"available kafka nodes not found"}`))
+			}))
+			defer server.Close()
+			connMsg := connName + "-msg-err"
+			cleanup := createTestConnectionAndSecret(ctx, connMsg, server)
+			defer cleanup()
+
+			cr := newTopicCR("topic-msg-error-test")
+			cr.Spec.ConnectionRef = connMsg
+			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
+			defer func() {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: testNamespace}, cr); err == nil {
+					controllerutil.RemoveFinalizer(cr, kafkaTopicFinalizerName)
+					_ = k8sClient.Update(ctx, cr)
+					_ = k8sClient.Delete(ctx, cr)
+				}
+			}()
+
+			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
+			reconciler := &AxonOpsKafkaTopicReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
+			Expect(cr.Status.Synced).To(BeFalse())
+
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			Expect(failedCond).NotTo(BeNil())
+			Expect(failedCond.Reason).To(Equal("CreateFailed"))
+			Expect(failedCond.Message).To(ContainSubstring("available kafka nodes not found"))
+		})
+	})
+
 	Context("Reconcile_Update_ConfigOnly", func() {
 		It("should update config via PUT when topic already synced", func() {
 			var putCalled atomic.Bool

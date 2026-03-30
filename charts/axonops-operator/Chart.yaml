@@ -31,9 +31,9 @@ annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
   artifacthub.io/crds: |
-    - kind: AxonOpsServer
+    - kind: AxonOpsPlatform
       version: v1alpha1
-      name: axonopsservers.core.axonops.com
+      name: axonopsplatforms.core.axonops.com
       description: Deploys the AxonOps server stack (server, dashboard, timeseries DB, search)
     - kind: AxonOpsConnection
       version: v1alpha1

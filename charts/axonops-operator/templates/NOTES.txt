@@ -16,9 +16,9 @@ Next steps:
 
        kubectl apply -f https://raw.githubusercontent.com/axonops/axonops-operator/main/config/samples/core_v1alpha1_axonopsconnection.yaml
 
-  2. Deploy the full AxonOps stack with an AxonOpsServer:
+  2. Deploy the full AxonOps stack with an AxonOpsPlatform:
 
-       kubectl apply -f https://raw.githubusercontent.com/axonops/axonops-operator/main/config/samples/core_v1alpha1_axonopsserver.yaml
+       kubectl apply -f https://raw.githubusercontent.com/axonops/axonops-operator/main/config/samples/core_v1alpha1_axonopsplatform.yaml
 
   3. Or apply all sample resources at once:
 

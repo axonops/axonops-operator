@@ -21,7 +21,7 @@ stringData:
 
 ---
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   name: server
   namespace: axonops

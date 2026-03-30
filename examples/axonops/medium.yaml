@@ -37,7 +37,7 @@ spec:
 
 ---
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   name: axonops
   namespace: axonops-prod

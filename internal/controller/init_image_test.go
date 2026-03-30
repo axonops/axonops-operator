@@ -24,7 +24,7 @@ import (
 )
 
 func TestResolveInitImage_DefaultIsPinned(t *testing.T) {
-	server := &corev1alpha1.AxonOpsServer{}
+	server := &corev1alpha1.AxonOpsPlatform{}
 
 	got := resolveInitImage(server)
 
@@ -40,8 +40,8 @@ func TestResolveInitImage_DefaultIsPinned(t *testing.T) {
 }
 
 func TestResolveInitImage_CustomImage(t *testing.T) {
-	server := &corev1alpha1.AxonOpsServer{
-		Spec: corev1alpha1.AxonOpsServerSpec{
+	server := &corev1alpha1.AxonOpsPlatform{
+		Spec: corev1alpha1.AxonOpsPlatformSpec{
 			InitImage: "myregistry.io/busybox:1.36.0",
 		},
 	}
@@ -54,8 +54,8 @@ func TestResolveInitImage_CustomImage(t *testing.T) {
 }
 
 func TestResolveInitImage_EmptyFallsBackToDefault(t *testing.T) {
-	server := &corev1alpha1.AxonOpsServer{
-		Spec: corev1alpha1.AxonOpsServerSpec{
+	server := &corev1alpha1.AxonOpsPlatform{
+		Spec: corev1alpha1.AxonOpsPlatformSpec{
 			InitImage: "",
 		},
 	}

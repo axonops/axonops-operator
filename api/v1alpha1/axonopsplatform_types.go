@@ -41,7 +41,7 @@ type IssuerConfig struct {
 	CASecretRef string `json:"caSecretRef,omitempty"`
 }
 
-// AxonOpsTLSConfig configures cert-manager TLS for the AxonOpsServer.
+// AxonOpsTLSConfig configures cert-manager TLS for the AxonOpsPlatform.
 type AxonOpsTLSConfig struct {
 	// Issuer configures the ClusterIssuer used to sign TLS certificates.
 	// If not specified, a default SelfSigned ClusterIssuer named
@@ -50,10 +50,10 @@ type AxonOpsTLSConfig struct {
 	Issuer IssuerConfig `json:"issuer,omitempty"`
 }
 
-// AxonOpsServerSpec defines the desired state of AxonOpsServer
+// AxonOpsPlatformSpec defines the desired state of AxonOpsPlatform
 // All components are enabled by default. Set component.enabled=false to disable.
-type AxonOpsServerSpec struct {
-	// Pause stops the controller from reconciling this AxonOpsServer resource.
+type AxonOpsPlatformSpec struct {
+	// Pause stops the controller from reconciling this AxonOpsPlatform resource.
 	// Existing owned resources (StatefulSets, Deployments, Services, Secrets,
 	// Certificates) are left untouched. Deletion still proceeds normally.
 	// +optional
@@ -94,9 +94,9 @@ type AxonOpsServerSpec struct {
 	InitImage string `json:"initImage,omitempty"`
 }
 
-// AxonOpsServerStatus defines the observed state of AxonOpsServer.
-type AxonOpsServerStatus struct {
-	// Conditions represent the current state of the AxonOpsServer resource.
+// AxonOpsPlatformStatus defines the observed state of AxonOpsPlatform.
+type AxonOpsPlatformStatus struct {
+	// Conditions represent the current state of the AxonOpsPlatform resource.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
@@ -130,30 +130,30 @@ type AxonOpsServerStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Paused",type=boolean,JSONPath=`.spec.pause`
 
-// AxonOpsServer is the Schema for the axonopsservers API; it's the top-level resource for AxonOpsSever, TimeSeries and SearchDB
-type AxonOpsServer struct {
+// AxonOpsPlatform is the Schema for the axonopsplatforms API; it's the top-level resource for the AxonOps observability platform (server, dashboard, TimeSeries and SearchDB)
+type AxonOpsPlatform struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of AxonOpsServer
+	// spec defines the desired state of AxonOpsPlatform
 	// +required
-	Spec AxonOpsServerSpec `json:"spec"`
+	Spec AxonOpsPlatformSpec `json:"spec"`
 
-	// status defines the observed state of AxonOpsServer
+	// status defines the observed state of AxonOpsPlatform
 	// +optional
-	Status AxonOpsServerStatus `json:"status,omitzero"`
+	Status AxonOpsPlatformStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// AxonOpsServerList contains a list of AxonOpsServer
-type AxonOpsServerList struct {
+// AxonOpsPlatformList contains a list of AxonOpsPlatform
+type AxonOpsPlatformList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []AxonOpsServer `json:"items"`
+	Items           []AxonOpsPlatform `json:"items"`
 }
 
 // AxonAuthentication configures database authentication credentials.
@@ -468,5 +468,5 @@ type AxonDashboardComponent struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&AxonOpsServer{}, &AxonOpsServerList{})
+	SchemeBuilder.Register(&AxonOpsPlatform{}, &AxonOpsPlatformList{})
 }

@@ -8,7 +8,7 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 
 ## What It Does
 
-- **Deploys the full AxonOps stack** — axon-server, axon-dash, axondb-timeseries, and axondb-search — from a single `AxonOpsServer` custom resource.
+- **Deploys the full AxonOps stack** — axon-server, axon-dash, axondb-timeseries, and axondb-search — from a single `AxonOpsPlatform` custom resource.
 - **Manages AxonOps configuration** — alert rules, alert routes, healthchecks, dashboard templates, backups, scheduled repairs, and commitlog archives are reconciled as Kubernetes resources and kept in sync with the AxonOps API.
 - **Manages Kafka resources** — topics, ACLs, and connectors for Kafka-based clusters.
 - **Handles day-2 operations** — credential rotation, TLS certificate management, startup ordering, and Ingress/Gateway API configuration.
@@ -21,7 +21,7 @@ A Kubernetes operator that deploys and manages the [AxonOps](https://axonops.com
 
 | Kind | Purpose |
 |---|---|
-| `AxonOpsServer` | Deploys and manages the full AxonOps server stack |
+| `AxonOpsPlatform` | Deploys and manages the full AxonOps server stack |
 | `AxonOpsConnection` | Stores reusable API credentials for the AxonOps API |
 
 ### `alerts.axonops.com/v1alpha1`
@@ -107,7 +107,7 @@ Deploy the complete AxonOps stack with a single resource. The operator provision
 
 ```yaml
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   name: axonops
   namespace: axonops
@@ -128,7 +128,7 @@ Connect the AxonOps server to existing Cassandra and Elasticsearch/OpenSearch cl
 
 ```yaml
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   name: axonops
   namespace: axonops
@@ -201,7 +201,7 @@ spec:
 
 ---
 
-## AxonOpsServer Components
+## AxonOpsPlatform Components
 
 Each component can operate in **internal** (operator-managed) or **external** (user-provided) mode.
 

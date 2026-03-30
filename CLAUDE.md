@@ -10,7 +10,7 @@ Kubernetes operator that manages the AxonOps observability stack. It aims to rep
 @AGENTS.md
 
 ## Current Status
-- **Last Updated**: 2026-03-20
+- **Last Updated**: 2026-03-30
 - **Current Phase**: Development — Feature implementation + code quality improvements
 - **Health**: Green — 4 API groups, 20+ CRDs implemented with controllers and tests
 
@@ -57,7 +57,10 @@ After ANY CRD or RBAC change:
 3. [NOT STARTED] Issue #74 (P2): Extract shared controller helpers to common package (`condTypeReady`, `setFailedCondition`, test helpers)
 4. [NOT STARTED] Issue #75 (P3): Quick code quality fixes (routeTypeMap encoding, scaffold TODOs, Go acronym casing)
 5. [NOT STARTED] Issue #76 (P1): Add unit tests for internal/axonops API client (currently 7.7% coverage)
-6. [NOT STARTED] Issue #77 (P1): Split axonopsserver_controller.go into component files (3618 lines)
+6. [NOT STARTED] Issue #77 (P1): Split axonopsplatform_controller.go into component files (3618 lines)
+
+### Rename (breaking change)
+7. [COMPLETED] Issue #106 (P1): `AxonOpsServer` CRD renamed to `AxonOpsPlatform` — all files, CRDs, RBAC, Helm, docs updated
 
 ### Original Bugs (#20-#26)
 - **#20 (HIGH)**: External credential path stores empty secret name — NOT STARTED
@@ -68,12 +71,15 @@ After ANY CRD or RBAC change:
 - **#25 (MEDIUM)**: PVCs not deleted on mode switch to external DB — NOT STARTED
 - **#26 (LOW)**: Bool default=true defaults to false at runtime — NOT STARTED
 
-## Recent Progress (2026-03-18 to 2026-03-20)
+## Recent Progress (2026-03-18 to 2026-03-30)
 
 ### New CRD Groups & Controllers Implemented
 - **`backups.axonops.com`** — `AxonOpsBackup` (S3/SFTP/Azure, inline + SecretRef credentials, PR #65)
 - **`kafka.axonops.com`** — `AxonOpsKafkaTopic` (PR #69), `AxonOpsKafkaACL` (PR #70), `AxonOpsKafkaConnector` (PR #71)
 - **`alerts.axonops.com` additions** — `AxonOpsScheduledRepair` (PR #67), `AxonOpsSilenceWindow` (PR #90)
+
+### Breaking Changes
+- **Renamed `AxonOpsServer` → `AxonOpsPlatform`** (issue #106) — all Go types, CRDs, RBAC, Helm chart, samples, BDD tests, docs updated; migration guide in #106
 
 ### Infrastructure Improvements
 - Extracted `ResolveAPIClient` to shared `internal/controller/common/` package (PR #65)
@@ -116,7 +122,7 @@ After ANY CRD or RBAC change:
 ### `core.axonops.com` (`api/v1alpha1/`)
 | CRD | Status | Notes |
 |---|---|---|
-| `AxonOpsServer` | ✅ Implemented + tested | 4-component deployment (TimeSeries, Search, Server, Dashboard) |
+| `AxonOpsPlatform` | ✅ Implemented + tested | 4-component deployment (TimeSeries, Search, Server, Dashboard) |
 | `AxonOpsConnection` | ✅ Implemented | Shared API auth config with configurable timeout |
 
 ### `alerts.axonops.com` (`api/alerts/v1alpha1/`)
@@ -150,8 +156,8 @@ After ANY CRD or RBAC change:
 ## Dependencies & Integration Points
 
 - **AxonOps REST API**: All CRD controllers call this API (alert rules, healthchecks, integrations, backups, repairs, silences, Kafka topics/ACLs/connectors)
-- **Kubernetes Gateway API** (`gateway.networking.k8s.io`): used by AxonOpsServer for Gateway/HTTPRoute resources
-- **cert-manager** (optional): for TLS certificate management in AxonOpsServer internal components
+- **Kubernetes Gateway API** (`gateway.networking.k8s.io`): used by AxonOpsPlatform for Gateway/HTTPRoute resources
+- **cert-manager** (optional): for TLS certificate management in AxonOpsPlatform internal components
 - **Prometheus Operator** (optional): ServiceMonitor creation via OTel metrics
 
 ## Useful Commands
@@ -223,4 +229,4 @@ kubectl apply -k config/samples/   # Apply sample CRs
 | Ansible `backup.py` | `AxonOpsBackup` |
 | Ansible `silence.py` | `AxonOpsSilenceWindow` |
 | TF `provider.go` auth config | `AxonOpsConnection` CR |
-| Helm chart (axon-server, axon-dash, axondb-*) | `AxonOpsServer` CR |
+| Helm chart (axon-server, axon-dash, axondb-*) | `AxonOpsPlatform` CR |

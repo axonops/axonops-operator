@@ -8,20 +8,20 @@ Feature: Dashboard startup waits for server to be Ready
     And the AxonOps CRDs are registered
 
   Scenario: Dashboard waits for server to be Ready
-    Given an AxonOpsServer CR with:
+    Given an AxonOpsPlatform CR with:
       | spec.timeseries.image | axonops/axondb-timeseries:latest |
       | spec.search.image     | axonops/axondb-search:latest     |
       | spec.dashboard.enabled| true                             |
     When the operator begins reconciliation
     And the axon-server StatefulSet is not yet Ready
     Then the axon-dash Deployment should not be created
-    And the AxonOpsServer status should show "Waiting for server to be ready"
+    And the AxonOpsPlatform status should show "Waiting for server to be ready"
     When the axon-server StatefulSet becomes Ready
     Then the axon-dash Deployment should be created
     And reconciliation should complete successfully
 
   Scenario: Dashboard skips server wait when server is disabled
-    Given an AxonOpsServer CR with:
+    Given an AxonOpsPlatform CR with:
       | spec.timeseries.image  | axonops/axondb-timeseries:latest |
       | spec.search.image      | axonops/axondb-search:latest     |
       | spec.dashboard.enabled | true                             |
@@ -31,7 +31,7 @@ Feature: Dashboard startup waits for server to be Ready
     And the status should indicate server is not enabled
 
   Scenario: Dashboard starts immediately when server is external
-    Given an AxonOpsServer CR with:
+    Given an AxonOpsPlatform CR with:
       | spec.server.external.host | server.example.com               |
       | spec.dashboard.enabled    | true                             |
     When the operator begins reconciliation
@@ -39,7 +39,7 @@ Feature: Dashboard startup waits for server to be Ready
     And no wait for server readiness is required
 
   Scenario: Dashboard remains stable if server becomes unavailable after startup
-    Given an AxonOpsServer CR with:
+    Given an AxonOpsPlatform CR with:
       | spec.timeseries.image | axonops/axondb-timeseries:latest |
       | spec.search.image     | axonops/axondb-search:latest     |
       | spec.dashboard.enabled| true                             |
@@ -52,15 +52,15 @@ Feature: Dashboard startup waits for server to be Ready
     Then reconciliation should complete successfully
 
   Scenario: Status conditions reflect dashboard dependency waiting state
-    Given an AxonOpsServer CR with server not yet ready and dashboard enabled
+    Given an AxonOpsPlatform CR with server not yet ready and dashboard enabled
     When the operator reconciles
-    Then the AxonOpsServer.status.conditions should include:
+    Then the AxonOpsPlatform.status.conditions should include:
       | Type    | Status | Reason          | Message                         |
       | Ready   | False  | WaitingForDeps   | Waiting for dependencies to be ready |
       | Dashboard | False  | WaitingForServer | Dashboard waiting for server to be ready |
 
   Scenario: Dashboard container environment is configured with server endpoints
-    Given an AxonOpsServer CR with ready server and dashboard enabled
+    Given an AxonOpsPlatform CR with ready server and dashboard enabled
     When the axon-dash Deployment is created
     Then the dashboard container should have environment variables pointing to:
       | AXONOPS_SERVER_HOST | axon-server.<namespace>.svc.cluster.local |
@@ -68,7 +68,7 @@ Feature: Dashboard startup waits for server to be Ready
     And the deployment should have readiness/liveness probes configured appropriately
 
   Scenario: Dashboard respects dashboard.enabled flag
-    Given an AxonOpsServer CR with:
+    Given an AxonOpsPlatform CR with:
       | spec.dashboard.enabled | false |
     When the operator begins reconciliation
     Then the axon-dash Deployment should not be created

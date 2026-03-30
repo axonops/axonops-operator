@@ -152,7 +152,7 @@ The operator uses kubebuilder with a multi-group layout:
 ```
 api/
   ├── v1alpha1/              # core.axonops.com group
-  │   ├── axonopsserver_types.go
+  │   ├── axonopsplatform_types.go
   │   └── axonopsconnection_types.go
   ├── alerts/v1alpha1/       # alerts.axonops.com group
   │   ├── axonopsmetricalert_types.go
@@ -164,7 +164,7 @@ api/
       └── ...
 
 internal/
-  ├── controller/            # AxonOpsServer controller
+  ├── controller/            # AxonOpsPlatform controller
   ├── controller/alerts/     # Alert controllers
   ├── controller/backups/    # Backup controllers
   ├── controller/kafka/      # Kafka controllers

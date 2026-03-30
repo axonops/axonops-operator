@@ -1,10 +1,10 @@
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   labels:
     app.kubernetes.io/name: axonops-operator
     app.kubernetes.io/managed-by: kustomize
-  name: axonopsserver-sample
+  name: axonopsplatform-sample
   namespace: default
 spec:
   # All components are enabled by default (enabled: true)

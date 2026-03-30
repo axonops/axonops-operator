@@ -106,17 +106,17 @@ const (
 	appManagedBy = "axonops-operator"
 )
 
-// AxonOpsServerReconciler reconciles a AxonOpsServer object
-type AxonOpsServerReconciler struct {
+// AxonOpsPlatformReconciler reconciles a AxonOpsPlatform object
+type AxonOpsPlatformReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
 	ClusterIssuerName string
 	RESTMapper        meta.RESTMapper
 }
 
-// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsservers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsservers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsservers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsplatforms,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsplatforms/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsplatforms/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
@@ -132,7 +132,7 @@ type AxonOpsServerReconciler struct {
 
 // resolveIssuerName returns the ClusterIssuer name to reference in Certificate
 // resources. Priority: spec.tls.issuer.name > operator flag (ClusterIssuerName).
-func (r *AxonOpsServerReconciler) resolveIssuerName(server *corev1alpha1.AxonOpsServer) string {
+func (r *AxonOpsPlatformReconciler) resolveIssuerName(server *corev1alpha1.AxonOpsPlatform) string {
 	if server.Spec.TLS.Issuer.Name != "" {
 		return server.Spec.TLS.Issuer.Name
 	}
@@ -140,7 +140,7 @@ func (r *AxonOpsServerReconciler) resolveIssuerName(server *corev1alpha1.AxonOps
 }
 
 // createOrUpdate wraps controllerutil.CreateOrUpdate and records Prometheus metrics.
-func (r *AxonOpsServerReconciler) createOrUpdate(
+func (r *AxonOpsPlatformReconciler) createOrUpdate(
 	ctx context.Context, obj client.Object, f controllerutil.MutateFn, resourceType string,
 ) error {
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, f)
@@ -156,9 +156,9 @@ func (r *AxonOpsServerReconciler) createOrUpdate(
 	return nil
 }
 
-// needsInternalResources checks if the AxonOpsServer requires any internal database
+// needsInternalResources checks if the AxonOpsPlatform requires any internal database
 // or internal workload components. Returns true if cert-manager is needed.
-func needsInternalResources(server *corev1alpha1.AxonOpsServer) bool {
+func needsInternalResources(server *corev1alpha1.AxonOpsPlatform) bool {
 	// Check TimeSeries: internal if enabled and not external
 	if server.Spec.TimeSeries != nil && (server.Spec.TimeSeries.Enabled == nil || *server.Spec.TimeSeries.Enabled) {
 		if !isTimeSeriesExternal(server) {
@@ -176,7 +176,7 @@ func needsInternalResources(server *corev1alpha1.AxonOpsServer) bool {
 
 // isCertManagerAvailable checks if cert-manager Certificate CRD is registered
 // in the cluster by querying the RESTMapper.
-func (r *AxonOpsServerReconciler) isCertManagerAvailable() bool {
+func (r *AxonOpsPlatformReconciler) isCertManagerAvailable() bool {
 	_, err := r.RESTMapper.RESTMapping(
 		schema.GroupKind{Group: "cert-manager.io", Kind: "Certificate"},
 		"v1",
@@ -187,9 +187,9 @@ func (r *AxonOpsServerReconciler) isCertManagerAvailable() bool {
 // ensureClusterIssuer creates or updates the default ClusterIssuer when no
 // custom issuer name is provided via spec.tls.issuer.name.
 // ClusterIssuer is cluster-scoped; no OwnerReference is set (intentional).
-func (r *AxonOpsServerReconciler) ensureClusterIssuer(
+func (r *AxonOpsPlatformReconciler) ensureClusterIssuer(
 	ctx context.Context,
-	server *corev1alpha1.AxonOpsServer,
+	server *corev1alpha1.AxonOpsPlatform,
 ) error {
 	log := logf.FromContext(ctx)
 
@@ -236,11 +236,11 @@ func (r *AxonOpsServerReconciler) ensureClusterIssuer(
 
 // Reconcile moves the current state of the cluster closer to the desired state.
 // nolint:gocyclo
-func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
 	log := logf.FromContext(ctx)
 
 	// Start OpenTelemetry span for this reconciliation
-	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.axonopsserver",
+	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.axonopsplatform",
 		trace.WithAttributes())
 	defer func() {
 		if err != nil {
@@ -258,17 +258,17 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			resultStr = axonopsmetrics.ResultError
 			axonopsmetrics.ReconcileErrorsTotal.WithLabelValues(axonopsmetrics.ClassifyError(err)).Inc()
 		}
-		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopsserver", resultStr).Observe(time.Since(start).Seconds())
-		axonopsmetrics.ReconcileTotal.WithLabelValues("axonopsserver", resultStr).Inc()
+		axonopsmetrics.ReconcileDuration.WithLabelValues("axonopsplatform", resultStr).Observe(time.Since(start).Seconds())
+		axonopsmetrics.ReconcileTotal.WithLabelValues("axonopsplatform", resultStr).Inc()
 	}()
 
-	// Fetch the AxonOpsServer CR
-	server := &corev1alpha1.AxonOpsServer{}
+	// Fetch the AxonOpsPlatform CR
+	server := &corev1alpha1.AxonOpsPlatform{}
 	if err := r.Get(ctx, req.NamespacedName, server); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.Info("Reconciling AxonOpsServer", "name", req.NamespacedName)
+	log.Info("Reconciling AxonOpsPlatform", "name", req.NamespacedName)
 
 	// Handle deletion — always proceed regardless of pause state
 	if !server.DeletionTimestamp.IsZero() {
@@ -661,7 +661,7 @@ func (r *AxonOpsServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 // cleanupTLSSecrets deletes TLS secrets created by cert-manager.
 // These secrets don't get auto-deleted when the Certificate is deleted.
-func (r *AxonOpsServerReconciler) cleanupTLSSecrets(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) cleanupTLSSecrets(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	log := logf.FromContext(ctx)
 
 	// List of TLS secrets to delete (created by cert-manager for each component)
@@ -698,9 +698,9 @@ func (r *AxonOpsServerReconciler) cleanupTLSSecrets(ctx context.Context, server 
 }
 
 // cleanupCredentialSecretsOnDelete deletes credential secrets that should not be retained
-// when the AxonOpsServer CR is being deleted. Secrets without owner references (Retain mode)
+// when the AxonOpsPlatform CR is being deleted. Secrets without owner references (Retain mode)
 // won't be cascade-deleted, so we explicitly delete them only if retention is not wanted.
-func (r *AxonOpsServerReconciler) cleanupCredentialSecretsOnDelete(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) cleanupCredentialSecretsOnDelete(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	log := logf.FromContext(ctx)
 
 	type componentInfo struct {
@@ -763,9 +763,9 @@ func (r *AxonOpsServerReconciler) cleanupCredentialSecretsOnDelete(ctx context.C
 // ensureAuthenticationSecret ensures an auth Secret exists for a database component.
 // Returns (secretName, contentHash, error). The contentHash is used for rolling update
 // annotations on the StatefulSet pod template.
-func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
+func (r *AxonOpsPlatformReconciler) ensureAuthenticationSecret(
 	ctx context.Context,
-	server *corev1alpha1.AxonOpsServer,
+	server *corev1alpha1.AxonOpsPlatform,
 	component string,
 	auth corev1alpha1.AxonAuthentication,
 	storageConfig corev1.PersistentVolumeClaimSpec,
@@ -889,7 +889,7 @@ func (r *AxonOpsServerReconciler) ensureAuthenticationSecret(
 }
 
 // getSecretKeys returns the appropriate secret key names for a given component.
-func (r *AxonOpsServerReconciler) getSecretKeys(component string) (userKey, passwordKey string) {
+func (r *AxonOpsPlatformReconciler) getSecretKeys(component string) (userKey, passwordKey string) {
 	switch component {
 	case "timeseries":
 		return timeseriesSecretKeyUser, timeseriesSecretKeyPassword
@@ -903,9 +903,9 @@ func (r *AxonOpsServerReconciler) getSecretKeys(component string) (userKey, pass
 
 // ensureKeystorePasswordSecret ensures a Secret exists with a password for Java keystores.
 // This is used by cert-manager to create JKS and PKCS12 keystores.
-func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
+func (r *AxonOpsPlatformReconciler) ensureKeystorePasswordSecret(
 	ctx context.Context,
-	server *corev1alpha1.AxonOpsServer,
+	server *corev1alpha1.AxonOpsPlatform,
 	component string,
 	storageConfig corev1.PersistentVolumeClaimSpec,
 ) (string, error) {
@@ -973,9 +973,9 @@ func (r *AxonOpsServerReconciler) ensureKeystorePasswordSecret(
 
 // ensureTLSCertificate ensures a cert-manager Certificate exists for the component.
 // Returns the name of the secret that will contain the TLS certificate.
-func (r *AxonOpsServerReconciler) ensureTLSCertificate(
+func (r *AxonOpsPlatformReconciler) ensureTLSCertificate(
 	ctx context.Context,
-	server *corev1alpha1.AxonOpsServer,
+	server *corev1alpha1.AxonOpsPlatform,
 	component string,
 	storageConfig corev1.PersistentVolumeClaimSpec,
 ) (string, error) {
@@ -1100,7 +1100,7 @@ func (r *AxonOpsServerReconciler) ensureTLSCertificate(
 
 // cleanupInternalSearchResources deletes internal Search resources when switching to external search.
 // Credential secrets are retained if the StorageClass reclaimPolicy is Retain.
-func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) cleanupInternalSearchResources(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	log := logf.FromContext(ctx)
 
 	var storageConfig corev1.PersistentVolumeClaimSpec
@@ -1158,7 +1158,7 @@ func (r *AxonOpsServerReconciler) cleanupInternalSearchResources(ctx context.Con
 
 // cleanupInternalTimeseriesResources deletes internal TimeSeries resources when switching to external timeseries.
 // Credential secrets are retained if the StorageClass reclaimPolicy is Retain.
-func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) cleanupInternalTimeseriesResources(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	log := logf.FromContext(ctx)
 
 	var storageConfig corev1.PersistentVolumeClaimSpec
@@ -1215,7 +1215,7 @@ func (r *AxonOpsServerReconciler) cleanupInternalTimeseriesResources(ctx context
 }
 
 // cleanupServerResources deletes all Server resources when the component is disabled
-func (r *AxonOpsServerReconciler) cleanupServerResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) cleanupServerResources(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	log := logf.FromContext(ctx)
 
 	resourcesToDelete := []struct {
@@ -1251,7 +1251,7 @@ func (r *AxonOpsServerReconciler) cleanupServerResources(ctx context.Context, se
 }
 
 // cleanupDashboardResources deletes all Dashboard resources when the component is disabled
-func (r *AxonOpsServerReconciler) cleanupDashboardResources(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) cleanupDashboardResources(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	log := logf.FromContext(ctx)
 
 	resourcesToDelete := []struct {
@@ -1284,7 +1284,7 @@ func (r *AxonOpsServerReconciler) cleanupDashboardResources(ctx context.Context,
 
 // isStatefulSetReady checks whether a StatefulSet has all its replicas ready.
 // Returns false (not error) if the StatefulSet does not exist yet.
-func (r *AxonOpsServerReconciler) isStatefulSetReady(ctx context.Context, namespace, name string) (bool, error) {
+func (r *AxonOpsPlatformReconciler) isStatefulSetReady(ctx context.Context, namespace, name string) (bool, error) {
 	sts := &appsv1.StatefulSet{}
 	err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, sts)
 	if err != nil {
@@ -1302,7 +1302,7 @@ func (r *AxonOpsServerReconciler) isStatefulSetReady(ctx context.Context, namesp
 // isComponentReady checks whether a component's workload is ready.
 // Disabled and external components are always considered ready.
 // Internal components require their StatefulSet to have all replicas ready.
-func (r *AxonOpsServerReconciler) isComponentReady(ctx context.Context, server *corev1alpha1.AxonOpsServer, component string) (bool, string) {
+func (r *AxonOpsPlatformReconciler) isComponentReady(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, component string) (bool, string) {
 	switch component {
 	case componentTimeseries:
 		if !r.isComponentEnabled(server.Spec.TimeSeries) {
@@ -1339,7 +1339,7 @@ func (r *AxonOpsServerReconciler) isComponentReady(ctx context.Context, server *
 
 // A component is enabled if it's not nil and its Enabled field is true (default).
 // A nil Enabled pointer is treated as true (enabled by default).
-func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
+func (r *AxonOpsPlatformReconciler) isComponentEnabled(component any) bool {
 	if component == nil {
 		return false
 	}
@@ -1356,12 +1356,12 @@ func (r *AxonOpsServerReconciler) isComponentEnabled(component any) bool {
 }
 
 // isSearchExternal checks if the Search component is configured to use external hosts
-func isSearchExternal(server *corev1alpha1.AxonOpsServer) bool {
+func isSearchExternal(server *corev1alpha1.AxonOpsPlatform) bool {
 	return server.Spec.Search != nil && len(server.Spec.Search.External.Hosts) > 0
 }
 
 // isTimeSeriesExternal checks if the TimeSeries component is configured to use external hosts
-func isTimeSeriesExternal(server *corev1alpha1.AxonOpsServer) bool {
+func isTimeSeriesExternal(server *corev1alpha1.AxonOpsPlatform) bool {
 	return server.Spec.TimeSeries != nil && len(server.Spec.TimeSeries.External.Hosts) > 0
 }
 
@@ -1434,7 +1434,7 @@ func generateRandomPassword(length int) (string, error) {
 }
 
 // reconcileTimeseries ensures all TimeSeries resources are created/updated
-func (r *AxonOpsServerReconciler) reconcileTimeseries(ctx context.Context, server *corev1alpha1.AxonOpsServer, authHash string) error {
+func (r *AxonOpsPlatformReconciler) reconcileTimeseries(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, authHash string) error {
 	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.timeseries")
 	defer span.End()
 
@@ -1465,7 +1465,7 @@ func (r *AxonOpsServerReconciler) reconcileTimeseries(ctx context.Context, serve
 }
 
 // ensureServiceAccount ensures a ServiceAccount exists for the component
-func (r *AxonOpsServerReconciler) ensureServiceAccount(ctx context.Context, server *corev1alpha1.AxonOpsServer, component string) error {
+func (r *AxonOpsPlatformReconciler) ensureServiceAccount(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, component string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, component)
 
@@ -1495,7 +1495,7 @@ func (r *AxonOpsServerReconciler) ensureServiceAccount(ctx context.Context, serv
 }
 
 // ensureHeadlessService ensures a headless Service exists for the StatefulSet
-func (r *AxonOpsServerReconciler) ensureHeadlessService(ctx context.Context, server *corev1alpha1.AxonOpsServer, component string) error {
+func (r *AxonOpsPlatformReconciler) ensureHeadlessService(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, component string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s-headless", server.Name, component)
 
@@ -1535,7 +1535,7 @@ func (r *AxonOpsServerReconciler) ensureHeadlessService(ctx context.Context, ser
 }
 
 // ensureService ensures a ClusterIP Service exists for the component
-func (r *AxonOpsServerReconciler) ensureService(ctx context.Context, server *corev1alpha1.AxonOpsServer, component string) error {
+func (r *AxonOpsPlatformReconciler) ensureService(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, component string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, component)
 
@@ -1569,7 +1569,7 @@ func (r *AxonOpsServerReconciler) ensureService(ctx context.Context, server *cor
 }
 
 // getServicePorts returns the appropriate service ports for a component
-func (r *AxonOpsServerReconciler) getServicePorts(component string, headless bool) []corev1.ServicePort {
+func (r *AxonOpsPlatformReconciler) getServicePorts(component string, headless bool) []corev1.ServicePort {
 	switch component {
 	case componentSearch:
 		return []corev1.ServicePort{
@@ -1604,7 +1604,7 @@ func (r *AxonOpsServerReconciler) getServicePorts(component string, headless boo
 }
 
 // ensureTimeseriesStatefulSet ensures the TimeSeries StatefulSet exists
-func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer, authHash string) error {
+func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, authHash string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentTimeseries)
 	headlessSvcName := fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries)
@@ -1805,7 +1805,7 @@ func (r *AxonOpsServerReconciler) ensureTimeseriesStatefulSet(ctx context.Contex
 }
 
 // buildTimeseriesEnv builds environment variables for the timeseries container
-func (r *AxonOpsServerReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, keystorePasswordSecretName, authSecretName string, extraEnv []corev1.EnvVar) []corev1.EnvVar {
+func (r *AxonOpsPlatformReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, keystorePasswordSecretName, authSecretName string, extraEnv []corev1.EnvVar) []corev1.EnvVar {
 	env := []corev1.EnvVar{
 		{
 			Name: "POD_IP",
@@ -1886,7 +1886,7 @@ func (r *AxonOpsServerReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, ke
 }
 
 // reconcileSearch ensures all Search resources are created/updated
-func (r *AxonOpsServerReconciler) reconcileSearch(ctx context.Context, server *corev1alpha1.AxonOpsServer, authHash string) error {
+func (r *AxonOpsPlatformReconciler) reconcileSearch(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, authHash string) error {
 	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.search")
 	defer span.End()
 
@@ -1917,7 +1917,7 @@ func (r *AxonOpsServerReconciler) reconcileSearch(ctx context.Context, server *c
 }
 
 // ensureSearchStatefulSet ensures the Search StatefulSet exists
-func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer, authHash string) error {
+func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, authHash string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentSearch)
 	headlessSvcName := fmt.Sprintf("%s-%s-headless", server.Name, componentSearch)
@@ -2175,7 +2175,7 @@ func (r *AxonOpsServerReconciler) ensureSearchStatefulSet(ctx context.Context, s
 }
 
 // buildSearchEnv builds environment variables for the search container
-func (r *AxonOpsServerReconciler) buildSearchEnv(fqdn, headlessSvc, clusterName, heapSize, keystorePasswordSecretName, searchAuthSecretName string, extraEnv []corev1.EnvVar) []corev1.EnvVar {
+func (r *AxonOpsPlatformReconciler) buildSearchEnv(fqdn, headlessSvc, clusterName, heapSize, keystorePasswordSecretName, searchAuthSecretName string, extraEnv []corev1.EnvVar) []corev1.EnvVar {
 	env := []corev1.EnvVar{
 		{Name: "bootstrap.memory_lock", Value: "false"},
 		{
@@ -2243,7 +2243,7 @@ func (r *AxonOpsServerReconciler) buildSearchEnv(fqdn, headlessSvc, clusterName,
 }
 
 // reconcileServer ensures all Server resources are created/updated
-func (r *AxonOpsServerReconciler) reconcileServer(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) reconcileServer(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.server")
 	defer span.End()
 
@@ -2313,7 +2313,7 @@ func (r *AxonOpsServerReconciler) reconcileServer(ctx context.Context, server *c
 }
 
 // ensureServerAgentService ensures the Agent Service exists for the Server
-func (r *AxonOpsServerReconciler) ensureServerAgentService(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) ensureServerAgentService(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s-agent", server.Name, componentServer)
 
@@ -2352,7 +2352,7 @@ func (r *AxonOpsServerReconciler) ensureServerAgentService(ctx context.Context, 
 }
 
 // ensureServerApiService ensures the API Service exists for the Server
-func (r *AxonOpsServerReconciler) ensureServerApiService(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) ensureServerApiService(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s-api", server.Name, componentServer)
 
@@ -2392,7 +2392,7 @@ func (r *AxonOpsServerReconciler) ensureServerApiService(ctx context.Context, se
 
 // ensureServerConfigSecret ensures the config Secret exists for the Server.
 // Returns the config content hash for use in pod template annotations.
-func (r *AxonOpsServerReconciler) ensureServerConfigSecret(ctx context.Context, server *corev1alpha1.AxonOpsServer) (string, error) {
+func (r *AxonOpsPlatformReconciler) ensureServerConfigSecret(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) (string, error) {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentServer)
 
@@ -2570,7 +2570,7 @@ cql_local_dc: {{ .CQLLocalDC }}
 
 // buildServerConfig generates the axon-server.yml configuration using a Go template.
 // Credentials are passed via environment variables from mounted secrets.
-func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOpsServer, searchURL, cqlHosts, licenseKey string) (string, error) {
+func (r *AxonOpsPlatformReconciler) buildServerConfig(server *corev1alpha1.AxonOpsPlatform, searchURL, cqlHosts, licenseKey string) (string, error) {
 	// Build dashboard URL from external hosts if available
 	dashURL := fmt.Sprintf("https://%s-%s", server.Name, componentDashboard)
 	if server.Spec.Dashboard != nil && len(server.Spec.Dashboard.External.Hosts) > 0 {
@@ -2697,7 +2697,7 @@ func (r *AxonOpsServerReconciler) buildServerConfig(server *corev1alpha1.AxonOps
 
 // resolveSecretName returns the secret name for a component's authentication.
 // Priority: spec SecretRef > status (from previous reconcile) > default convention.
-func (r *AxonOpsServerReconciler) resolveSecretName(server *corev1alpha1.AxonOpsServer, component string) string {
+func (r *AxonOpsPlatformReconciler) resolveSecretName(server *corev1alpha1.AxonOpsPlatform, component string) string {
 	switch component {
 	case componentTimeseries:
 		if server.Spec.TimeSeries != nil && server.Spec.TimeSeries.Authentication.SecretRef != "" {
@@ -2719,7 +2719,7 @@ func (r *AxonOpsServerReconciler) resolveSecretName(server *corev1alpha1.AxonOps
 
 // buildServerEnv builds environment variables for the server container
 // including credentials from search and timeseries secrets
-func (r *AxonOpsServerReconciler) buildServerEnv(server *corev1alpha1.AxonOpsServer, extraEnv []corev1.EnvVar) []corev1.EnvVar {
+func (r *AxonOpsPlatformReconciler) buildServerEnv(server *corev1alpha1.AxonOpsPlatform, extraEnv []corev1.EnvVar) []corev1.EnvVar {
 	searchSecretName := r.resolveSecretName(server, componentSearch)
 	timeseriesSecretName := r.resolveSecretName(server, componentTimeseries)
 
@@ -2774,7 +2774,7 @@ func (r *AxonOpsServerReconciler) buildServerEnv(server *corev1alpha1.AxonOpsSer
 
 // ensureServerStatefulSet ensures the Server StatefulSet exists.
 // configHash is the pre-computed hash of the config Secret content.
-func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsServer, configHash string) error {
+func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, configHash string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentServer)
 	headlessSvcName := fmt.Sprintf("%s-%s-headless", server.Name, componentServer)
@@ -3033,7 +3033,7 @@ func (r *AxonOpsServerReconciler) ensureServerStatefulSet(ctx context.Context, s
 }
 
 // buildLabels builds standard labels for a component
-func (r *AxonOpsServerReconciler) buildLabels(server *corev1alpha1.AxonOpsServer, component string) map[string]string {
+func (r *AxonOpsPlatformReconciler) buildLabels(server *corev1alpha1.AxonOpsPlatform, component string) map[string]string {
 	return map[string]string{
 		"app.kubernetes.io/name":       "axonops",
 		"app.kubernetes.io/instance":   server.Name,
@@ -3043,7 +3043,7 @@ func (r *AxonOpsServerReconciler) buildLabels(server *corev1alpha1.AxonOpsServer
 }
 
 // removeOwnerReference removes the owner reference for the given owner from the object.
-func (r *AxonOpsServerReconciler) removeOwnerReference(obj metav1.Object, owner metav1.Object) {
+func (r *AxonOpsPlatformReconciler) removeOwnerReference(obj metav1.Object, owner metav1.Object) {
 	ownerUID := owner.GetUID()
 	refs := obj.GetOwnerReferences()
 	filtered := make([]metav1.OwnerReference, 0, len(refs))
@@ -3058,7 +3058,7 @@ func (r *AxonOpsServerReconciler) removeOwnerReference(obj metav1.Object, owner 
 // shouldRetainCredentials checks the StorageClass reclaimPolicy for a component's storage.
 // Returns true if the StorageClass has Retain policy, meaning credential secrets should
 // survive CR deletion so retained PVCs remain usable on re-creation.
-func (r *AxonOpsServerReconciler) shouldRetainCredentials(ctx context.Context, storageConfig corev1.PersistentVolumeClaimSpec) bool {
+func (r *AxonOpsPlatformReconciler) shouldRetainCredentials(ctx context.Context, storageConfig corev1.PersistentVolumeClaimSpec) bool {
 	log := logf.FromContext(ctx)
 
 	scName := ""
@@ -3094,7 +3094,7 @@ func (r *AxonOpsServerReconciler) shouldRetainCredentials(ctx context.Context, s
 }
 
 // buildSelectorLabels builds selector labels for a component
-func (r *AxonOpsServerReconciler) buildSelectorLabels(server *corev1alpha1.AxonOpsServer, component string) map[string]string {
+func (r *AxonOpsPlatformReconciler) buildSelectorLabels(server *corev1alpha1.AxonOpsPlatform, component string) map[string]string {
 	return map[string]string{
 		"app.kubernetes.io/name":      "axonops",
 		"app.kubernetes.io/instance":  server.Name,
@@ -3103,7 +3103,7 @@ func (r *AxonOpsServerReconciler) buildSelectorLabels(server *corev1alpha1.AxonO
 }
 
 // reconcileDashboard ensures all Dashboard resources are created/updated
-func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) reconcileDashboard(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	ctx, span := otel.Tracer("axonops-operator").Start(ctx, "reconcile.dashboard")
 	defer span.End()
 
@@ -3150,7 +3150,7 @@ func (r *AxonOpsServerReconciler) reconcileDashboard(ctx context.Context, server
 
 // ensureDashboardConfigMap ensures the Dashboard ConfigMap exists.
 // Returns the config content hash for use in pod template annotations.
-func (r *AxonOpsServerReconciler) ensureDashboardConfigMap(ctx context.Context, server *corev1alpha1.AxonOpsServer) (string, error) {
+func (r *AxonOpsPlatformReconciler) ensureDashboardConfigMap(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) (string, error) {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
 
@@ -3198,7 +3198,7 @@ axon-dash:
 
 // ensureDashboardDeployment ensures the Dashboard Deployment exists.
 // configHash is the pre-computed hash of the ConfigMap content.
-func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context, server *corev1alpha1.AxonOpsServer, configHash string) error {
+func (r *AxonOpsPlatformReconciler) ensureDashboardDeployment(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, configHash string) error {
 	log := logf.FromContext(ctx)
 	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
 	configMapName := name
@@ -3338,7 +3338,7 @@ func (r *AxonOpsServerReconciler) ensureDashboardDeployment(ctx context.Context,
 }
 
 // ensureIngress is a generic helper to create/update an Ingress resource
-func (r *AxonOpsServerReconciler) ensureIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer, ingressName, serviceName string, defaultPort int32, component string, ingressSpec corev1alpha1.Ingress) error {
+func (r *AxonOpsPlatformReconciler) ensureIngress(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, ingressName, serviceName string, defaultPort int32, component string, ingressSpec corev1alpha1.Ingress) error {
 	log := logf.FromContext(ctx)
 
 	// Build ingress rules from hosts
@@ -3424,28 +3424,28 @@ func (r *AxonOpsServerReconciler) ensureIngress(ctx context.Context, server *cor
 }
 
 // ensureDashboardIngress ensures the Dashboard Ingress exists
-func (r *AxonOpsServerReconciler) ensureDashboardIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) ensureDashboardIngress(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	name := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
 	serviceName := name
 	return r.ensureIngress(ctx, server, name, serviceName, 3000, componentDashboard, server.Spec.Dashboard.Ingress)
 }
 
 // ensureServerAgentIngress ensures the Server Agent Ingress exists
-func (r *AxonOpsServerReconciler) ensureServerAgentIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) ensureServerAgentIngress(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	name := fmt.Sprintf("%s-%s-agent", server.Name, componentServer)
 	serviceName := name
 	return r.ensureIngress(ctx, server, name, serviceName, 1888, componentServer, server.Spec.Server.AgentIngress)
 }
 
 // ensureServerApiIngress ensures the Server API Ingress exists
-func (r *AxonOpsServerReconciler) ensureServerApiIngress(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) ensureServerApiIngress(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	name := fmt.Sprintf("%s-%s-api", server.Name, componentServer)
 	serviceName := name
 	return r.ensureIngress(ctx, server, name, serviceName, 8080, componentServer, server.Spec.Server.ApiIngress)
 }
 
 // ensureHTTPRoute is a generic helper to create/update an HTTPRoute resource
-func (r *AxonOpsServerReconciler) ensureHTTPRoute(ctx context.Context, server *corev1alpha1.AxonOpsServer, routeName, serviceName string, servicePort int32, component string, gatewaySpec corev1alpha1.GatewayConfig) error {
+func (r *AxonOpsPlatformReconciler) ensureHTTPRoute(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, routeName, serviceName string, servicePort int32, component string, gatewaySpec corev1alpha1.GatewayConfig) error {
 	log := logf.FromContext(ctx)
 
 	// Use provided port or default
@@ -3519,7 +3519,7 @@ func (r *AxonOpsServerReconciler) ensureHTTPRoute(ctx context.Context, server *c
 }
 
 // ensureGateway is a generic helper to create/update a Gateway resource
-func (r *AxonOpsServerReconciler) ensureGateway(ctx context.Context, server *corev1alpha1.AxonOpsServer, gatewayName string, defaultPort int32, component string, gatewaySpec corev1alpha1.GatewayConfig) error {
+func (r *AxonOpsPlatformReconciler) ensureGateway(ctx context.Context, server *corev1alpha1.AxonOpsPlatform, gatewayName string, defaultPort int32, component string, gatewaySpec corev1alpha1.GatewayConfig) error {
 	log := logf.FromContext(ctx)
 
 	// Use provided port or default
@@ -3584,7 +3584,7 @@ func (r *AxonOpsServerReconciler) ensureGateway(ctx context.Context, server *cor
 }
 
 // ensureDashboardGateway ensures the Dashboard Gateway and HTTPRoute exist
-func (r *AxonOpsServerReconciler) ensureDashboardGateway(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) ensureDashboardGateway(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	gatewayName := fmt.Sprintf("%s-%s-gateway", server.Name, componentDashboard)
 	routeName := fmt.Sprintf("%s-%s-route", server.Name, componentDashboard)
 	serviceName := fmt.Sprintf("%s-%s", server.Name, componentDashboard)
@@ -3599,7 +3599,7 @@ func (r *AxonOpsServerReconciler) ensureDashboardGateway(ctx context.Context, se
 }
 
 // ensureServerAgentGateway ensures the Server Agent Gateway and HTTPRoute exist
-func (r *AxonOpsServerReconciler) ensureServerAgentGateway(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) ensureServerAgentGateway(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	gatewayName := fmt.Sprintf("%s-%s-agent-gateway", server.Name, componentServer)
 	routeName := fmt.Sprintf("%s-%s-agent-route", server.Name, componentServer)
 	serviceName := fmt.Sprintf("%s-%s-agent", server.Name, componentServer)
@@ -3614,7 +3614,7 @@ func (r *AxonOpsServerReconciler) ensureServerAgentGateway(ctx context.Context, 
 }
 
 // ensureServerApiGateway ensures the Server API Gateway and HTTPRoute exist
-func (r *AxonOpsServerReconciler) ensureServerApiGateway(ctx context.Context, server *corev1alpha1.AxonOpsServer) error {
+func (r *AxonOpsPlatformReconciler) ensureServerApiGateway(ctx context.Context, server *corev1alpha1.AxonOpsPlatform) error {
 	gatewayName := fmt.Sprintf("%s-%s-api-gateway", server.Name, componentServer)
 	routeName := fmt.Sprintf("%s-%s-api-route", server.Name, componentServer)
 	serviceName := fmt.Sprintf("%s-%s-api", server.Name, componentServer)
@@ -3635,14 +3635,14 @@ func ptr[T any](v T) *T {
 
 // resolveInitImage returns the init container image to use.
 // Precedence: spec.initImage > spec.imageRegistry applied to default > default.
-func resolveInitImage(server *corev1alpha1.AxonOpsServer) string {
+func resolveInitImage(server *corev1alpha1.AxonOpsPlatform) string {
 	return resolveImage(defaultInitImage, server.Spec.ImageRegistry, server.Spec.InitImage)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AxonOpsServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *AxonOpsPlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.AxonOpsServer{}).
+		For(&corev1alpha1.AxonOpsPlatform{}).
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
@@ -3655,8 +3655,8 @@ func (r *AxonOpsServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// We don't watch them because Gateway API CRDs may not be installed
 		// in the cluster. The controller still creates/updates them when needed;
 		// users configure Gateway support via spec.server.dashboard.external.gateway
-		// and spec.server.agent.external.gateway fields in the AxonOpsServer CR.
+		// and spec.server.agent.external.gateway fields in the AxonOpsPlatform CR.
 		Owns(&certmanagerv1.Certificate{}).
-		Named("axonopsserver").
+		Named("axonopsplatform").
 		Complete(r)
 }

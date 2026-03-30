@@ -67,7 +67,7 @@ resources:
 - alerts_axonopsmetricalert_admin_role.yaml
 - alerts_axonopsmetricalert_editor_role.yaml
 - alerts_axonopsmetricalert_viewer_role.yaml
-- axonopsserver_admin_role.yaml
-- axonopsserver_editor_role.yaml
-- axonopsserver_viewer_role.yaml
+- axonopsplatform_admin_role.yaml
+- axonopsplatform_editor_role.yaml
+- axonopsplatform_viewer_role.yaml
 

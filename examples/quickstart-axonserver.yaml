@@ -1,14 +1,18 @@
+# quickstart-axonserver.yaml - Minimal AxonOpsPlatform with external databases
+# Use this as a starting point when Cassandra and Elasticsearch/OpenSearch are
+# managed outside the operator. The server and dashboard are operator-managed;
+# timeSeries and search connect to pre-existing clusters.
+#
+# Apply with:
+#   kubectl apply -f examples/quickstart-axonserver.yaml
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
-  name: serg
+  name: axonops
   namespace: default
 spec:
   server:
-    orgName: "axonops"
-    repository:
-      image: europe-docker.pkg.dev/axonops-public/axonops-docker-dev/axon-server
-      tag: 2.0.27-asb4338searchdbtlscacert-1-arm64
+    orgName: "my-organisation"
 
   timeSeries: {}
   search: {}

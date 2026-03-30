@@ -70,7 +70,7 @@ This is a **multi-group kubebuilder project** (`multigroup: true` in `PROJECT`).
 axonops-operator/
 ├── api/
 │   ├── v1alpha1/                   # core.axonops.com group
-│   │   ├── axonopsserver_types.go
+│   │   ├── axonopsplatform_types.go
 │   │   ├── axonopsconnection_types.go
 │   │   ├── groupversion_info.go
 │   │   └── zz_generated.deepcopy.go   # AUTO-GENERATED — do not edit
@@ -85,18 +85,21 @@ axonops-operator/
 │           └── zz_generated.deepcopy.go   # AUTO-GENERATED — do not edit
 ├── internal/
 │   ├── controller/
-│   │   ├── axonopsserver_controller.go    # Main AxonOpsServer reconciler
-│   │   ├── axonopsserver_controller_test.go
+│   │   ├── axonopsplatform_controller.go    # Main AxonOpsPlatform reconciler
+│   │   ├── axonopsplatform_controller_test.go
 │   │   ├── suite_test.go
-│   │   └── alerts/                        # All alert CRD reconcilers
-│   │       ├── axonopsmetricalert_controller.go
-│   │       ├── axonopslogalert_controller.go
-│   │       ├── axonopsalertroute_controller.go
-│   │       ├── axonopshealthcheckhttp_controller.go
-│   │       ├── axonopshealthcheckshell_controller.go
-│   │       ├── axonopshealthchecktcp_controller.go
-│   │       ├── connection.go              # Shared AxonOpsConnection resolver
-│   │       └── suite_test.go
+│   │   ├── alerts/                        # Alert CRD reconcilers
+│   │   │   ├── axonopsmetricalert_controller.go
+│   │   │   ├── axonopslogalert_controller.go
+│   │   │   ├── axonopsalertroute_controller.go
+│   │   │   ├── axonopshealthcheckhttp_controller.go
+│   │   │   ├── axonopshealthcheckshell_controller.go
+│   │   │   ├── axonopshealthchecktcp_controller.go
+│   │   │   └── suite_test.go
+│   │   ├── backups/                       # Backup CRD reconcilers
+│   │   ├── kafka/                         # Kafka CRD reconcilers
+│   │   └── common/
+│   │       └── connection.go              # Shared AxonOpsConnection resolver
 │   └── axonops/
 │       ├── client.go                      # AxonOps REST API client
 │       └── types.go                       # API request/response types
@@ -108,7 +111,7 @@ axonops-operator/
 │   ├── bdd/                       # Gherkin feature files (acceptance criteria)
 │   └── e2e/                       # End-to-end tests (requires Kind)
 ├── examples/
-│   ├── axonops/                   # Full AxonOpsServer examples
+│   ├── axonops/                   # Full AxonOpsPlatform examples
 │   └── k8ssandra/                 # K8ssandra-specific examples
 ├── charts/axonops-operator/       # Helm chart (published to GHCR)
 ├── cmd/main.go                    # Manager entry point
@@ -122,7 +125,7 @@ axonops-operator/
 
 | Kind | Purpose |
 |---|---|
-| `AxonOpsServer` | Deploys and manages axon-server, axon-dash, axondb-timeseries, axondb-search |
+| `AxonOpsPlatform` | Deploys and manages axon-server, axon-dash, axondb-timeseries, axondb-search |
 | `AxonOpsConnection` | Holds reusable AxonOps API credentials referenced by alert CRDs |
 
 **`alerts.axonops.com`** (`api/alerts/v1alpha1/`)
@@ -237,14 +240,14 @@ Unit tests use [envtest](https://book.kubebuilder.io/reference/envtest.html), wh
 
 Tests are written with **Ginkgo v2 + Gomega**. See `internal/controller/suite_test.go` and `internal/controller/alerts/suite_test.go` for test suite setup.
 
-**Important cert-manager note**: cert-manager CRDs are not available in the envtest environment. Tests that exercise the `AxonOpsServer` controller with internal database components (TimeSeries or Search StatefulSets) will encounter the cert-manager `ClusterIssuer` step. Tests that use external database configuration bypass this step entirely. When writing new controller tests, use the external database path if you do not need to test cert-manager integration specifically.
+**Important cert-manager note**: cert-manager CRDs are not available in the envtest environment. Tests that exercise the `AxonOpsPlatform` controller with internal database components (TimeSeries or Search StatefulSets) will encounter the cert-manager `ClusterIssuer` step. Tests that use external database configuration bypass this step entirely. When writing new controller tests, use the external database path if you do not need to test cert-manager integration specifically.
 
 ```bash
 # Run tests for a specific package
 go test ./internal/controller/... -v
 
 # Run a single test by name
-go test ./internal/controller/... -run "TestAxonOpsServerController"
+go test ./internal/controller/... -run "TestAxonOpsPlatformController"
 
 # View coverage report
 make test
@@ -447,13 +450,13 @@ log.Error(err, "Failed to create Service", "name", svc.Name)
 Add RBAC markers in the controller file alongside the `Reconcile` method. `make manifests` reads these and writes `config/rbac/role.yaml`.
 
 ```go
-// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsservers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsservers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsservers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsplatforms,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsplatforms/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core.axonops.com,resources=axonopsplatforms/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 ```
 
-### Authentication in AxonOpsServer
+### Authentication in AxonOpsPlatform
 
 The `AxonAuthentication` struct defines credential priority for database components:
 
@@ -499,7 +502,7 @@ kubectl logs -n axonops-operator-system \
 ### Describe a failing CR
 
 ```bash
-kubectl describe axonopsserver my-server -n my-namespace
+kubectl describe axonopsplatform my-server -n my-namespace
 kubectl get events -n my-namespace --sort-by='.lastTimestamp'
 ```
 
@@ -524,7 +527,7 @@ kubectl get clusterrole axonops-operator-manager-role -o yaml
 
 ### cert-manager issues
 
-The AxonOpsServer controller creates `ClusterIssuer` and `Certificate` resources for internal database components (TimeSeries and Search). cert-manager must be installed and its CRDs must be present in the cluster when using these components.
+The AxonOpsPlatform controller creates `ClusterIssuer` and `Certificate` resources for internal database components (TimeSeries and Search). cert-manager must be installed and its CRDs must be present in the cluster when using these components.
 
 ```bash
 # Install cert-manager (required for internal database components only)
@@ -534,7 +537,7 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/do
 kubectl wait --for=condition=Available deployment --all -n cert-manager --timeout=120s
 ```
 
-External database configurations (`spec.server.timeseries.external`, `spec.server.search.external`) do not require cert-manager.
+External database configurations (`spec.timeSeries.external`, `spec.search.external`) do not require cert-manager.
 
 ---
 

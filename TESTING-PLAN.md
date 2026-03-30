@@ -7,7 +7,7 @@ End-to-end test suite for the AxonOps Operator. Tests all 18 CRDs against a real
 ## Goals
 
 1. Install the operator via Helm chart on a fresh cluster
-2. Deploy AxonOps stack (`AxonOpsServer`) and verify all components come up
+2. Deploy AxonOps stack (`AxonOpsPlatform`) and verify all components come up
 3. Obtain an API token from the live AxonOps instance
 4. Deploy a 1-node Cassandra cluster (K8ssandra) and a Kafka cluster (Strimzi)
 5. Exercise every CRD: create, verify Ready status, verify API sync, update, delete
@@ -59,11 +59,11 @@ test/e2e/
     ├── lib.sh                       # Shared helpers
     ├── 00-setup-cluster.sh          # Kind cluster + cert-manager + Gateway API
     ├── 01-install-operator.sh       # Helm install operator
-    ├── 02-deploy-axonops.sh         # AxonOpsServer CR (full internal stack)
+    ├── 02-deploy-axonops.sh         # AxonOpsPlatform CR (full internal stack)
     ├── 03-obtain-token.sh           # API token → Secret → AxonOpsConnection
     ├── 04-install-k8ssandra.sh      # K8ssandra operator + 1-node Cassandra
     ├── 05-install-strimzi.sh        # Strimzi operator + Kafka cluster
-    ├── 06-test-core-crds.sh         # AxonOpsServer + AxonOpsConnection
+    ├── 06-test-core-crds.sh         # AxonOpsPlatform + AxonOpsConnection
     ├── 07-test-alert-crds.sh        # MetricAlert, LogAlert, AlertRoute, AlertEndpoint
     ├── 08-test-healthcheck-crds.sh  # HealthcheckHTTP, HealthcheckTCP, HealthcheckShell
     ├── 09-test-ops-crds.sh          # DashboardTemplate, AdaptiveRepair, ScheduledRepair, CommitlogArchive
@@ -150,10 +150,10 @@ print_summary
 
 ### `02-deploy-axonops.sh`
 
-1. Apply `AxonOpsServer` CR with all internal components enabled:
+1. Apply `AxonOpsPlatform` CR with all internal components enabled:
    ```yaml
    apiVersion: core.axonops.com/v1alpha1
-   kind: AxonOpsServer
+   kind: AxonOpsPlatform
    metadata:
      name: axonops
      namespace: $TEST_NAMESPACE
@@ -280,7 +280,7 @@ Every test follows the same pattern:
 
 ### `06-test-core-crds.sh`
 
-#### AxonOpsServer
+#### AxonOpsPlatform
 Already deployed in Phase 1. Additional assertions:
 - `status.timeSeriesSecretName` is non-empty
 - `status.searchSecretName` is non-empty
@@ -638,12 +638,12 @@ Tests that deleting CRs triggers proper finalizer execution and resource cleanup
    - Verify Secret still exists (not owned by connection)
    - Verify connection CR is gone
 
-3. **Disable AxonOpsServer components one by one**
+3. **Disable AxonOpsPlatform components one by one**
    - Patch `dashboard.enabled: false` → verify Deployment, Service, ConfigMap deleted
    - Patch `search.enabled: false` → verify StatefulSet, Services, Secrets, TLS cert deleted
    - Patch `timeSeries.enabled: false` → verify StatefulSet, Services, Secrets, TLS cert deleted
 
-4. **Delete AxonOpsServer**
+4. **Delete AxonOpsPlatform**
    - Verify all remaining resources cleaned up (server StatefulSet, Services, etc.)
    - Verify namespace has no orphaned resources with `app.kubernetes.io/managed-by: axonops-operator`
 
@@ -711,7 +711,7 @@ fi
 
 | # | CRD | Script | Create | Wait Condition | Status Field | Update | Delete |
 |---|---|---|---|---|---|---|---|
-| 1 | AxonOpsServer | 06 | Phase 1 | ServerReady=True | timeSeriesSecretName | n/a (tested in 12) | 12 |
+| 1 | AxonOpsPlatform | 06 | Phase 1 | ServerReady=True | timeSeriesSecretName | n/a (tested in 12) | 12 |
 | 2 | AxonOpsConnection | 06 | Phase 2 | exists | orgId | tlsSkipVerify | 12 |
 | 3 | AxonOpsMetricAlert | 07 | YAML | Ready=True | syncedAlertID | criticalValue | 07+12 |
 | 4 | AxonOpsLogAlert | 07 | YAML | Ready=True | syncedAlertID | criticalValue | 07+12 |
@@ -728,7 +728,7 @@ fi
 | 15 | AxonOpsKafkaTopic | 11 | YAML | Ready=True | syncedTopicID | partitions | 11+12 |
 | 16 | AxonOpsKafkaACL | 11 | YAML | Ready=True | syncedACLID | — | 11+12 |
 | 17 | AxonOpsKafkaConnector | 11 | YAML | Ready=True | syncedConnectorID | — | 11+12 |
-| 18 | AxonOpsServer (external) | 06 | optional | ServerReady=True | — | — | — |
+| 18 | AxonOpsPlatform (external) | 06 | optional | ServerReady=True | — | — | — |
 
 ---
 

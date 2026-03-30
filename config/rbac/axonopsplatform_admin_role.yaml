@@ -1,9 +1,9 @@
 # This rule is not used by the project axonops-operator itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read-only access to core.axonops.com resources.
-# This role is intended for users who need visibility into these resources
-# without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
+# Grants full permissions ('*') over core.axonops.com.
+# This role is intended for users authorized to modify roles and bindings within the cluster,
+# enabling them to delegate specific permissions to other users or groups as needed.
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -11,19 +11,17 @@ metadata:
   labels:
     app.kubernetes.io/name: axonops-operator
     app.kubernetes.io/managed-by: kustomize
-  name: axonopsserver-viewer-role
+  name: axonopsplatform-admin-role
 rules:
 - apiGroups:
   - core.axonops.com
   resources:
-  - axonopsservers
+  - axonopsplatforms
   verbs:
-  - get
-  - list
-  - watch
+  - '*'
 - apiGroups:
   - core.axonops.com
   resources:
-  - axonopsservers/status
+  - axonopsplatforms/status
   verbs:
   - get

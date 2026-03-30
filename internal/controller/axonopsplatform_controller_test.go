@@ -78,7 +78,7 @@ func (m *mockRESTMapper) KindFor(input schema.GroupVersionResource) (schema.Grou
 	return m.delegate.KindFor(input)
 }
 
-var _ = Describe("AxonOpsServer Controller", func() {
+var _ = Describe("AxonOpsPlatform Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -88,13 +88,13 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		axonopsserver := &corev1alpha1.AxonOpsServer{}
+		axonopsplatform := &corev1alpha1.AxonOpsPlatform{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind AxonOpsServer")
-			err := k8sClient.Get(ctx, typeNamespacedName, axonopsserver)
+			By("creating the custom resource for the Kind AxonOpsPlatform")
+			err := k8sClient.Get(ctx, typeNamespacedName, axonopsplatform)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &corev1alpha1.AxonOpsServer{
+				resource := &corev1alpha1.AxonOpsPlatform{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -107,16 +107,16 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &corev1alpha1.AxonOpsServer{}
+			resource := &corev1alpha1.AxonOpsPlatform{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance AxonOpsServer")
+			By("Cleanup the specific resource instance AxonOpsPlatform")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &AxonOpsServerReconciler{
+			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
@@ -154,13 +154,13 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, searchSecret)).To(Succeed())
 
-			// Create AxonOpsServer with external search configured
-			resource := &corev1alpha1.AxonOpsServer{
+			// Create AxonOpsPlatform with external search configured
+			resource := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: "default",
 				},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					Search: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -181,7 +181,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the external search resource")
-			controllerReconciler := &AxonOpsServerReconciler{
+			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
@@ -202,7 +202,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(errors.IsNotFound(err)).To(BeTrue())
 
 			By("Verifying that the status condition reflects Search: External")
-			updatedResource := &corev1alpha1.AxonOpsServer{}
+			updatedResource := &corev1alpha1.AxonOpsPlatform{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedResource)).To(Succeed())
 			cond := meta.FindStatusCondition(updatedResource.Status.Conditions, "SearchMode")
 			Expect(cond).NotTo(BeNil())
@@ -222,13 +222,13 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Namespace: "default",
 			}
 
-			// Create AxonOpsServer with external search but no credentials
-			resource := &corev1alpha1.AxonOpsServer{
+			// Create AxonOpsPlatform with external search but no credentials
+			resource := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: "default",
 				},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					Search: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -245,7 +245,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the resource with missing Search credentials")
-			controllerReconciler := &AxonOpsServerReconciler{
+			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
@@ -294,13 +294,13 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, searchSecret)).To(Succeed())
 
-			// Create AxonOpsServer with external search and minimal server config
-			resource := &corev1alpha1.AxonOpsServer{
+			// Create AxonOpsPlatform with external search and minimal server config
+			resource := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: "default",
 				},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					Search: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -323,7 +323,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the resource")
-			controllerReconciler := &AxonOpsServerReconciler{
+			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
@@ -381,13 +381,13 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, timeseriesSecret)).To(Succeed())
 
-			// Create AxonOpsServer with external timeseries configured
-			resource := &corev1alpha1.AxonOpsServer{
+			// Create AxonOpsPlatform with external timeseries configured
+			resource := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: "default",
 				},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -408,7 +408,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the external timeseries resource")
-			controllerReconciler := &AxonOpsServerReconciler{
+			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
@@ -429,7 +429,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(errors.IsNotFound(err)).To(BeTrue())
 
 			By("Verifying that the status condition reflects TimeSeries: External")
-			updatedResource := &corev1alpha1.AxonOpsServer{}
+			updatedResource := &corev1alpha1.AxonOpsPlatform{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedResource)).To(Succeed())
 			cond := meta.FindStatusCondition(updatedResource.Status.Conditions, "TimeSeriesMode")
 			Expect(cond).NotTo(BeNil())
@@ -449,13 +449,13 @@ var _ = Describe("AxonOpsServer Controller", func() {
 				Namespace: "default",
 			}
 
-			// Create AxonOpsServer with external timeseries but no credentials
-			resource := &corev1alpha1.AxonOpsServer{
+			// Create AxonOpsPlatform with external timeseries but no credentials
+			resource := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: "default",
 				},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -472,7 +472,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the resource with missing TimeSeries credentials")
-			controllerReconciler := &AxonOpsServerReconciler{
+			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
@@ -521,13 +521,13 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, timeseriesSecret)).To(Succeed())
 
-			// Create AxonOpsServer with external timeseries and minimal server config
-			resource := &corev1alpha1.AxonOpsServer{
+			// Create AxonOpsPlatform with external timeseries and minimal server config
+			resource := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: "default",
 				},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -550,7 +550,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the resource")
-			controllerReconciler := &AxonOpsServerReconciler{
+			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",
@@ -589,7 +589,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 	Context("Startup dependency ordering", func() {
 		It("should report isStatefulSetReady=false when StatefulSet does not exist", func() {
 			ctx := context.Background()
-			reconciler := &AxonOpsServerReconciler{
+			reconciler := &AxonOpsPlatformReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
@@ -601,7 +601,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 		It("should report isStatefulSetReady=false when StatefulSet has no ready replicas", func() {
 			ctx := context.Background()
-			reconciler := &AxonOpsServerReconciler{
+			reconciler := &AxonOpsPlatformReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
@@ -636,7 +636,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 		It("should report isStatefulSetReady=true when all replicas are ready", func() {
 			ctx := context.Background()
-			reconciler := &AxonOpsServerReconciler{
+			reconciler := &AxonOpsPlatformReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
@@ -676,14 +676,14 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 		It("should treat disabled components as ready", func() {
 			ctx := context.Background()
-			reconciler := &AxonOpsServerReconciler{
+			reconciler := &AxonOpsPlatformReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
 
-			server := &corev1alpha1.AxonOpsServer{
+			server := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{Name: "dep-test", Namespace: "default"},
-				Spec:       corev1alpha1.AxonOpsServerSpec{
+				Spec:       corev1alpha1.AxonOpsPlatformSpec{
 					// TimeSeries and Search are nil (disabled)
 				},
 			}
@@ -703,14 +703,14 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 		It("should treat external components as ready", func() {
 			ctx := context.Background()
-			reconciler := &AxonOpsServerReconciler{
+			reconciler := &AxonOpsPlatformReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
 
-			server := &corev1alpha1.AxonOpsServer{
+			server := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{Name: "dep-external-test", Namespace: "default"},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -739,14 +739,14 @@ var _ = Describe("AxonOpsServer Controller", func() {
 
 		It("should report internal component as not ready when StatefulSet does not exist", func() {
 			ctx := context.Background()
-			reconciler := &AxonOpsServerReconciler{
+			reconciler := &AxonOpsPlatformReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
 
-			server := &corev1alpha1.AxonOpsServer{
+			server := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{Name: "dep-internal-test", Namespace: "default"},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -793,12 +793,12 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Create(ctx, tsSecret)).To(Succeed())
 			Expect(k8sClient.Create(ctx, searchSecret)).To(Succeed())
 
-			resource := &corev1alpha1.AxonOpsServer{
+			resource := &corev1alpha1.AxonOpsPlatform{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: "default",
 				},
-				Spec: corev1alpha1.AxonOpsServerSpec{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
 							Enabled: ptr(true),
@@ -832,7 +832,7 @@ var _ = Describe("AxonOpsServer Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling — external databases should be considered ready")
-			controllerReconciler := &AxonOpsServerReconciler{
+			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
 				ClusterIssuerName: "axonops-selfsigned",

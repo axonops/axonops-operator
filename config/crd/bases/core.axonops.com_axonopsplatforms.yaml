@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.1
-  name: axonopsservers.core.axonops.com
+  name: axonopsplatforms.core.axonops.com
 spec:
   group: core.axonops.com
   names:
-    kind: AxonOpsServer
-    listKind: AxonOpsServerList
-    plural: axonopsservers
-    singular: axonopsserver
+    kind: AxonOpsPlatform
+    listKind: AxonOpsPlatformList
+    plural: axonopsplatforms
+    singular: axonopsplatform
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -24,8 +24,9 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: AxonOpsServer is the Schema for the axonopsservers API; it's
-          the top-level resource for AxonOpsSever, TimeSeries and SearchDB
+        description: AxonOpsPlatform is the Schema for the axonopsplatforms API; it's
+          the top-level resource for the AxonOps observability platform (server, dashboard,
+          TimeSeries and SearchDB)
         properties:
           apiVersion:
             description: |-
@@ -45,7 +46,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of AxonOpsServer
+            description: spec defines the desired state of AxonOpsPlatform
             properties:
               dashboard:
                 description: Dashboard configures the axon-dash component
@@ -181,7 +182,7 @@ spec:
               pause:
                 default: false
                 description: |-
-                  Pause stops the controller from reconciling this AxonOpsServer resource.
+                  Pause stops the controller from reconciling this AxonOpsPlatform resource.
                   Existing owned resources (StatefulSets, Deployments, Services, Secrets,
                   Certificates) are left untouched. Deletion still proceeds normally.
                 type: boolean
@@ -567,10 +568,10 @@ spec:
                 type: object
             type: object
           status:
-            description: status defines the observed state of AxonOpsServer
+            description: status defines the observed state of AxonOpsPlatform
             properties:
               conditions:
-                description: Conditions represent the current state of the AxonOpsServer
+                description: Conditions represent the current state of the AxonOpsPlatform
                   resource.
                 items:
                   description: Condition contains details for one aspect of the current

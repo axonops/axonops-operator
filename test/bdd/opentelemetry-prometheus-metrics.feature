@@ -21,18 +21,18 @@ Feature: OpenTelemetry instrumentation and Prometheus metrics
       | axonops_reconciliation_errors_total   | counter   | error_type                |
 
   Scenario: Controller reconciliation duration is tracked accurately
-    Given an AxonOpsServer CR is created
+    Given an AxonOpsPlatform CR is created
     When the controller reconciles the resource
     Then the axonops_reconciliation_duration_seconds metric should record:
       - A histogram bucket for the reconciliation duration
-      - Resource type label (e.g., "axonopsserver")
+      - Resource type label (e.g., "axonopsplatform")
       - Result label (success or error)
       - Duration in seconds
     And the axonops_reconciliation_total counter should be incremented
       - With the same resource type and result labels
 
   Scenario: Resource lifecycle metrics track created resources
-    Given the AxonOpsServer controller is reconciling resources
+    Given the AxonOpsPlatform controller is reconciling resources
     When a StatefulSet is created for TimeSeries
     Then axonops_resource_created_total should be incremented with:
       - resource_type label = "statefulset"
@@ -41,14 +41,14 @@ Feature: OpenTelemetry instrumentation and Prometheus metrics
     Then each resource creation should increment the metric with appropriate type label
 
   Scenario: Resource lifecycle metrics track deleted resources
-    Given an AxonOpsServer with internal resources deployed
+    Given an AxonOpsPlatform with internal resources deployed
     When the controller cleanup deletes a StatefulSet
     Then axonops_resource_deleted_total should be incremented with:
       - resource_type label = "statefulset"
       - Subsequent metrics for service, secret deletion
 
   Scenario: Error metrics track failure types
-    Given the AxonOpsServer controller encounters errors
+    Given the AxonOpsPlatform controller encounters errors
     When reconciliation fails (e.g., API error, validation error, conflict)
     Then axonops_reconciliation_errors_total should be incremented with:
       - error_type label indicating the failure type
@@ -74,7 +74,7 @@ Feature: OpenTelemetry instrumentation and Prometheus metrics
       - Proper parent-child relationship between spans
 
   Scenario: Trace spans record component reconciliation
-    Given the AxonOpsServer controller is reconciling
+    Given the AxonOpsPlatform controller is reconciling
     When the controller processes components (TimeSeries, Search, Server, Dashboard)
     Then each component should have a span with:
       - Span name: reconcile.<component-name>
@@ -92,16 +92,16 @@ Feature: OpenTelemetry instrumentation and Prometheus metrics
       - Operator should log that metrics collection is disabled
 
   Scenario: Metrics include proper label dimensions
-    Given the AxonOpsServer controller is running
-    When multiple AxonOpsServer resources are reconciled in different namespaces
+    Given the AxonOpsPlatform controller is running
+    When multiple AxonOpsPlatform resources are reconciled in different namespaces
     Then metrics should include appropriate labels for:
-      - resource_type (axonopsserver, axonopsmetricalert, etc.)
+      - resource_type (axonopsplatform, axonopsmetricalert, etc.)
       - result (success, error)
       - error_type (for errors: api_error, validation_error, timeout, conflict, other)
       - namespace (optional, for filtered views)
 
   Scenario: Reconciliation metrics reflect actual performance
-    Given an AxonOpsServer with all components configured
+    Given an AxonOpsPlatform with all components configured
     When the controller completes reconciliation
     Then the axonops_reconciliation_duration_seconds histogram should show:
       - Reasonable duration (seconds)
@@ -109,7 +109,7 @@ Feature: OpenTelemetry instrumentation and Prometheus metrics
       - P95 and P99 latencies available via histogram quantiles
 
   Scenario: Multiple reconciliation attempts are tracked
-    Given an AxonOpsServer CR is created
+    Given an AxonOpsPlatform CR is created
     When the controller reconciles it multiple times (including retries)
     Then axonops_reconciliation_total should accumulate:
       - Each reconciliation attempt counted

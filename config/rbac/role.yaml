@@ -154,7 +154,7 @@ rules:
 - apiGroups:
   - core.axonops.com
   resources:
-  - axonopsservers
+  - axonopsplatforms
   verbs:
   - create
   - delete
@@ -166,13 +166,13 @@ rules:
 - apiGroups:
   - core.axonops.com
   resources:
-  - axonopsservers/finalizers
+  - axonopsplatforms/finalizers
   verbs:
   - update
 - apiGroups:
   - core.axonops.com
   resources:
-  - axonopsservers/status
+  - axonopsplatforms/status
   verbs:
   - get
   - patch

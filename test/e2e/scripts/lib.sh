@@ -64,7 +64,7 @@ print_summary() {
 # wait_for_condition <resource/name> <condition> <timeout_seconds> [namespace]
 #
 # Waits for a Kubernetes resource condition to become True.
-# Example: wait_for_condition axonopsserver/axonops ServerReady 300
+# Example: wait_for_condition axonopsplatform/axonops ServerReady 300
 # ---------------------------------------------------------------------------
 wait_for_condition() {
   local resource="$1"
@@ -88,7 +88,7 @@ wait_for_condition() {
 # assert_jsonpath <resource/name> <jsonpath> <expected> [namespace]
 #
 # Asserts that a kubectl jsonpath expression returns the expected value.
-# Example: assert_jsonpath axonopsserver/axonops '{.status.timeSeriesSecretName}' 'axonops-timeseries-auth'
+# Example: assert_jsonpath axonopsplatform/axonops '{.status.timeSeriesSecretName}' 'axonops-timeseries-auth'
 # ---------------------------------------------------------------------------
 assert_jsonpath() {
   local resource="$1"

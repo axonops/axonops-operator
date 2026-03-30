@@ -7,24 +7,18 @@ metadata:
     app.kubernetes.io/name: {{ include "axonops-operator.name" . }}
     helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
     app.kubernetes.io/instance: {{ .Release.Name }}
-  name: {{ include "axonops-operator.resourceName" (dict "suffix" "axonopsserver-editor-role" "context" $) }}
+  name: {{ include "axonops-operator.resourceName" (dict "suffix" "axonopsplatform-admin-role" "context" $) }}
 rules:
 - apiGroups:
   - core.axonops.com
   resources:
-  - axonopsservers
+  - axonopsplatforms
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+  - '*'
 - apiGroups:
   - core.axonops.com
   resources:
-  - axonopsservers/status
+  - axonopsplatforms/status
   verbs:
   - get
 {{- end }}

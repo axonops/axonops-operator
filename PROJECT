@@ -20,7 +20,7 @@ resources:
   controller: true
   domain: axonops.com
   group: core
-  kind: AxonOpsServer
+  kind: AxonOpsPlatform
   path: github.com/axonops/axonops-operator/api/v1alpha1
   version: v1alpha1
 - api:

@@ -190,18 +190,18 @@ func TestResolveImage(t *testing.T) {
 func TestResolveInitImage_ImageRegistry(t *testing.T) {
 	tests := []struct {
 		name   string
-		server *corev1alpha1.AxonOpsServer
+		server *corev1alpha1.AxonOpsPlatform
 		want   string
 	}{
 		{
 			name:   "Default",
-			server: &corev1alpha1.AxonOpsServer{},
+			server: &corev1alpha1.AxonOpsPlatform{},
 			want:   defaultInitImage,
 		},
 		{
 			name: "CustomInitImage_TakesPrecedence",
-			server: &corev1alpha1.AxonOpsServer{
-				Spec: corev1alpha1.AxonOpsServerSpec{
+			server: &corev1alpha1.AxonOpsPlatform{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					ImageRegistry: "registry.local",
 					InitImage:     "my.io/custom-busybox:2.0",
 				},
@@ -210,8 +210,8 @@ func TestResolveInitImage_ImageRegistry(t *testing.T) {
 		},
 		{
 			name: "ImageRegistry_AppliedToDefault",
-			server: &corev1alpha1.AxonOpsServer{
-				Spec: corev1alpha1.AxonOpsServerSpec{
+			server: &corev1alpha1.AxonOpsPlatform{
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					ImageRegistry: "registry.local",
 				},
 			},

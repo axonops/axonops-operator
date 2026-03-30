@@ -12,8 +12,8 @@ A Kubernetes operator that manages the full AxonOps observability stack as decla
 |---|---|---|
 | Kubernetes | 1.28+ | |
 | Helm | 3.x | |
-| cert-manager | any | Required only when deploying internal TimeSeries or Search components via `AxonOpsServer` |
-| Gateway API CRDs | any | Required only when using Gateway API ingress in `AxonOpsServer` |
+| cert-manager | any | Required only when deploying internal TimeSeries or Search components via `AxonOpsPlatform` |
+| Gateway API CRDs | any | Required only when using Gateway API ingress in `AxonOpsPlatform` |
 
 ## Installation
 
@@ -43,7 +43,7 @@ The operator introduces 19 CRDs across four API groups.
 
 | CRD | Description |
 |---|---|
-| `AxonOpsServer` | Deploys the AxonOps stack: axon-server, axon-dash, axondb-timeseries, axondb-search |
+| `AxonOpsPlatform` | Deploys the AxonOps stack: axon-server, axon-dash, axondb-timeseries, axondb-search |
 | `AxonOpsConnection` | Shared API authentication configuration for all other CRDs |
 
 ### `alerts.axonops.com/v1alpha1`
@@ -86,7 +86,7 @@ Apply this resource after installing the operator. cert-manager MUST be installe
 
 ```yaml
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   name: axonops
   namespace: axonops
@@ -107,7 +107,7 @@ Use this form when Cassandra and Elasticsearch are managed outside the operator.
 
 ```yaml
 apiVersion: core.axonops.com/v1alpha1
-kind: AxonOpsServer
+kind: AxonOpsPlatform
 metadata:
   name: axonops
   namespace: axonops
@@ -319,7 +319,7 @@ manager:
 helm uninstall axonops-operator -n axonops-operator-system
 ```
 
-CRDs are retained by default (`crd.keep=true`). This preserves all existing `AxonOpsServer`, `AxonOpsBackup`, and other custom resources in the cluster. To remove CRDs and all associated resources after uninstalling the chart:
+CRDs are retained by default (`crd.keep=true`). This preserves all existing `AxonOpsPlatform`, `AxonOpsBackup`, and other custom resources in the cluster. To remove CRDs and all associated resources after uninstalling the chart:
 
 ```bash
 kubectl get crd -o name | grep axonops.com | xargs kubectl delete

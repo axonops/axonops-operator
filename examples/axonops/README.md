@@ -239,7 +239,7 @@ spec:
 ### Check deployment status
 ```bash
 kubectl get all -n axonops-prod
-kubectl describe axonopsserver axonops -n axonops-prod
+kubectl describe axonopsplatform axonops -n axonops-prod
 ```
 
 ### View logs
@@ -251,7 +251,7 @@ kubectl logs -n axonops-prod statefulset/axonops-server
 kubectl logs -n axonops-prod deployment/axonops-dashboard
 
 # Operator logs
-kubectl logs -n axonops-system deployment/axonops-controller-manager
+kubectl logs -n axonops-operator-system deployment/axonops-operator-controller-manager
 ```
 
 ### Access shell for debugging
@@ -323,5 +323,5 @@ spec:
 1. Choose an example matching your use case
 2. Customize the values (domain names, storage sizes, replicas)
 3. Apply the manifest: `kubectl apply -f example.yaml`
-4. Verify deployment: `kubectl get axonopsserver`
+4. Verify deployment: `kubectl get axonopsplatform`
 5. Access the dashboard and configure alerts

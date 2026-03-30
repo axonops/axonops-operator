@@ -8,39 +8,39 @@ Feature: Pause reconciliation
     Given a Kubernetes cluster with the AxonOps operator installed
     And the operator is reconciling resources normally
 
-  # --- AxonOpsServer pause ---
+  # --- AxonOpsPlatform pause ---
 
-  Scenario: Pause AxonOpsServer reconciliation
-    Given an AxonOpsServer resource with all components running
-    When I set spec.pause to true on the AxonOpsServer
+  Scenario: AxonOpsPlatform reconciliation
+    Given an AxonOpsPlatform resource with all components running
+    When I set spec.pause to true on the AxonOpsPlatform
     Then the controller should stop reconciling all server components
     And existing StatefulSets, Deployments, Services, and Secrets should remain unchanged
     And the status should have a condition "Paused" with status "True" and reason "ReconciliationPaused"
     And the controller should log that reconciliation is paused
 
-  Scenario: Resume AxonOpsServer reconciliation
-    Given an AxonOpsServer resource with spec.pause set to true
+  Scenario: AxonOpsPlatform reconciliation
+    Given an AxonOpsPlatform resource with spec.pause set to true
     When I set spec.pause to false
     Then the controller should resume reconciling all server components
     And the "Paused" condition should be removed from status
     And any pending spec changes made while paused should be applied
 
-  Scenario: Paused AxonOpsServer ignores spec changes
-    Given an AxonOpsServer resource with spec.pause set to true
+  Scenario: AxonOpsPlatform ignores spec changes
+    Given an AxonOpsPlatform resource with spec.pause set to true
     When I change the server image tag in the spec
     Then the controller should not update the StatefulSet
     And the observedGeneration should not advance
     When I set spec.pause to false
     Then the controller should apply the image tag change
 
-  Scenario: AxonOpsServer pause is false by default
-    Given a new AxonOpsServer resource with no pause field set
+  Scenario: AxonOpsPlatform pause is false by default
+    Given a new AxonOpsPlatform resource with no pause field set
     Then spec.pause should default to false
     And the controller should reconcile normally
 
-  Scenario: Paused AxonOpsServer still handles deletion
-    Given an AxonOpsServer resource with spec.pause set to true
-    When I delete the AxonOpsServer resource
+  Scenario: AxonOpsPlatform still handles deletion
+    Given an AxonOpsPlatform resource with spec.pause set to true
+    When I delete the AxonOpsPlatform resource
     Then the finalizer should still run
     And all owned resources should be cleaned up normally
 
@@ -104,8 +104,8 @@ Feature: Pause reconciliation
   # --- Status print column ---
 
   Scenario: kubectl shows paused status
-    Given an AxonOpsServer with spec.pause set to true
-    When I run kubectl get axonopsservers
+    Given an AxonOpsPlatform with spec.pause set to true
+    When I run kubectl get axonopsplatforms
     Then the Paused column should show "True"
 
   Scenario: kubectl shows paused connection
@@ -116,7 +116,7 @@ Feature: Pause reconciliation
   # --- Edge cases ---
 
   Scenario: Rapid pause/unpause does not lose events
-    Given an AxonOpsServer reconciling normally
+    Given an AxonOpsPlatform reconciling normally
     When I set spec.pause to true and immediately back to false
     Then the controller should process the final state (unpaused)
     And reconciliation should continue without errors
