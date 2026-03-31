@@ -87,6 +87,14 @@ spec:
                   AxonOps API calls. Dependant resources retain their current status fields.
                   Deletion of dependant resources still runs finalizers.
                 type: boolean
+              port:
+                description: |-
+                  Port is the TCP port of the AxonOps server.
+                  When omitted, defaults to 443 for protocol "https" or 80 for protocol "http".
+                format: int32
+                maximum: 65535
+                minimum: 1
+                type: integer
               protocol:
                 default: https
                 description: Protocol is the protocol to use (http or https)

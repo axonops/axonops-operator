@@ -28,6 +28,9 @@ spec:
   # Optional: Protocol (default: https)
   # protocol: "https"
 
+  # Optional: Port for on-premises deployments (default: 443 for https, 80 for http)
+  # port: 8443
+
   # Optional: Token type (default: Bearer)
   # tokenType: "Bearer"
 

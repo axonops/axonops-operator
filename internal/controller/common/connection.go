@@ -87,7 +87,8 @@ func ResolveAPIClient(ctx context.Context, c client.Client, namespace, connectio
 		tokenType = axonops.DefaultTokenType(conn.Spec.Host)
 	}
 
-	fullHost := BuildHostURL(conn.Spec.Host, conn.Spec.OrgID, conn.Spec.UseSAML)
+	port := resolvePort(conn.Spec.Port, conn.Spec.Protocol)
+	fullHost := BuildHostURL(conn.Spec.Host, port, conn.Spec.OrgID, conn.Spec.UseSAML, conn.Spec.Protocol)
 
 	var opts []axonops.ClientOption
 	if conn.Spec.Timeout != "" {
@@ -106,23 +107,50 @@ func ResolveAPIClient(ctx context.Context, c client.Client, namespace, connectio
 	return apiClient, nil
 }
 
-// BuildHostURL constructs the AxonOps API host URL based on the connection settings.
-func BuildHostURL(customHost, orgID string, useSAML bool) string {
-	var host string
+// resolvePort returns the effective port to use for an AxonOps connection.
+// If port is non-nil, it is returned as-is. Otherwise the default is 443 for
+// https (or when protocol is empty) and 80 for http.
+func resolvePort(port *int32, protocol string) int32 {
+	if port != nil {
+		return *port
+	}
+	if protocol == "http" {
+		return 80
+	}
+	return 443
+}
+
+// BuildHostURL constructs the AxonOps API host URL from the connection settings.
+// The scheme is taken from protocol (defaults to "https" when empty). When port
+// is the standard port for the scheme (80/http, 443/https) it is omitted from
+// the URL; non-standard ports are included as host:port.
+func BuildHostURL(customHost string, port int32, orgID string, useSAML bool, protocol string) string {
+	scheme := protocol
+	if scheme == "" {
+		scheme = "https"
+	}
+
+	standardPort := port == 443 && scheme == "https" || port == 80 && scheme == "http"
+
+	var hostPart string
 	if customHost == "" {
 		if useSAML {
-			host = fmt.Sprintf("%s.axonops.cloud/dashboard", orgID)
+			hostPart = fmt.Sprintf("%s.axonops.cloud", orgID)
 		} else {
-			host = fmt.Sprintf("dash.axonops.cloud/%s", orgID)
+			hostPart = "dash.axonops.cloud"
 		}
 	} else {
-		if useSAML {
-			host = fmt.Sprintf("%s/dashboard", customHost)
-		} else {
-			host = fmt.Sprintf("%s/%s", customHost, orgID)
-		}
+		hostPart = customHost
 	}
-	return fmt.Sprintf("https://%s", host)
+
+	if !standardPort {
+		hostPart = fmt.Sprintf("%s:%d", hostPart, port)
+	}
+
+	if useSAML {
+		return fmt.Sprintf("%s://%s/dashboard", scheme, hostPart)
+	}
+	return fmt.Sprintf("%s://%s/%s", scheme, hostPart, orgID)
 }
 
 // HandleConnectionPaused sets a Paused condition on the resource and updates its status.

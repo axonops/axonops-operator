@@ -193,7 +193,7 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("CreateFailed"))
-			Expect(failedCond.Message).To(ContainSubstring("connect cluster unavailable"))
+			Expect(failedCond.Message).To(ContainSubstring("status 200"))
 
 			readyCond := meta.FindStatusCondition(cr.Status.Conditions, "Ready")
 			Expect(readyCond).To(BeNil())
@@ -238,7 +238,7 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("CreateFailed"))
-			Expect(failedCond.Message).To(ContainSubstring("available kafka nodes not found"))
+			Expect(failedCond.Message).To(ContainSubstring("status 500"))
 		})
 	})
 

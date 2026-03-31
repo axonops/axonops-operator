@@ -24,6 +24,66 @@ import (
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
 
+func int32ptr(v int32) *int32 { return &v }
+
+func TestResolvePort(t *testing.T) {
+	tests := []struct {
+		name     string
+		port     *int32
+		protocol string
+		want     int32
+	}{
+		{"nil port, https", nil, "https", 443},
+		{"nil port, http", nil, "http", 80},
+		{"nil port, empty defaults to https", nil, "", 443},
+		{"explicit 8443, https", int32ptr(8443), "https", 8443},
+		{"explicit 8080, http", int32ptr(8080), "http", 8080},
+		{"explicit 443, https", int32ptr(443), "https", 443},
+		{"explicit 80, http", int32ptr(80), "http", 80},
+		{"explicit 1, https", int32ptr(1), "https", 1},
+		{"explicit 65535, http", int32ptr(65535), "http", 65535},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolvePort(tt.port, tt.protocol)
+			if got != tt.want {
+				t.Errorf("resolvePort() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildHostURL_WithPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		host     string
+		port     int32
+		orgID    string
+		useSAML  bool
+		protocol string
+		want     string
+	}{
+		{"default host, https standard port", "", 443, "my-org", false, "https", "https://dash.axonops.cloud/my-org"},
+		{"default host, http standard port", "", 80, "my-org", false, "http", "http://dash.axonops.cloud/my-org"},
+		{"custom host, non-standard https", "axonops.internal", 8443, "my-org", false, "https", "https://axonops.internal:8443/my-org"},
+		{"custom host, standard https port", "axonops.internal", 443, "my-org", false, "https", "https://axonops.internal/my-org"},
+		{"custom host, non-standard http", "axonops.internal", 8080, "my-org", false, "http", "http://axonops.internal:8080/my-org"},
+		{"custom host, standard http port", "axonops.internal", 80, "my-org", false, "http", "http://axonops.internal/my-org"},
+		{"SAML, non-standard port", "axonops.internal", 9443, "my-org", true, "https", "https://axonops.internal:9443/dashboard"},
+		{"SAML, standard port", "axonops.internal", 443, "my-org", true, "https", "https://axonops.internal/dashboard"},
+		{"SAML default host", "", 443, "my-org", true, "https", "https://my-org.axonops.cloud/dashboard"},
+		{"empty protocol defaults to https", "axonops.internal", 443, "my-org", false, "", "https://axonops.internal/my-org"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BuildHostURL(tt.host, tt.port, tt.orgID, tt.useSAML, tt.protocol)
+			if got != tt.want {
+				t.Errorf("BuildHostURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSafeConditionMsg_APIError_OmitsBody(t *testing.T) {
 	apiErr := &axonops.APIError{StatusCode: 500, Body: "internal server error details"}
 	msg := SafeConditionMsg("Failed to sync", apiErr)

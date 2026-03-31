@@ -49,6 +49,13 @@ type AxonOpsConnectionSpec struct {
 	// +kubebuilder:default="https"
 	Protocol string `json:"protocol,omitempty"`
 
+	// Port is the TCP port of the AxonOps server.
+	// When omitted, defaults to 443 for protocol "https" or 80 for protocol "http".
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port *int32 `json:"port,omitempty"`
+
 	// TokenType is the token type for authentication (Bearer or AxonApi)
 	// +optional
 	// +kubebuilder:validation:Enum=Bearer;AxonApi

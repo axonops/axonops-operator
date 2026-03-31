@@ -517,6 +517,21 @@ func (e *APIError) IsRetryable() bool {
 	return e.StatusCode >= 500
 }
 
+// checkBodyError inspects a JSON response body for a top-level "error" field.
+// Some AxonOps endpoints return HTTP 200/201 with {"error":"..."} when the
+// operation fails (e.g. Kafka nodes unavailable). When such a field is present,
+// it returns an APIError using the provided HTTP status code so callers can
+// handle it uniformly; otherwise it returns nil.
+func checkBodyError(body []byte, statusCode int) error {
+	var envelope struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Error != "" {
+		return &APIError{StatusCode: statusCode, Body: string(body)}
+	}
+	return nil
+}
+
 // GetIntegrations retrieves all integrations and their routing configurations for a cluster
 func (c *Client) GetIntegrations(ctx context.Context, clusterType, clusterName string) (*IntegrationsResponse, error) {
 	reqURL := fmt.Sprintf("%s/api/v1/integrations/%s/%s/%s", c.baseURL, p(c.orgID), p(clusterType), p(clusterName))
@@ -1165,11 +1180,11 @@ func (c *Client) CreateKafkaTopic(ctx context.Context, clusterName string, topic
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		respBody, _ := io.ReadAll(resp.Body)
 		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
-	return nil
+	return checkBodyError(respBody, resp.StatusCode)
 }
 
 // UpdateKafkaTopicConfig updates a Kafka topic's configuration
@@ -1250,11 +1265,11 @@ func (c *Client) CreateKafkaACL(ctx context.Context, clusterName string, acl Kaf
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusCreated {
-		respBody, _ := io.ReadAll(resp.Body)
 		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
-	return nil
+	return checkBodyError(respBody, resp.StatusCode)
 }
 
 // DeleteKafkaACL deletes a Kafka ACL entry. The full ACL struct is sent as the request body.
@@ -1309,13 +1324,16 @@ func (c *Client) CreateKafkaConnector(ctx context.Context, clusterName, connectC
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		respBody, _ := io.ReadAll(resp.Body)
 		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	if err := checkBodyError(respBody, resp.StatusCode); err != nil {
+		return nil, err
 	}
 
 	var result KafkaConnectorResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(respBody)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 	return &result, nil
