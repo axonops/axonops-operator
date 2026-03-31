@@ -520,14 +520,14 @@ func (e *APIError) IsRetryable() bool {
 // checkBodyError inspects a JSON response body for a top-level "error" field.
 // Some AxonOps endpoints return HTTP 200/201 with {"error":"..."} when the
 // operation fails (e.g. Kafka nodes unavailable). When such a field is present,
-// it returns an APIError using the provided HTTP status code so callers can
-// handle it uniformly; otherwise it returns nil.
+// it returns an APIError whose Body is the error string from the JSON (not the
+// raw response body); otherwise it returns nil.
 func checkBodyError(body []byte, statusCode int) error {
 	var envelope struct {
 		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Error != "" {
-		return &APIError{StatusCode: statusCode, Body: string(body)}
+		return &APIError{StatusCode: statusCode, Body: envelope.Error}
 	}
 	return nil
 }
@@ -1213,11 +1213,11 @@ func (c *Client) UpdateKafkaTopicConfig(ctx context.Context, clusterName, topicN
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		respBody, _ := io.ReadAll(resp.Body)
 		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
-	return nil
+	return checkBodyError(respBody, resp.StatusCode)
 }
 
 // DeleteKafkaTopic deletes a Kafka topic
@@ -1236,11 +1236,11 @@ func (c *Client) DeleteKafkaTopic(ctx context.Context, clusterName, topicName st
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
-		respBody, _ := io.ReadAll(resp.Body)
 		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
-	return nil
+	return checkBodyError(respBody, resp.StatusCode)
 }
 
 // CreateKafkaACL creates a Kafka ACL entry
@@ -1294,11 +1294,11 @@ func (c *Client) DeleteKafkaACL(ctx context.Context, clusterName string, acl Kaf
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
-		respBody, _ := io.ReadAll(resp.Body)
 		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
-	return nil
+	return checkBodyError(respBody, resp.StatusCode)
 }
 
 // CreateKafkaConnector creates a Kafka Connect connector
@@ -1363,11 +1363,11 @@ func (c *Client) UpdateKafkaConnectorConfig(ctx context.Context, clusterName, co
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		respBody, _ := io.ReadAll(resp.Body)
 		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
-	return nil
+	return checkBodyError(respBody, resp.StatusCode)
 }
 
 // DeleteKafkaConnector deletes a Kafka Connect connector
@@ -1387,11 +1387,11 @@ func (c *Client) DeleteKafkaConnector(ctx context.Context, clusterName, connectC
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
-		respBody, _ := io.ReadAll(resp.Body)
 		return &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
-	return nil
+	return checkBodyError(respBody, resp.StatusCode)
 }
 
 // GetLogCollectors retrieves all log collectors for a cluster
