@@ -3641,7 +3641,9 @@ func resolveInitImage(server *corev1alpha1.AxonOpsPlatform) string {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AxonOpsPlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	log := logf.FromContext(context.Background())
+
+	b := ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.AxonOpsPlatform{}).
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.Service{}).
@@ -3649,14 +3651,23 @@ func (r *AxonOpsPlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&appsv1.Deployment{}).
-		Owns(&networkingv1.Ingress{}).
-		// Gateway API resources (Gateway, HTTPRoute) are owned but not watched.
-		// They are created with owner references, enabling garbage collection.
-		// We don't watch them because Gateway API CRDs may not be installed
-		// in the cluster. The controller still creates/updates them when needed;
-		// users configure Gateway support via spec.server.dashboard.external.gateway
-		// and spec.server.agent.external.gateway fields in the AxonOpsPlatform CR.
-		Owns(&certmanagerv1.Certificate{}).
-		Named("axonopsplatform").
-		Complete(r)
+		Owns(&networkingv1.Ingress{})
+	// Gateway API resources (Gateway, HTTPRoute) are owned but not watched.
+	// They are created with owner references, enabling garbage collection.
+	// We don't watch them because Gateway API CRDs may not be installed
+	// in the cluster. The controller still creates/updates them when needed;
+	// users configure Gateway support via spec.server.dashboard.external.gateway
+	// and spec.server.agent.external.gateway fields in the AxonOpsPlatform CR.
+
+	// cert-manager Certificate resources are watched only when the CRD is
+	// installed. The operator starts successfully in clusters without
+	// cert-manager; TLS certificate management is silently skipped in that case.
+	if r.isCertManagerAvailable() {
+		log.Info("cert-manager CRDs detected — enabling Certificate watch")
+		b = b.Owns(&certmanagerv1.Certificate{})
+	} else {
+		log.Info("cert-manager CRDs not found — Certificate watch disabled")
+	}
+
+	return b.Named("axonopsplatform").Complete(r)
 }
