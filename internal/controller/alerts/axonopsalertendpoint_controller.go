@@ -129,17 +129,24 @@ func (r *AxonOpsAlertEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 	params, err := r.buildParams(ctx, endpoint)
 	if err != nil {
 		log.Error(err, "Failed to build integration params")
+		reason := "InvalidConfig"
+		retryable := false
+		var cfgErr *endpointConfigError
+		if errors.As(err, &cfgErr) {
+			reason = cfgErr.Reason
+			retryable = cfgErr.Retryable
+		}
 		meta.SetStatusCondition(&endpoint.Status.Conditions, metav1.Condition{
 			Type:               condTypeReady,
 			Status:             metav1.ConditionFalse,
-			Reason:             err.(*endpointConfigError).Reason,
+			Reason:             reason,
 			Message:            err.Error(),
 			ObservedGeneration: endpoint.Generation,
 		})
 		if statusErr := r.Status().Update(ctx, endpoint); statusErr != nil {
 			log.Error(statusErr, "Failed to update status")
 		}
-		if err.(*endpointConfigError).Retryable {
+		if retryable {
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
