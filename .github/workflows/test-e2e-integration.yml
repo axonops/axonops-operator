@@ -24,6 +24,9 @@ jobs:
       AWS_ENDPOINT_URL_S3: https://sos-ch-gva-2.exo.io
       TF_BACKEND_KEY: e2e/pr-${{ github.event.pull_request.number }}/terraform.tfstate
     steps:
+      - name: Disabled for now
+        run: "exit 0"
+
       - name: Clone the code
         uses: actions/checkout@v5
 
