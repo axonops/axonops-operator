@@ -239,16 +239,25 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 		})
 	})
 
-	Context("Reconcile_Idempotent_NoApiCallWhenSynced", func() {
-		It("should not call API when already synced", func() {
-			var apiCallCount atomic.Int32
+	Context("Reconcile_Idempotent_NoResyncWhenSynced", func() {
+		It("should only perform a drift-check GET and not re-sync when already synced", func() {
+			var getCalls, putCalls atomic.Int32
+			var syncedUUID string
+
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				apiCallCount.Add(1)
 				switch r.Method {
 				case http.MethodGet:
+					getCalls.Add(1)
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte(`[]`))
+					if syncedUUID != "" {
+						collectors := []axonops.LogCollector{{UUID: syncedUUID, Filename: "/var/log/cassandra/idem.log"}}
+						data, _ := json.Marshal(collectors)
+						_, _ = w.Write(data)
+					} else {
+						_, _ = w.Write([]byte(`[]`))
+					}
 				case http.MethodPut:
+					putCalls.Add(1)
 					w.WriteHeader(http.StatusOK)
 				default:
 					w.WriteHeader(http.StatusOK)
@@ -267,18 +276,24 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 			nn := types.NamespacedName{Name: cr.Name, Namespace: testNamespace}
 			reconciler := &AxonOpsLogCollectorReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
 
-			// First reconcile: finalizer
+			// First reconcile: adds finalizer, no API calls
 			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
-			// Second reconcile: sync
+			// Second reconcile: syncs (GET + PUT)
 			_, _ = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 
-			callsAfterSync := apiCallCount.Load()
+			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
+			syncedUUID = cr.Status.SyncedUUID
+			Expect(syncedUUID).NotTo(BeEmpty())
 
-			// Third reconcile: should be idempotent
+			getCallsAfterSync := getCalls.Load()
+			putCallsAfterSync := putCalls.Load()
+
+			// Third reconcile: drift check only (1 GET, no PUT)
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: nn})
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(apiCallCount.Load()).To(Equal(callsAfterSync))
+			Expect(getCalls.Load()).To(Equal(getCallsAfterSync + 1))
+			Expect(putCalls.Load()).To(Equal(putCallsAfterSync))
 		})
 	})
 

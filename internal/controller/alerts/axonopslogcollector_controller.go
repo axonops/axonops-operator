@@ -114,13 +114,14 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Check idempotency
+	// Check idempotency with drift detection
 	readyCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		cr.Status.ObservedGeneration == cr.Generation &&
 		cr.Status.SyncedUUID != "" {
-		log.Info("Log collector already synced and spec unchanged, skipping API call")
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, cr, apiClient); done {
+			return result, err
+		}
 	}
 
 	// GET current list of log collectors
@@ -228,6 +229,46 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 
 	log.Info("Successfully synced log collector", "uuid", collectorUUID)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether the synced log collector still exists in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsLogCollectorReconciler) checkDrift(ctx context.Context, cr *alertsv1alpha1.AxonOpsLogCollector, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	collectors, err := apiClient.GetLogCollectors(ctx, cr.Spec.ClusterType, cr.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
+			Type:               "DriftCheckFailed",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: cr.Generation,
+			Reason:             "DriftCheckFailed",
+			Message:            common.SafeConditionMsg("Failed to check for drift", err),
+		})
+		if statusErr := r.Status().Update(ctx, cr); statusErr != nil {
+			log.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	for _, lc := range collectors {
+		if lc.UUID == cr.Status.SyncedUUID {
+			log.Info("Log collector already synced and spec unchanged, skipping API call")
+			return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+		}
+	}
+	log.Info("Drift detected: log collector no longer exists in AxonOps", "uuid", cr.Status.SyncedUUID)
+	meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: cr.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Log collector was deleted externally; recreating",
+	})
+	cr.Status.SyncedUUID = ""
+	if statusErr := r.Status().Update(ctx, cr); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 func (r *AxonOpsLogCollectorReconciler) handleDeletion(ctx context.Context, cr *alertsv1alpha1.AxonOpsLogCollector) (ctrl.Result, error) {

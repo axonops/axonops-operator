@@ -120,13 +120,14 @@ func (r *AxonOpsDashboardTemplateReconciler) Reconcile(ctx context.Context, req 
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Check if already synced and spec unchanged
+	// Check if already synced with drift detection
 	readyCond := meta.FindStatusCondition(dashboard.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		dashboard.Status.ObservedGeneration == dashboard.Generation &&
 		dashboard.Status.LastSyncTime != nil {
-		log.Info("Dashboard template already synced and spec unchanged, skipping API call")
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, dashboard, apiClient); done {
+			return result, err
+		}
 	}
 
 	// Validate and resolve source
@@ -214,6 +215,44 @@ func (r *AxonOpsDashboardTemplateReconciler) Reconcile(ctx context.Context, req 
 
 	log.Info("Successfully synced dashboard template", "dashboard", dashboard.Spec.DashboardName, "panelCount", panelCount)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether dashboard templates still exist in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsDashboardTemplateReconciler) checkDrift(ctx context.Context, dashboard *alertsv1alpha1.AxonOpsDashboardTemplate, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	templates, err := apiClient.GetDashboardTemplates(ctx, dashboard.Spec.ClusterType, dashboard.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		meta.SetStatusCondition(&dashboard.Status.Conditions, metav1.Condition{
+			Type:               "DriftCheckFailed",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: dashboard.Generation,
+			Reason:             "DriftCheckFailed",
+			Message:            common.SafeConditionMsg("Failed to check for drift", err),
+		})
+		if statusErr := r.Status().Update(ctx, dashboard); statusErr != nil {
+			log.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	if len(templates.Dashboards) > 0 {
+		log.Info("Dashboard template already synced and spec unchanged, skipping API call")
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	log.Info("Drift detected: dashboard templates no longer exist in AxonOps")
+	meta.SetStatusCondition(&dashboard.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: dashboard.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Dashboard templates were removed externally; recreating",
+	})
+	dashboard.Status.LastSyncTime = nil
+	if statusErr := r.Status().Update(ctx, dashboard); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 // resolveSource validates and resolves the dashboard source.

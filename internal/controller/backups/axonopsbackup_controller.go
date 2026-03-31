@@ -143,13 +143,14 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Check idempotency
+	// Check idempotency with drift detection
 	readyCond := meta.FindStatusCondition(backup.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		backup.Status.ObservedGeneration == backup.Generation &&
 		backup.Status.SyncedBackupID != "" {
-		log.Info("Backup already synced and spec unchanged, skipping API call")
-		return ctrl.Result{}, nil
+		if result, done, driftErr := r.checkDrift(ctx, backup, apiClient); done {
+			return result, driftErr
+		}
 	}
 
 	// Build the backup payload
@@ -232,6 +233,46 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	log.Info("Successfully synced backup schedule", "backupID", syncedID, "tag", backup.Spec.Tag)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether the scheduled backup still exists in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsBackupReconciler) checkDrift(ctx context.Context, backup *backupsv1alpha1.AxonOpsBackup, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	snapshots, err := apiClient.GetScheduledSnapshots(ctx, backup.Spec.ClusterType, backup.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		meta.SetStatusCondition(&backup.Status.Conditions, metav1.Condition{
+			Type:               "DriftCheckFailed",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: backup.Generation,
+			Reason:             "DriftCheckFailed",
+			Message:            common.SafeConditionMsg("Failed to check for drift", err),
+		})
+		if statusErr := r.Status().Update(ctx, backup); statusErr != nil {
+			log.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	for _, s := range snapshots.ScheduledSnapshots {
+		if s.ID == backup.Status.SyncedBackupID {
+			log.Info("Backup already synced and spec unchanged, skipping API call")
+			return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+		}
+	}
+	log.Info("Drift detected: scheduled backup no longer exists in AxonOps", "backupID", backup.Status.SyncedBackupID)
+	meta.SetStatusCondition(&backup.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: backup.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Scheduled backup was deleted externally; recreating",
+	})
+	backup.Status.SyncedBackupID = ""
+	if statusErr := r.Status().Update(ctx, backup); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 // handleDeletion handles cleanup when the CR is being deleted

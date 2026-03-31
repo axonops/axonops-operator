@@ -125,13 +125,14 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Check if alert is already synced with observed generation matching
+	// Check if alert is already synced with drift detection
 	readyCond := meta.FindStatusCondition(alert.Status.Conditions, logAlertCondTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		alert.Status.ObservedGeneration == alert.Generation &&
 		alert.Status.SyncedAlertID != "" {
-		log.Info("Alert already synced and spec unchanged, skipping API call")
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, alert, apiClient); done {
+			return result, err
+		}
 	}
 
 	// Set Progressing condition
@@ -203,6 +204,46 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	log.Info("Successfully synced alert rule", "alertID", result.ID)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether the synced log alert rule still exists in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsLogAlertReconciler) checkDrift(ctx context.Context, alert *alertsv1alpha1.AxonOpsLogAlert, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	rules, err := apiClient.GetMetricAlertRules(ctx, alert.Spec.ClusterType, alert.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
+			Type:               "DriftCheckFailed",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: alert.Generation,
+			Reason:             "DriftCheckFailed",
+			Message:            common.SafeConditionMsg("Failed to check for drift", err),
+		})
+		if statusErr := r.Status().Update(ctx, alert); statusErr != nil {
+			log.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	for _, rule := range rules {
+		if rule.ID == alert.Status.SyncedAlertID {
+			log.Info("Alert already synced and spec unchanged, skipping API call")
+			return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+		}
+	}
+	log.Info("Drift detected: log alert rule no longer exists in AxonOps", "alertID", alert.Status.SyncedAlertID)
+	meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: alert.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Log alert rule was deleted externally; recreating",
+	})
+	alert.Status.SyncedAlertID = ""
+	if statusErr := r.Status().Update(ctx, alert); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 // handleDeletion handles cleanup when the CR is being deleted

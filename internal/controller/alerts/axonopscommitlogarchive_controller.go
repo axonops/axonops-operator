@@ -115,8 +115,9 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		archive.Status.ObservedGeneration == archive.Generation &&
 		archive.Status.LastSyncTime != nil {
-		log.Info("Commitlog archive already synced and spec unchanged, skipping")
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, archive, apiClient); done {
+			return result, err
+		}
 	}
 
 	if err := r.validateConfig(archive); err != nil {
@@ -193,6 +194,35 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 
 	log.Info("Successfully synced commitlog archive settings", "remoteType", archive.Spec.RemoteType)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether commitlog archive settings still exist in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsCommitlogArchiveReconciler) checkDrift(ctx context.Context, archive *alertsv1alpha1.AxonOpsCommitlogArchive, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	settings, err := apiClient.GetCommitlogArchiveSettings(ctx, archive.Spec.ClusterType, archive.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		r.setFailedCondition(ctx, archive, "DriftCheckFailed", common.SafeConditionMsg("Failed to check for drift", err))
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	if len(settings) > 0 {
+		log.Info("Commitlog archive already synced and spec unchanged, skipping")
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	log.Info("Drift detected: commitlog archive settings no longer exist in AxonOps")
+	meta.SetStatusCondition(&archive.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: archive.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Commitlog archive settings were removed externally; recreating",
+	})
+	archive.Status.LastSyncTime = nil
+	if statusErr := r.Status().Update(ctx, archive); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 func (r *AxonOpsCommitlogArchiveReconciler) validateConfig(archive *alertsv1alpha1.AxonOpsCommitlogArchive) error {

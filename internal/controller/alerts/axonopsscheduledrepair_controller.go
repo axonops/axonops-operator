@@ -133,13 +133,14 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Check idempotency
+	// Check idempotency with drift detection
 	readyCond := meta.FindStatusCondition(repair.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		repair.Status.ObservedGeneration == repair.Generation &&
 		repair.Status.SyncedRepairID != "" {
-		log.Info("Repair already synced and spec unchanged, skipping API call")
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, repair, apiClient); done {
+			return result, err
+		}
 	}
 
 	// If updating, delete the old repair first
@@ -212,6 +213,46 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 
 	log.Info("Successfully synced scheduled repair", "repairID", syncedID, "tag", repair.Spec.Tag)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether the synced scheduled repair still exists in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsScheduledRepairReconciler) checkDrift(ctx context.Context, repair *alertsv1alpha1.AxonOpsScheduledRepair, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	repairs, err := apiClient.GetScheduledRepairs(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
+			Type:               "DriftCheckFailed",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: repair.Generation,
+			Reason:             "DriftCheckFailed",
+			Message:            common.SafeConditionMsg("Failed to check for drift", err),
+		})
+		if statusErr := r.Status().Update(ctx, repair); statusErr != nil {
+			log.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	for _, entry := range repairs.Repairs {
+		if entry.ID == repair.Status.SyncedRepairID {
+			log.Info("Repair already synced and spec unchanged, skipping API call")
+			return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+		}
+	}
+	log.Info("Drift detected: scheduled repair no longer exists in AxonOps", "repairID", repair.Status.SyncedRepairID)
+	meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: repair.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Scheduled repair was deleted externally; recreating",
+	})
+	repair.Status.SyncedRepairID = ""
+	if statusErr := r.Status().Update(ctx, repair); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 func (r *AxonOpsScheduledRepairReconciler) handleDeletion(ctx context.Context, repair *alertsv1alpha1.AxonOpsScheduledRepair) (ctrl.Result, error) {

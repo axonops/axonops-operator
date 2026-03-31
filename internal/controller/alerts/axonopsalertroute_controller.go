@@ -112,14 +112,14 @@ func (r *AxonOpsAlertRouteReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
-	// Check idempotency: skip if already synced and generation unchanged
+	// Check idempotency with drift detection
 	readyCond := meta.FindStatusCondition(route.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		route.Status.ObservedGeneration == route.Generation &&
 		route.Status.IntegrationID != "" {
-		log.Info("Route already synced, skipping reconciliation",
-			"integrationID", route.Status.IntegrationID, "generation", route.Generation)
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, route); done {
+			return result, err
+		}
 	}
 
 	log.Info("Reconciling AxonOpsAlertRoute",
@@ -199,50 +199,10 @@ func (r *AxonOpsAlertRouteReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, err
 	}
 
-	// Check if route already exists
+	// Set override and add route if needed
 	routeExists := checkRouteExists(integrations, apiRouteType, route.Spec.Severity, integrationID)
-
-	// Set override if non-global and enabled (defaults to true when nil)
-	enableOverride := route.Spec.EnableOverride == nil || *route.Spec.EnableOverride
-	if route.Spec.Type != "global" && enableOverride {
-		log.Info("Setting integration override", "routeType", apiRouteType, "severity", route.Spec.Severity)
-		if err := apiClient.SetIntegrationOverride(ctx, route.Spec.ClusterType, route.Spec.ClusterName,
-			apiRouteType, route.Spec.Severity, true); err != nil {
-			log.Error(err, "Failed to set integration override")
-			meta.SetStatusCondition(&route.Status.Conditions, metav1.Condition{
-				Type:               condTypeReady,
-				Status:             metav1.ConditionFalse,
-				Reason:             "OverrideError",
-				Message:            common.SafeConditionMsg("Failed to set override", err),
-				ObservedGeneration: route.Generation,
-			})
-			if err := r.Status().Update(ctx, route); err != nil {
-				log.Error(err, "Failed to update status")
-			}
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-		}
-	}
-
-	// Add route if it doesn't exist
-	if !routeExists {
-		log.Info("Adding integration route", "integrationID", integrationID, "routeType", apiRouteType, "severity", route.Spec.Severity)
-		if err := apiClient.AddIntegrationRoute(ctx, route.Spec.ClusterType, route.Spec.ClusterName,
-			apiRouteType, route.Spec.Severity, integrationID); err != nil {
-			log.Error(err, "Failed to add integration route")
-			meta.SetStatusCondition(&route.Status.Conditions, metav1.Condition{
-				Type:               condTypeReady,
-				Status:             metav1.ConditionFalse,
-				Reason:             "RouteError",
-				Message:            common.SafeConditionMsg("Failed to add route", err),
-				ObservedGeneration: route.Generation,
-			})
-			if err := r.Status().Update(ctx, route); err != nil {
-				log.Error(err, "Failed to update status")
-			}
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-		}
-	} else {
-		log.Info("Route already exists, skipping creation")
+	if result, stop := r.applyRoute(ctx, apiClient, route, apiRouteType, integrationID, routeExists); stop {
+		return result, nil
 	}
 
 	// Update status
@@ -268,6 +228,98 @@ func (r *AxonOpsAlertRouteReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	log.Info("Successfully reconciled AxonOpsAlertRoute")
 	return ctrl.Result{}, nil
+}
+
+// applyRoute sets the integration override (if needed) and adds the route (if missing).
+// Returns (result, true) if the reconcile loop should stop.
+func (r *AxonOpsAlertRouteReconciler) applyRoute(ctx context.Context, apiClient *axonops.Client, route *alertsv1alpha1.AxonOpsAlertRoute, apiRouteType, integrationID string, routeExists bool) (ctrl.Result, bool) {
+	log := logf.FromContext(ctx)
+
+	enableOverride := route.Spec.EnableOverride == nil || *route.Spec.EnableOverride
+	if route.Spec.Type != "global" && enableOverride {
+		log.Info("Setting integration override", "routeType", apiRouteType, "severity", route.Spec.Severity)
+		if err := apiClient.SetIntegrationOverride(ctx, route.Spec.ClusterType, route.Spec.ClusterName,
+			apiRouteType, route.Spec.Severity, true); err != nil {
+			log.Error(err, "Failed to set integration override")
+			meta.SetStatusCondition(&route.Status.Conditions, metav1.Condition{
+				Type:               condTypeReady,
+				Status:             metav1.ConditionFalse,
+				Reason:             "OverrideError",
+				Message:            common.SafeConditionMsg("Failed to set override", err),
+				ObservedGeneration: route.Generation,
+			})
+			if statusErr := r.Status().Update(ctx, route); statusErr != nil {
+				log.Error(statusErr, "Failed to update status")
+			}
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, true
+		}
+	}
+
+	if routeExists {
+		log.Info("Route already exists, skipping creation")
+		return ctrl.Result{}, false
+	}
+
+	log.Info("Adding integration route", "integrationID", integrationID, "routeType", apiRouteType, "severity", route.Spec.Severity)
+	if err := apiClient.AddIntegrationRoute(ctx, route.Spec.ClusterType, route.Spec.ClusterName,
+		apiRouteType, route.Spec.Severity, integrationID); err != nil {
+		log.Error(err, "Failed to add integration route")
+		meta.SetStatusCondition(&route.Status.Conditions, metav1.Condition{
+			Type:               condTypeReady,
+			Status:             metav1.ConditionFalse,
+			Reason:             "RouteError",
+			Message:            common.SafeConditionMsg("Failed to add route", err),
+			ObservedGeneration: route.Generation,
+		})
+		if statusErr := r.Status().Update(ctx, route); statusErr != nil {
+			log.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, true
+	}
+	return ctrl.Result{}, false
+}
+
+// checkDrift verifies whether the alert route still exists in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsAlertRouteReconciler) checkDrift(ctx context.Context, route *alertsv1alpha1.AxonOpsAlertRoute) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	apiClient, err := ResolveAPIClient(ctx, r.Client, route.Namespace, route.Spec.ConnectionRef)
+	if err != nil {
+		log.Error(err, "Failed to resolve API client for drift check")
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	integrations, err := apiClient.GetIntegrations(ctx, route.Spec.ClusterType, route.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to get integrations during drift check")
+		meta.SetStatusCondition(&route.Status.Conditions, metav1.Condition{
+			Type:               "DriftCheckFailed",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: route.Generation,
+			Reason:             "APIError",
+			Message:            common.SafeConditionMsg("Failed to check for drift", err),
+		})
+		if statusErr := r.Status().Update(ctx, route); statusErr != nil {
+			log.Error(statusErr, "Failed to update status after drift check failure")
+		}
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	apiRouteType, _ := getAPIRouteType(route.Spec.Type)
+	if checkRouteExists(integrations, apiRouteType, route.Spec.Severity, route.Status.IntegrationID) {
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	log.Info("Drift detected: alert route no longer exists in AxonOps, will recreate")
+	meta.SetStatusCondition(&route.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: route.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Alert route was deleted externally; reapplying",
+	})
+	route.Status.IntegrationID = ""
+	if statusErr := r.Status().Update(ctx, route); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 // handleDeletion handles cleanup when the CR is being deleted
