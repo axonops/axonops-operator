@@ -116,13 +116,14 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Check if already synced and spec unchanged
+	// Check if already synced with drift detection
 	readyCond := meta.FindStatusCondition(repair.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		repair.Status.ObservedGeneration == repair.Generation &&
 		repair.Status.LastSyncTime != nil {
-		log.Info("Adaptive repair already synced and spec unchanged, skipping API call")
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, repair, apiClient); done {
+			return result, err
+		}
 	}
 
 	// Get current settings from API
@@ -163,6 +164,36 @@ func (r *AxonOpsAdaptiveRepairReconciler) Reconcile(ctx context.Context, req ctr
 }
 
 // handleDeletion handles cleanup when the CR is being deleted.
+// checkDrift verifies whether adaptive repair settings have drifted from the desired spec.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsAdaptiveRepairReconciler) checkDrift(ctx context.Context, repair *alertsv1alpha1.AxonOpsAdaptiveRepair, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	currentSettings, err := apiClient.GetAdaptiveRepair(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		r.setFailedCondition(ctx, repair, "DriftCheckFailed", common.SafeConditionMsg("Failed to check for drift", err))
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	desired := r.buildAdaptiveRepairSettings(repair)
+	if r.settingsEqual(desired, *currentSettings) {
+		log.Info("Adaptive repair already synced and spec unchanged, skipping API call")
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	log.Info("Drift detected: adaptive repair settings have changed externally")
+	meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: repair.Generation,
+		Reason:             "SettingsChanged",
+		Message:            "Adaptive repair settings were changed externally; reapplying",
+	})
+	repair.Status.LastSyncTime = nil
+	if statusErr := r.Status().Update(ctx, repair); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
+}
+
 // Adaptive repair is a cluster-level singleton -- it cannot be "deleted" via the API.
 // The finalizer simply removes itself without making any API calls.
 func (r *AxonOpsAdaptiveRepairReconciler) handleDeletion(ctx context.Context, repair *alertsv1alpha1.AxonOpsAdaptiveRepair) error {

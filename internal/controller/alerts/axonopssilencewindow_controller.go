@@ -117,13 +117,14 @@ func (r *AxonOpsSilenceWindowReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Check idempotency
+	// Check idempotency with drift detection
 	readyCond := meta.FindStatusCondition(silence.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		silence.Status.ObservedGeneration == silence.Generation &&
 		silence.Status.SyncedSilenceID != "" {
-		log.Info("Silence already synced and spec unchanged, skipping API call")
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, silence, apiClient); done {
+			return result, err
+		}
 	}
 
 	active := true
@@ -207,6 +208,46 @@ func (r *AxonOpsSilenceWindowReconciler) Reconcile(ctx context.Context, req ctrl
 
 	log.Info("Successfully synced silence window", "silenceID", syncedID)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether the synced silence window still exists in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsSilenceWindowReconciler) checkDrift(ctx context.Context, silence *alertsv1alpha1.AxonOpsSilenceWindow, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	silences, err := apiClient.GetSilenceWindows(ctx, silence.Spec.ClusterType, silence.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		meta.SetStatusCondition(&silence.Status.Conditions, metav1.Condition{
+			Type:               "DriftCheckFailed",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: silence.Generation,
+			Reason:             "DriftCheckFailed",
+			Message:            common.SafeConditionMsg("Failed to check for drift", err),
+		})
+		if statusErr := r.Status().Update(ctx, silence); statusErr != nil {
+			log.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	for _, s := range silences {
+		if s.ID == silence.Status.SyncedSilenceID {
+			log.Info("Silence already synced and spec unchanged, skipping API call")
+			return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+		}
+	}
+	log.Info("Drift detected: silence window no longer exists in AxonOps", "silenceID", silence.Status.SyncedSilenceID)
+	meta.SetStatusCondition(&silence.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: silence.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Silence window was deleted externally; recreating",
+	})
+	silence.Status.SyncedSilenceID = ""
+	if statusErr := r.Status().Update(ctx, silence); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 func (r *AxonOpsSilenceWindowReconciler) handleDeletion(ctx context.Context, silence *alertsv1alpha1.AxonOpsSilenceWindow) (ctrl.Result, error) {

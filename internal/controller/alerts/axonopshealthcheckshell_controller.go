@@ -112,13 +112,14 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	// Check if healthcheck is already synced
+	// Check if healthcheck is already synced with drift detection
 	readyCond := meta.FindStatusCondition(healthcheck.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		healthcheck.Status.ObservedGeneration == healthcheck.Generation &&
 		healthcheck.Status.SyncedHealthcheckID != "" {
-		log.Info("Healthcheck already synced and spec unchanged, skipping API call")
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, healthcheck, apiClient); done {
+			return result, err
+		}
 	}
 
 	// Get all healthchecks from API
@@ -188,6 +189,37 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 
 	log.Info("Successfully synced Shell healthcheck", "healthcheckID", syncedID)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether the synced shell healthcheck still exists in AxonOps.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsHealthcheckShellReconciler) checkDrift(ctx context.Context, healthcheck *alertsv1alpha1.AxonOpsHealthcheckShell, apiClient *axonops.Client) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	allHealthchecks, err := apiClient.GetHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		r.setFailedCondition(ctx, healthcheck, "DriftCheckFailed", common.SafeConditionMsg("Failed to check for drift", err))
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	for _, hc := range allHealthchecks.ShellChecks {
+		if hc.ID == healthcheck.Status.SyncedHealthcheckID {
+			log.Info("Healthcheck already synced and spec unchanged, skipping API call")
+			return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+		}
+	}
+	log.Info("Drift detected: shell healthcheck no longer exists in AxonOps", "healthcheckID", healthcheck.Status.SyncedHealthcheckID)
+	meta.SetStatusCondition(&healthcheck.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: healthcheck.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Shell healthcheck was deleted externally; recreating",
+	})
+	healthcheck.Status.SyncedHealthcheckID = ""
+	if statusErr := r.Status().Update(ctx, healthcheck); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 // handleDeletion handles cleanup when the CR is being deleted

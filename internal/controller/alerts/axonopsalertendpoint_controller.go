@@ -110,14 +110,14 @@ func (r *AxonOpsAlertEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
-	// Idempotency check: skip if already synced and generation unchanged
+	// Idempotency check with drift detection
 	readyCond := meta.FindStatusCondition(endpoint.Status.Conditions, condTypeReady)
 	if readyCond != nil && readyCond.Status == metav1.ConditionTrue &&
 		endpoint.Status.ObservedGeneration == endpoint.Generation &&
 		endpoint.Status.SyncedIntegrationID != "" {
-		log.Info("Endpoint already synced, skipping reconciliation",
-			"integrationID", endpoint.Status.SyncedIntegrationID, "generation", endpoint.Generation)
-		return ctrl.Result{}, nil
+		if result, done, err := r.checkDrift(ctx, endpoint); done {
+			return result, err
+		}
 	}
 
 	log.Info("Reconciling AxonOpsAlertEndpoint",
@@ -225,6 +225,53 @@ func (r *AxonOpsAlertEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 
 	log.Info("Successfully reconciled AxonOpsAlertEndpoint", "integrationID", result.ID)
 	return ctrl.Result{}, nil
+}
+
+// checkDrift verifies whether the synced integration still exists in AxonOps.
+// Resolves its own API client since the main Reconcile path doesn't do so until later.
+// Returns (result, true, err) if the reconcile loop should return; (zero, false, nil) to continue.
+func (r *AxonOpsAlertEndpointReconciler) checkDrift(ctx context.Context, endpoint *alertsv1alpha1.AxonOpsAlertEndpoint) (ctrl.Result, bool, error) {
+	log := logf.FromContext(ctx)
+	apiClient, err := ResolveAPIClient(ctx, r.Client, endpoint.Namespace, endpoint.Spec.ConnectionRef)
+	if err != nil {
+		log.Error(err, "Failed to resolve API client for drift check")
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	integrations, err := apiClient.GetIntegrations(ctx, endpoint.Spec.ClusterType, endpoint.Spec.ClusterName)
+	if err != nil {
+		log.Error(err, "Failed to perform drift check")
+		meta.SetStatusCondition(&endpoint.Status.Conditions, metav1.Condition{
+			Type:               "DriftCheckFailed",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: endpoint.Generation,
+			Reason:             "DriftCheckFailed",
+			Message:            common.SafeConditionMsg("Failed to check for drift", err),
+		})
+		if statusErr := r.Status().Update(ctx, endpoint); statusErr != nil {
+			log.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+	}
+	for _, def := range integrations.Definitions {
+		if def.ID == endpoint.Status.SyncedIntegrationID {
+			log.Info("Endpoint already synced, skipping reconciliation",
+				"integrationID", endpoint.Status.SyncedIntegrationID, "generation", endpoint.Generation)
+			return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
+		}
+	}
+	log.Info("Drift detected: integration no longer exists in AxonOps", "integrationID", endpoint.Status.SyncedIntegrationID)
+	meta.SetStatusCondition(&endpoint.Status.Conditions, metav1.Condition{
+		Type:               "DriftDetected",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: endpoint.Generation,
+		Reason:             "ResourceDeleted",
+		Message:            "Integration was deleted externally; recreating",
+	})
+	endpoint.Status.SyncedIntegrationID = ""
+	if statusErr := r.Status().Update(ctx, endpoint); statusErr != nil {
+		return ctrl.Result{}, true, statusErr
+	}
+	return ctrl.Result{}, false, nil
 }
 
 // handleDeletion handles cleanup when the CR is being deleted

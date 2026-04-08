@@ -34,6 +34,9 @@ import (
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
 
+// DriftCheckInterval is the period between drift checks on already-synced resources.
+const DriftCheckInterval = 5 * time.Minute
+
 // Shared condition reasons used across controller groups
 const (
 	ReasonConnectionError  = "ConnectionError"
