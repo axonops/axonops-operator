@@ -5,10 +5,10 @@ echo "===================================="
 echo "Kubebuilder DevContainer Setup"
 echo "===================================="
 
-# Verify running as root (required for installing to /usr/local/bin and /etc)
+# Use sudo for operations that require root (node user has NOPASSWD sudo)
+SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
-  echo "ERROR: This script must be run as root"
-  exit 1
+  SUDO="sudo"
 fi
 
 echo ""
@@ -36,7 +36,7 @@ echo "------------------------------------"
 
 BASH_COMPLETIONS_DIR="/usr/share/bash-completion/completions"
 
-# Enable bash-completion in root's .bashrc (devcontainer runs as root)
+# Enable bash-completion in user's .bashrc
 if ! grep -q "source /usr/share/bash-completion/bash_completion" ~/.bashrc 2>/dev/null; then
   echo 'source /usr/share/bash-completion/bash_completion' >> ~/.bashrc
   echo "Added bash-completion to .bashrc"
@@ -47,52 +47,55 @@ echo "------------------------------------"
 echo "Installing development tools..."
 echo "------------------------------------"
 
-# Install kind
+# Install kind (fallback if not baked into image)
 if ! command -v kind &> /dev/null; then
   echo "Installing kind..."
-  curl -Lo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/latest/kind-linux-${ARCH}"
-  chmod +x /usr/local/bin/kind
+  curl -Lo /tmp/kind "https://kind.sigs.k8s.io/dl/latest/kind-linux-${ARCH}"
+  $SUDO install -o root -g root -m 0755 /tmp/kind /usr/local/bin/kind
+  rm /tmp/kind
   echo "kind installed successfully"
 fi
 
 # Generate kind bash completion
 if command -v kind &> /dev/null; then
-  if kind completion bash > "${BASH_COMPLETIONS_DIR}/kind" 2>/dev/null; then
+  if kind completion bash | $SUDO tee "${BASH_COMPLETIONS_DIR}/kind" > /dev/null 2>&1; then
     echo "kind completion installed"
   else
     echo "WARNING: Failed to generate kind completion"
   fi
 fi
 
-# Install kubebuilder
+# Install kubebuilder (fallback if not baked into image)
 if ! command -v kubebuilder &> /dev/null; then
   echo "Installing kubebuilder..."
-  curl -Lo /usr/local/bin/kubebuilder "https://go.kubebuilder.io/dl/latest/linux/${ARCH}"
-  chmod +x /usr/local/bin/kubebuilder
+  curl -Lo /tmp/kubebuilder "https://github.com/kubernetes-sigs/kubebuilder/releases/latest/download/kubebuilder_linux_${ARCH}"
+  $SUDO install -o root -g root -m 0755 /tmp/kubebuilder /usr/local/bin/kubebuilder
+  rm /tmp/kubebuilder
   echo "kubebuilder installed successfully"
 fi
 
 # Generate kubebuilder bash completion
 if command -v kubebuilder &> /dev/null; then
-  if kubebuilder completion bash > "${BASH_COMPLETIONS_DIR}/kubebuilder" 2>/dev/null; then
+  if kubebuilder completion bash | $SUDO tee "${BASH_COMPLETIONS_DIR}/kubebuilder" > /dev/null 2>&1; then
     echo "kubebuilder completion installed"
   else
     echo "WARNING: Failed to generate kubebuilder completion"
   fi
 fi
 
-# Install kubectl
+# Install kubectl (fallback if not provided by devcontainer feature)
 if ! command -v kubectl &> /dev/null; then
   echo "Installing kubectl..."
   KUBECTL_VERSION=$(curl -Ls https://dl.k8s.io/release/stable.txt)
-  curl -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
-  chmod +x /usr/local/bin/kubectl
+  curl -Lo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+  $SUDO install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+  rm /tmp/kubectl
   echo "kubectl installed successfully"
 fi
 
 # Generate kubectl bash completion
 if command -v kubectl &> /dev/null; then
-  if kubectl completion bash > "${BASH_COMPLETIONS_DIR}/kubectl" 2>/dev/null; then
+  if kubectl completion bash | $SUDO tee "${BASH_COMPLETIONS_DIR}/kubectl" > /dev/null 2>&1; then
     echo "kubectl completion installed"
   else
     echo "WARNING: Failed to generate kubectl completion"
@@ -101,7 +104,7 @@ fi
 
 # Generate Docker bash completion
 if command -v docker &> /dev/null; then
-  if docker completion bash > "${BASH_COMPLETIONS_DIR}/docker" 2>/dev/null; then
+  if docker completion bash | $SUDO tee "${BASH_COMPLETIONS_DIR}/docker" > /dev/null 2>&1; then
     echo "docker completion installed"
   else
     echo "WARNING: Failed to generate docker completion"

@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   jq \
   nano \
   vim \
+  bash-completion \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Ensure default node user has access to /usr/local/share
@@ -32,6 +33,12 @@ RUN mkdir -p /usr/local/share/npm-global && \
   chown -R node:node /usr/local/share
 
 ARG USERNAME=node
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+# Remap node user/group to match host UID/GID to avoid bind-mount permission issues
+RUN groupmod -g ${USER_GID} node && \
+    usermod -u ${USER_UID} -g ${USER_GID} node
 
 # Persist bash history.
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
@@ -53,6 +60,30 @@ RUN ARCH=$(dpkg --print-architecture) && \
   wget "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
   sudo dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
   rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
+
+# Install Go — version must match go.mod (go 1.25.3)
+ARG GO_VERSION=1.25.3
+RUN ARCH=$(dpkg --print-architecture) && \
+  wget -q "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" && \
+  tar -C /usr/local -xzf "go${GO_VERSION}.linux-${ARCH}.tar.gz" && \
+  rm "go${GO_VERSION}.linux-${ARCH}.tar.gz"
+
+ENV PATH=$PATH:/usr/local/go/bin
+ENV GOPATH=/home/node/go
+ENV GOBIN=/home/node/go/bin
+ENV PATH=$PATH:/home/node/go/bin
+
+# Install Kind — pinned for reproducible e2e cluster creation
+ARG KIND_VERSION=v0.31.0
+RUN ARCH=$(dpkg --print-architecture) && \
+  wget -q "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-${ARCH}" -O /usr/local/bin/kind && \
+  chmod +x /usr/local/bin/kind
+
+# Install Kubebuilder CLI — used for scaffolding and kubebuilder completion
+ARG KUBEBUILDER_VERSION=v4.13.0
+RUN ARCH=$(dpkg --print-architecture) && \
+  wget -q "https://github.com/kubernetes-sigs/kubebuilder/releases/download/${KUBEBUILDER_VERSION}/kubebuilder_linux_${ARCH}" -O /usr/local/bin/kubebuilder && \
+  chmod +x /usr/local/bin/kubebuilder
 
 # Set up non-root user
 USER node

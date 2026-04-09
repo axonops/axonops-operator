@@ -4,9 +4,14 @@
     "dockerfile": "Dockerfile",
     "args": {
       "TZ": "${localEnv:TZ:Europe/London}",
+      "USER_UID": "${localEnv:UID:1000}",
+      "USER_GID": "${localEnv:GID:1000}",
       "CLAUDE_CODE_VERSION": "latest",
       "GIT_DELTA_VERSION": "0.18.2",
-      "ZSH_IN_DOCKER_VERSION": "1.2.0"
+      "ZSH_IN_DOCKER_VERSION": "1.2.0",
+      "GO_VERSION": "1.25.3",
+      "KIND_VERSION": "v0.31.0",
+      "KUBEBUILDER_VERSION": "v4.13.0"
     }
   },
   "features": {
@@ -24,7 +29,8 @@
     "source=dind-var-lib-docker,target=/var/lib/docker,type=volume",
     "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
     "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
-    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,type=bind,readonly"
+    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,type=bind,readonly",
+    "source=${localEnv:HOME}/.kube,target=/home/node/.kube,type=bind,readonly"
   ],
 
   "customizations": {
