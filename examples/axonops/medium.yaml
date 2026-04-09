@@ -9,15 +9,29 @@ metadata:
   name: axonops-prod
 
 ---
+# Secret holding the AxonOps API key.
 apiVersion: v1
 kind: Secret
 metadata:
-  name: axonops-credentials
+  name: axonops-api-key
   namespace: axonops-prod
 type: Opaque
 stringData:
   api_key: "your-production-api-key-here"
-  token_type: "Bearer"
+
+---
+# AxonOpsConnection provides credentials to all alert/backup CRDs in this namespace.
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsConnection
+metadata:
+  name: axonops-api
+  namespace: axonops-prod
+spec:
+  orgId: "your-org-id"
+  # host: "axonops.example.com"   # Omit for SaaS (dash.axonops.cloud)
+  apiKeyRef:
+    name: axonops-api-key
+    key: api_key
 
 ---
 apiVersion: cert-manager.io/v1
@@ -47,7 +61,6 @@ spec:
     repository:
       image: "ghcr.io/axonops/axon-server"
       tag: "2.0.19"
-    replicas: 3
     resources:
       requests:
         cpu: "2"
@@ -55,9 +68,11 @@ spec:
       limits:
         cpu: "4"
         memory: "8Gi"
-    storage:
-      size: "100Gi"
+    storageConfig:
       storageClassName: "fast-ssd"
+      resources:
+        requests:
+          storage: "100Gi"
     # Expose server API via Ingress with TLS
     apiIngress:
       enabled: true
@@ -80,7 +95,6 @@ spec:
     repository:
       image: "ghcr.io/axonops/axondb-timeseries"
       tag: "5.0.6-1.1.0"
-    replicas: 3
     resources:
       requests:
         cpu: "4"
@@ -88,17 +102,18 @@ spec:
       limits:
         cpu: "8"
         memory: "16Gi"
-    storage:
-      size: "500Gi"
+    storageConfig:
       storageClassName: "fast-ssd"
-    # Custom heap size for TimeSeries
-    jvmHeapSize: "8g"
+      resources:
+        requests:
+          storage: "500Gi"
+    # JVM heap size for TimeSeries (format: "NNNNm" or "NG")
+    heapSize: "8192M"
 
   search:
     repository:
       image: "ghcr.io/axonops/axondb-search"
       tag: "6.15.0"
-    replicas: 2
     resources:
       requests:
         cpu: "2"
@@ -106,9 +121,11 @@ spec:
       limits:
         cpu: "4"
         memory: "8Gi"
-    storage:
-      size: "250Gi"
+    storageConfig:
       storageClassName: "fast-ssd"
+      resources:
+        requests:
+          storage: "250Gi"
 
   dashboard:
     repository:
@@ -141,7 +158,7 @@ metadata:
   name: cassandra-read-latency
   namespace: axonops-prod
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cassandra
   clusterType: cassandra
   name: cassandra-read-latency-high
@@ -155,7 +172,7 @@ spec:
     summary: "Cassandra read latency is high"
     description: "Read p99 latency on {{ $labels.host_id }} exceeded threshold"
   filters:
-    dataCenter:
+    dc:
       - "us-east-1a"
 
 ---
@@ -165,7 +182,7 @@ metadata:
   name: cassandra-write-latency
   namespace: axonops-prod
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cassandra
   clusterType: cassandra
   name: cassandra-write-latency-high
@@ -186,7 +203,7 @@ metadata:
   name: cassandra-compaction-errors
   namespace: axonops-prod
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cassandra
   clusterType: cassandra
   name: cassandra-compaction-errors
@@ -208,7 +225,7 @@ metadata:
   name: cassandra-native-healthcheck
   namespace: axonops-prod
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cassandra
   clusterType: cassandra
   name: cassandra-native-port-check
@@ -227,7 +244,7 @@ metadata:
   name: cassandra-jmx-healthcheck
   namespace: axonops-prod
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cassandra
   clusterType: cassandra
   name: cassandra-jmx-check
@@ -246,7 +263,7 @@ metadata:
   name: cassandra-alerts-routing
   namespace: axonops-prod
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cassandra
   clusterType: cassandra
   name: cassandra-alert-routing

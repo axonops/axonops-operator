@@ -8,6 +8,21 @@ stringData:
   AXONOPS_SEARCH_USER: admin
   AXONOPS_SEARCH_PASSWORD: "your-secure-password-here"
 ---
+# TLS certificate secret for verifying the external Search endpoint.
+# Required when tls.enabled=true and tls.insecureSkipVerify=false.
+# The Secret must contain ca.crt, tls.crt, and tls.key.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: external-search-tls
+  namespace: default
+type: kubernetes.io/tls
+data:
+  # Base64-encoded PEM values:
+  ca.crt: <base64-encoded-ca-cert>
+  tls.crt: <base64-encoded-client-cert>
+  tls.key: <base64-encoded-client-key>
+---
 apiVersion: core.axonops.com/v1alpha1
 kind: AxonOpsPlatform
 metadata:
@@ -23,8 +38,12 @@ spec:
       tls:
         enabled: true
         insecureSkipVerify: false
+        # certSecretRef is required when insecureSkipVerify is false.
+        # Omitting it will set Ready=False with reason MissingExternalTLSCert.
+        certSecretRef: external-search-tls
     authentication:
-      # Use an existing secret with credentials
+      # Use an existing secret with credentials.
+      # External Search requires explicit credentials — they are not auto-generated.
       secretRef: external-search-credentials
 
   # Server configuration

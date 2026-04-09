@@ -461,9 +461,10 @@ Add RBAC markers in the controller file alongside the `Reconcile` method. `make 
 The `AxonAuthentication` struct defines credential priority for database components:
 
 1. `SecretRef` — reference to an existing Kubernetes Secret (highest priority)
-2. Auto-generated random credentials via `generateRandomPassword` (default fallback)
+2. `Username` / `Password` — inline credentials specified directly in the CR
+3. Auto-generated random credentials via `generateRandomPassword` (default fallback for internal components only)
 
-> **Note:** Inline `username` / `password` fields are not yet supported. Use `secretRef` or rely on auto-generation.
+> **Note:** Auto-generation applies only to internal (operator-managed) components. External components (`spec.*.external.hosts` set) require explicit credentials via `secretRef` or inline `username`/`password`.
 
 The generated password meets complexity requirements: at least one uppercase letter, one digit, and one special character.
 

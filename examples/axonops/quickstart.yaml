@@ -9,15 +9,32 @@ metadata:
   name: axonops
 
 ---
+# Secret holding the AxonOps API key used by alert and backup CRDs.
 apiVersion: v1
 kind: Secret
 metadata:
-  name: axonops-credentials
+  name: axonops-api-key
   namespace: axonops
 type: Opaque
 stringData:
   api_key: "your-api-key-here"
-  token_type: "Bearer"
+
+---
+# AxonOpsConnection provides credentials to all alert/backup CRDs in this namespace.
+# connectionRef in those CRDs must match this resource's name.
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsConnection
+metadata:
+  name: axonops-api
+  namespace: axonops
+spec:
+  orgId: "your-org-id"
+  # For SaaS: omit host (defaults to dash.axonops.cloud)
+  # For on-premises: set host to your AxonOps instance hostname
+  # host: "axonops.example.com"
+  apiKeyRef:
+    name: axonops-api-key
+    key: api_key
 
 ---
 apiVersion: core.axonops.com/v1alpha1
@@ -36,15 +53,19 @@ spec:
     repository:
       image: "ghcr.io/axonops/axondb-timeseries"
       tag: "5.0.6-1.1.0"
-    storage:
-      size: "10Gi"
+    storageConfig:
+      resources:
+        requests:
+          storage: "10Gi"
 
   search:
     repository:
       image: "ghcr.io/axonops/axondb-search"
       tag: "6.15.0"
-    storage:
-      size: "5Gi"
+    storageConfig:
+      resources:
+        requests:
+          storage: "5Gi"
 
   dashboard:
     repository:
@@ -65,7 +86,7 @@ metadata:
   name: high-read-latency
   namespace: axonops
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cluster
   clusterType: cassandra
   name: high-read-latency
@@ -87,7 +108,7 @@ metadata:
   name: error-log-alert
   namespace: axonops
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cluster
   clusterType: cassandra
   name: cassandra-errors
@@ -109,7 +130,7 @@ metadata:
   name: cassandra-native-check
   namespace: axonops
 spec:
-  connectionRef: "axonops-credentials"
+  connectionRef: "axonops-api"
   clusterName: production-cluster
   clusterType: cassandra
   name: cassandra-native-port

@@ -148,10 +148,16 @@ spec:
     external:
       hosts:
         - https://elasticsearch.example.com:9200
+      tls:
+        enabled: true
+        insecureSkipVerify: true   # Set to false and add certSecretRef for full TLS verification
+        # certSecretRef: elasticsearch-tls  # Secret with ca.crt, tls.crt, tls.key
     authentication:
       secretRef: elasticsearch-credentials  # Secret with AXONOPS_SEARCH_USER / AXONOPS_SEARCH_PASSWORD
   dashboard: {}
 ```
+
+> **TLS verification:** When `tls.enabled=true` and `tls.insecureSkipVerify=false`, you must also set `tls.certSecretRef` to the name of a Secret containing `ca.crt`, `tls.crt`, and `tls.key`. Without it, the operator sets `Ready=False` with reason `MissingExternalTLSCert`.
 
 ### Alert management
 
@@ -214,12 +220,13 @@ Each component can operate in **internal** (operator-managed) or **external** (u
 
 ### Authentication
 
-For each database component, the operator uses credentials in this priority order:
+For internal (operator-managed) database components, credentials are resolved in this priority order:
 
-1. `authentication.secretRef` — reference an existing Secret
-2. Auto-generated — operator creates and manages a Secret with random credentials
+1. `authentication.secretRef` — reference an existing Secret containing `AXONOPS_DB_USER` / `AXONOPS_DB_PASSWORD` (or `AXONOPS_SEARCH_USER` / `AXONOPS_SEARCH_PASSWORD` for Search)
+2. `authentication.username` / `authentication.password` — inline credentials in the CR
+3. Auto-generated — operator creates and manages a Secret with random credentials
 
-> **Note:** Inline `authentication.username` / `authentication.password` fields are not yet supported. Use `secretRef` or rely on auto-generation.
+> **Note:** External components (those with `spec.*.external.hosts` set) require explicit credentials. Auto-generation does not apply to external database connections. Set `authentication.secretRef` or `authentication.username`/`authentication.password` when using external hosts.
 
 ### Ingress and Gateway API
 

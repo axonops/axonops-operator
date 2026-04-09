@@ -9,15 +9,29 @@ metadata:
   name: axonops-enterprise
 
 ---
+# Secret holding the AxonOps API key.
 apiVersion: v1
 kind: Secret
 metadata:
-  name: axonops-api-credentials
+  name: axonops-api-key
   namespace: axonops-enterprise
 type: Opaque
 stringData:
   api_key: "sk-enterprise-prod-xxxxxxxxxxxx"
-  token_type: "Bearer"
+
+---
+# AxonOpsConnection provides credentials to all alert/backup CRDs in this namespace.
+apiVersion: core.axonops.com/v1alpha1
+kind: AxonOpsConnection
+metadata:
+  name: axonops-api
+  namespace: axonops-enterprise
+spec:
+  orgId: "your-org-id"
+  # host: "axonops.example.com"   # Omit for SaaS (dash.axonops.cloud)
+  apiKeyRef:
+    name: axonops-api-key
+    key: api_key
 
 ---
 apiVersion: v1
@@ -65,7 +79,6 @@ spec:
     repository:
       image: "ghcr.io/axonops/axon-server"
       tag: "2.0.19"
-    replicas: 5
     resources:
       requests:
         cpu: "4"
@@ -73,18 +86,11 @@ spec:
       limits:
         cpu: "8"
         memory: "16Gi"
-    storage:
-      size: "500Gi"
+    storageConfig:
       storageClassName: "premium-ssd"
-    # TLS certificate management
-    tlsCertificate:
-      issuerName: "vault-issuer"
-      issuerKind: "ClusterIssuer"
-      commonName: "axonops-api.example.com"
-      dnsNames:
-        - "axonops-api.example.com"
-        - "agent.axonops.example.com"
-
+      resources:
+        requests:
+          storage: "500Gi"
     # Agent Gateway (istio)
     agentGateway:
       enabled: true
@@ -114,7 +120,6 @@ spec:
       image: "ghcr.io/axonops/axondb-timeseries"
       tag: "5.0.6-1.1.0"
       pullPolicy: "IfNotPresent"
-    replicas: 5
     resources:
       requests:
         cpu: "8"
@@ -122,18 +127,19 @@ spec:
       limits:
         cpu: "16"
         memory: "32Gi"
-    storage:
-      size: "1Ti"
+    storageConfig:
       storageClassName: "premium-ssd"
-    # JVM Tuning for large deployments
-    jvmHeapSize: "16g"
+      resources:
+        requests:
+          storage: "1Ti"
+    # JVM heap size for TimeSeries (format: "NNNNm" or "NG")
+    heapSize: "16384M"
 
   search:
     repository:
       image: "ghcr.io/axonops/axondb-search"
       tag: "6.15.0"
       pullPolicy: "IfNotPresent"
-    replicas: 3
     resources:
       requests:
         cpu: "4"
@@ -141,9 +147,11 @@ spec:
       limits:
         cpu: "8"
         memory: "16Gi"
-    storage:
-      size: "500Gi"
+    storageConfig:
       storageClassName: "premium-ssd"
+      resources:
+        requests:
+          storage: "500Gi"
 
   dashboard:
     replicas: 3
@@ -178,7 +186,7 @@ metadata:
   name: cassandra-gc-pause-time
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-gc-pause-time-critical
@@ -193,7 +201,7 @@ spec:
     description: "GC pause time on {{ $labels.host_id }} in {{ $labels.rack }} exceeded threshold"
     widgetUrl: "https://dashboard.axonops.example.com/dashboards/cassandra-gc"
   filters:
-    dataCenter:
+    dc:
       - "us-east-1a"
       - "us-east-1b"
       - "us-east-1c"
@@ -208,7 +216,7 @@ metadata:
   name: cassandra-heap-usage-critical
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-heap-usage
@@ -233,7 +241,7 @@ metadata:
   name: kafka-under-replicated-partitions
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: kafka-prod
   clusterType: kafka
   name: kafka-under-replicated-partitions
@@ -257,7 +265,7 @@ metadata:
   name: cassandra-critical-errors
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-critical-errors
@@ -279,7 +287,7 @@ metadata:
   name: cassandra-disk-warnings
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-disk-warnings
@@ -301,7 +309,7 @@ metadata:
   name: cassandra-native-port-check
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-native-port
@@ -321,7 +329,7 @@ metadata:
   name: cassandra-internode-check
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-internode-port
@@ -341,7 +349,7 @@ metadata:
   name: cassandra-jmx-endpoint
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-jmx-health
@@ -362,7 +370,7 @@ metadata:
   name: cassandra-custom-validation
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-custom-check
@@ -390,7 +398,7 @@ metadata:
   name: cassandra-enterprise-routing
   namespace: axonops-enterprise
 spec:
-  connectionRef: "axonops-api-credentials"
+  connectionRef: "axonops-api"
   clusterName: cassandra-us-east
   clusterType: cassandra
   name: cassandra-intelligent-routing

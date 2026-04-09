@@ -37,7 +37,7 @@ kubectl get crd | grep axonops.com
 
 ## Custom Resource Definitions
 
-The operator introduces 19 CRDs across four API groups.
+The operator introduces 20 CRDs across four API groups.
 
 ### `core.axonops.com/v1alpha1`
 
@@ -103,7 +103,7 @@ spec:
 
 ### Deploy the AxonOps stack with external databases
 
-Use this form when Cassandra and Elasticsearch are managed outside the operator.
+Use this form when Cassandra and Elasticsearch are managed outside the operator. External components require explicit credentials — auto-generation does not apply.
 
 ```yaml
 apiVersion: core.axonops.com/v1alpha1
@@ -119,16 +119,24 @@ spec:
       hosts:
         - cassandra-node1.example.com:9042
         - cassandra-node2.example.com:9042
+      tls:
+        enabled: false
     authentication:
-      secretRef: cassandra-credentials
+      secretRef: cassandra-credentials   # Secret with AXONOPS_DB_USER / AXONOPS_DB_PASSWORD
   search:
     external:
       hosts:
         - https://elasticsearch.example.com:9200
+      tls:
+        enabled: true
+        insecureSkipVerify: true   # Set to false and add certSecretRef for full TLS verification
+        # certSecretRef: elasticsearch-tls  # Secret with ca.crt, tls.crt, tls.key
     authentication:
-      secretRef: elasticsearch-credentials
+      secretRef: elasticsearch-credentials  # Secret with AXONOPS_SEARCH_USER / AXONOPS_SEARCH_PASSWORD
   dashboard: {}
 ```
+
+> **TLS verification:** When `tls.enabled=true` and `tls.insecureSkipVerify=false`, you must set `tls.certSecretRef` to the name of a Secret containing `ca.crt`, `tls.crt`, and `tls.key`. Without it, the operator sets `Ready=False` with reason `MissingExternalTLSCert`.
 
 ### Configure an API connection and alert rule
 

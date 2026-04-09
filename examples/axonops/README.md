@@ -38,11 +38,8 @@ kubectl port-forward -n axonops svc/server-dashboard 3000:3000
 **Use Case**: Production deployments with high availability
 
 **Features**:
-- Multi-replica setup (HA):
-  - Server: 3 replicas
-  - TimeSeries: 3 replicas
-  - Search: 2 replicas
-  - Dashboard: 2 replicas
+- Larger resource allocations for TimeSeries, Search, and Dashboard components
+- Dashboard replicas set to 2 (the only component that supports the `replicas` field)
 - TLS certificates via cert-manager and Let's Encrypt
 - Proper resource requests/limits
 - 100Gi Server, 500Gi TimeSeries, 250Gi Search storage
@@ -79,12 +76,12 @@ kubectl apply -f examples/axonops/medium.yaml
 **Use Case**: Enterprise deployments with advanced features
 
 **Features**:
-- Ultra-HA setup (5x Server, 5x TimeSeries, 3x Search, 3x Dashboard)
+- Full-scale setup (TimeSeries, Search, Dashboard StatefulSets/Deployments with large resource allocations)
 - Gateway API (Istio) instead of Ingress
 - Advanced TLS with Vault issuer
 - Large storage: 500Gi Server, 1Ti TimeSeries, 500Gi Search
-- JVM tuning (16GB heap for TimeSeries)
-- Multi-cluster support (Cassandra US-East, Kafka)
+- JVM tuning (16GB heap for TimeSeries via `heapSize`)
+- Multi-cluster monitoring support (Cassandra US-East, Kafka)
 - Sophisticated alert routing:
   - PagerDuty, Slack, OpsGenie integration
   - Different routing for Critical/Warning/Info
@@ -144,7 +141,6 @@ vault write pki/roles/kubernetes \
 spec:
   server:
     orgName: "Organization Name"        # Required
-    replicas: 3                         # Number of server instances
     repository:
       image: "..."                      # Docker image
       tag: "..."                        # Image tag
@@ -156,8 +152,10 @@ spec:
       limits:
         cpu: "4"
         memory: "8Gi"
-    storage:
-      size: "100Gi"
+    storageConfig:                      # PersistentVolumeClaimSpec
+      resources:
+        requests:
+          storage: "100Gi"
       storageClassName: "fast-ssd"
     apiIngress:                         # Optional
       enabled: true
@@ -180,7 +178,7 @@ spec:
 ```yaml
 spec:
   dashboard:
-    replicas: 2
+    replicas: 2                         # Only dashboard supports replicas
     repository:
       image: "..."
       tag: "..."
@@ -198,15 +196,17 @@ spec:
 ```yaml
 spec:
   timeSeries:
-    replicas: 3
-    storage:
-      size: "500Gi"
+    heapSize: "16384M"                  # JVM heap size (e.g., "1024M", "4G")
+    storageConfig:                      # PersistentVolumeClaimSpec
+      resources:
+        requests:
+          storage: "500Gi"
       storageClassName: "premium-ssd"
-    jvmHeapSize: "16g"                  # JVM heap tuning
   search:
-    replicas: 2
-    storage:
-      size: "250Gi"
+    storageConfig:
+      resources:
+        requests:
+          storage: "250Gi"
       storageClassName: "premium-ssd"
 ```
 
@@ -273,8 +273,10 @@ kubectl describe certificate axonops-api-tls -n axonops-prod
 ```yaml
 spec:
   timeSeries:
-    storage:
-      size: "1Ti"  # Increase to 1TB
+    storageConfig:
+      resources:
+        requests:
+          storage: "1Ti"  # Increase to 1TB
 ```
 
 ### Adjust resource limits
@@ -294,7 +296,7 @@ spec:
 ```yaml
 spec:
   timeSeries:
-    storage:
+    storageConfig:
       storageClassName: "fast-nvme"
 ```
 
@@ -302,7 +304,7 @@ spec:
 ```yaml
 spec:
   timeSeries:
-    jvmHeapSize: "32g"  # For large deployments
+    heapSize: "32768M"  # For large deployments (e.g., 32GB)
 ```
 
 ---
