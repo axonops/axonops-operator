@@ -191,10 +191,23 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 
 	baseURL := fmt.Sprintf("%s://%s", protocol, host)
 
-	var transport http.RoundTripper = &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: tlsSkipVerify,
-		},
+	// Clone http.DefaultTransport to inherit connection pool settings (MaxIdleConns,
+	// IdleConnTimeout, TLSHandshakeTimeout, DialContext, etc.) while overriding only
+	// the TLS config. A bare &http.Transport{} has no idle-connection timeout, so
+	// abandoned transports (one is created per reconcile) accumulate open sockets.
+	var transport http.RoundTripper
+	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
+		cloned := dt.Clone()
+		cloned.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: tlsSkipVerify, //nolint:gosec // controlled by user-facing field TLSSkipVerify
+		}
+		transport = cloned
+	} else {
+		transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: tlsSkipVerify, //nolint:gosec
+			},
+		}
 	}
 	if o.verbose {
 		transport = &verboseTransport{base: transport}

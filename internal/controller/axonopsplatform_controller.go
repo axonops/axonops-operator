@@ -331,6 +331,37 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 	}
 
+	// Validate that internal database components are not enabled without the server component.
+	// External components (with spec.*.external.hosts) are already-running services; the operator
+	// only writes connection references for them, so they do not require a Server to be present.
+	// Internal (operator-managed) TimeSeries and Search exist solely to be consumed by the Server;
+	// enabling them without a Server produces a confusing partial state.
+	internalTSEnabled := r.isComponentEnabled(server.Spec.TimeSeries) && !isTimeSeriesExternal(server)
+	internalSearchEnabled := r.isComponentEnabled(server.Spec.Search) && !isSearchExternal(server)
+	if !r.isComponentEnabled(server.Spec.Server) && (internalTSEnabled || internalSearchEnabled) {
+		var components []string
+		if internalTSEnabled {
+			components = append(components, "timeSeries")
+		}
+		if internalSearchEnabled {
+			components = append(components, "search")
+		}
+		msg := fmt.Sprintf("spec.server must be configured when %s is enabled", strings.Join(components, " and "))
+		log.Info("Invalid configuration: database components require server", "components", components)
+		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: server.Generation,
+			Reason:             "InvalidConfiguration",
+			Message:            msg,
+		})
+		server.Status.ObservedGeneration = server.Generation
+		if err := r.Status().Update(ctx, server); err != nil {
+			log.Error(err, "Failed to update status for invalid configuration")
+		}
+		return ctrl.Result{}, nil
+	}
+
 	// Verify cert-manager CRDs are available (only needed for internal database/workload resources)
 	if needsInternalResources(server) {
 		if !r.isCertManagerAvailable() {
@@ -397,10 +428,30 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{}, err
 			}
 
+			// External databases require explicit credentials — auto-generating random
+			// credentials would cause permanent authentication failures since the operator
+			// cannot know what credentials the existing cluster was provisioned with.
+			tsAuth := server.Spec.TimeSeries.Authentication
+			if tsAuth.SecretRef == "" && tsAuth.Username == "" {
+				msg := "external TimeSeries requires credentials: set spec.timeSeries.authentication.secretRef or spec.timeSeries.authentication.username/password"
+				log.Info("Missing external TimeSeries credentials", "message", msg)
+				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+					Type:               "Ready",
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: server.Generation,
+					Reason:             "MissingExternalCredentials",
+					Message:            msg,
+				})
+				server.Status.ObservedGeneration = server.Generation
+				if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+					log.Error(statusErr, "Failed to update status")
+				}
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
+
 			// Ensure authentication secret for external TimeSeries.
 			// ensureAuthenticationSecret handles all cases: SecretRef (validates it),
-			// inline username/password (creates a managed Secret), and no credentials
-			// (auto-generates into a managed Secret).
+			// inline username/password (creates a managed Secret).
 			var err error
 			timeSeriesSecretName, _, err = r.ensureAuthenticationSecret(ctx, server, componentTimeseries, server.Spec.TimeSeries.Authentication, server.Spec.TimeSeries.StorageConfig)
 			if err != nil {
@@ -447,10 +498,30 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{}, err
 			}
 
+			// External databases require explicit credentials — auto-generating random
+			// credentials would cause permanent authentication failures since the operator
+			// cannot know what credentials the existing cluster was provisioned with.
+			searchAuth := server.Spec.Search.Authentication
+			if searchAuth.SecretRef == "" && searchAuth.Username == "" {
+				msg := "external Search requires credentials: set spec.search.authentication.secretRef or spec.search.authentication.username/password"
+				log.Info("Missing external Search credentials", "message", msg)
+				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+					Type:               "Ready",
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: server.Generation,
+					Reason:             "MissingExternalCredentials",
+					Message:            msg,
+				})
+				server.Status.ObservedGeneration = server.Generation
+				if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+					log.Error(statusErr, "Failed to update status")
+				}
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
+
 			// Ensure authentication secret for external Search.
 			// ensureAuthenticationSecret handles all cases: SecretRef (validates it),
-			// inline username/password (creates a managed Secret), and no credentials
-			// (auto-generates into a managed Secret).
+			// inline username/password (creates a managed Secret).
 			var err error
 			searchSecretName, _, err = r.ensureAuthenticationSecret(ctx, server, componentSearch, server.Spec.Search.Authentication, server.Spec.Search.StorageConfig)
 			if err != nil {

@@ -108,6 +108,8 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Validate mutual exclusivity of tables and keyspaces
 	if len(backup.Spec.Tables) > 0 && len(backup.Spec.Keyspaces) > 0 {
+		validationErr := fmt.Errorf("spec.tables and spec.keyspaces are mutually exclusive — specify one or neither")
+		log.Error(validationErr, "Validation failed", "backup", req.NamespacedName)
 		meta.SetStatusCondition(&backup.Status.Conditions, metav1.Condition{
 			Type:               "Failed",
 			Status:             metav1.ConditionTrue,
@@ -119,6 +121,9 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if err := r.Status().Update(ctx, backup); err != nil {
 			log.Error(err, "Failed to update status")
 		}
+		// Return nil (not the error) — this is a terminal user-error; returning an error
+		// would trigger exponential back-off retries that can never self-resolve without
+		// a spec change.
 		return ctrl.Result{}, nil
 	}
 
