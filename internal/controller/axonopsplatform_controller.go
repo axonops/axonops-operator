@@ -449,6 +449,27 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 
+			// When TLS verification is required, a cert secret must be provided so the
+			// operator can mount it into the Server pod. Without it the server config
+			// would reference non-existent files and fail to start.
+			tsTLS := server.Spec.TimeSeries.External.TLS
+			if tsTLS.Enabled && !tsTLS.InsecureSkipVerify && tsTLS.CertSecretRef == "" {
+				msg := "external TimeSeries TLS verification requires spec.timeSeries.external.tls.certSecretRef"
+				log.Info("Missing external TimeSeries TLS cert secret", "message", msg)
+				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+					Type:               "Ready",
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: server.Generation,
+					Reason:             "MissingExternalTLSCert",
+					Message:            msg,
+				})
+				server.Status.ObservedGeneration = server.Generation
+				if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+					log.Error(statusErr, "Failed to update status")
+				}
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
+
 			// Ensure authentication secret for external TimeSeries.
 			// ensureAuthenticationSecret handles all cases: SecretRef (validates it),
 			// inline username/password (creates a managed Secret).
@@ -519,6 +540,27 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 
+			// When TLS verification is required, a cert secret must be provided so the
+			// operator can mount it into the Server pod. Without it the server config
+			// would reference non-existent files and fail to start.
+			searchTLS := server.Spec.Search.External.TLS
+			if searchTLS.Enabled && !searchTLS.InsecureSkipVerify && searchTLS.CertSecretRef == "" {
+				msg := "external Search TLS verification requires spec.search.external.tls.certSecretRef"
+				log.Info("Missing external Search TLS cert secret", "message", msg)
+				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+					Type:               "Ready",
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: server.Generation,
+					Reason:             "MissingExternalTLSCert",
+					Message:            msg,
+				})
+				server.Status.ObservedGeneration = server.Generation
+				if statusErr := r.Status().Update(ctx, server); statusErr != nil {
+					log.Error(statusErr, "Failed to update status")
+				}
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
+
 			// Ensure authentication secret for external Search.
 			// ensureAuthenticationSecret handles all cases: SecretRef (validates it),
 			// inline username/password (creates a managed Secret).
@@ -574,6 +616,10 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			}
 			message := strings.Join(messages, "; ")
 
+			// Re-fetch before status update to avoid 409 Conflict from stale resource version.
+			if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
 			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
 				Type:               "ServerReady",
 				Status:             metav1.ConditionFalse,
@@ -613,6 +659,10 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if r.isComponentEnabled(server.Spec.Dashboard) {
 		serverReady, serverReason := r.isComponentReady(ctx, server, componentServer)
 		if !serverReady {
+			// Re-fetch before status update to avoid 409 Conflict from stale resource version.
+			if err := r.Get(ctx, req.NamespacedName, server); err != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
 			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
 				Type:               "DashboardReady",
 				Status:             metav1.ConditionFalse,
@@ -2648,33 +2698,35 @@ func (r *AxonOpsPlatformReconciler) buildServerConfig(server *corev1alpha1.AxonO
 		dashURL = fmt.Sprintf("https://%s", server.Spec.Dashboard.External.Hosts[0])
 	}
 
-	// Determine search TLS settings based on internal vs external
-	// Default to secure communication for internal connections
+	// Determine search TLS settings based on internal vs external.
+	// Internal search always uses cert-manager-issued TLS at the standard paths.
+	// External search cert paths are only set when TLS verification is required
+	// AND CertSecretRef is provided — otherwise the volume is not mounted and
+	// referencing those paths would cause the Server pod to fail at startup.
 	searchSkipVerify := true
 	searchCACert := "/etc/axonops/certs/search/ca.crt"
 	searchKey := "/etc/axonops/certs/search/tls.key"
 	searchCert := "/etc/axonops/certs/search/tls.crt"
 
 	if isSearchExternal(server) && server.Spec.Search != nil {
-		// For external search, respect the TLS configuration
-		tls := server.Spec.Search.External.TLS
-		if tls.Enabled {
-			searchSkipVerify = tls.InsecureSkipVerify
-			// Only include ca_cert if not skipping verification
-			if !tls.InsecureSkipVerify {
-				searchCACert = "/etc/axonops/certs/search/ca.crt"
-			} else {
-				searchCACert = ""
-			}
-		} else {
-			// External search without TLS
+		tlsCfg := server.Spec.Search.External.TLS
+		if tlsCfg.Enabled && !tlsCfg.InsecureSkipVerify {
+			// Verified TLS: certs are mounted from CertSecretRef at the standard path.
 			searchSkipVerify = false
+			searchCACert = "/etc/axonops/certs/search/ca.crt"
+			searchCert = "/etc/axonops/certs/search/tls.crt"
+			searchKey = "/etc/axonops/certs/search/tls.key"
+		} else {
+			// TLS disabled, or skip-verify: no cert files needed.
+			searchSkipVerify = !tlsCfg.Enabled || tlsCfg.InsecureSkipVerify
 			searchCACert = ""
+			searchCert = ""
+			searchKey = ""
 		}
 	}
 
-	// Determine timeseries TLS settings based on internal vs external
-	// Default to secure communication for internal connections
+	// Determine timeseries TLS settings based on internal vs external.
+	// Same rationale as search above.
 	cqlSSLEnabled := true
 	cqlSkipVerify := true
 	cqlCACert := "/etc/axonops/certs/timeseries/ca.crt"
@@ -2689,23 +2741,23 @@ func (r *AxonOpsPlatformReconciler) buildServerConfig(server *corev1alpha1.AxonO
 		} else {
 			localDC = ""
 		}
-		// For external timeseries, respect the TLS configuration
-		tls := server.Spec.TimeSeries.External.TLS
-		if tls.Enabled {
+		tlsCfg := server.Spec.TimeSeries.External.TLS
+		if tlsCfg.Enabled && !tlsCfg.InsecureSkipVerify {
+			// Verified TLS: certs are mounted from CertSecretRef at the standard path.
 			cqlSSLEnabled = true
-			cqlSkipVerify = tls.InsecureSkipVerify
-			// Only include cert paths if not skipping verification
-			if !tls.InsecureSkipVerify {
-				cqlCACert = "/etc/axonops/certs/timeseries/ca.crt"
-				cqlKey = "/etc/axonops/certs/timeseries/tls.key"
-				cqlCert = "/etc/axonops/certs/timeseries/tls.crt"
-			} else {
-				cqlCACert = ""
-				cqlKey = ""
-				cqlCert = ""
-			}
+			cqlSkipVerify = false
+			cqlCACert = "/etc/axonops/certs/timeseries/ca.crt"
+			cqlKey = "/etc/axonops/certs/timeseries/tls.key"
+			cqlCert = "/etc/axonops/certs/timeseries/tls.crt"
+		} else if tlsCfg.Enabled {
+			// TLS enabled but skip-verify: no cert files needed.
+			cqlSSLEnabled = true
+			cqlSkipVerify = true
+			cqlCACert = ""
+			cqlKey = ""
+			cqlCert = ""
 		} else {
-			// External timeseries without TLS
+			// External timeseries without TLS.
 			cqlSSLEnabled = false
 			cqlSkipVerify = false
 			cqlCACert = ""
@@ -2994,13 +3046,24 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 									{Name: "logs", MountPath: "/var/log/axonops"},
 									{Name: "data", MountPath: "/var/lib/axonops"},
 								}
-								// Only mount timeseries-tls if timeseries is internal
+								// Mount timeseries TLS certs: internal uses cert-manager secret,
+								// external uses user-provided CertSecretRef when verification is required.
 								if !isTimeSeriesExternal(server) {
 									mounts = append(mounts, corev1.VolumeMount{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true})
+								} else if server.Spec.TimeSeries != nil {
+									tsTLS := server.Spec.TimeSeries.External.TLS
+									if tsTLS.Enabled && !tsTLS.InsecureSkipVerify && tsTLS.CertSecretRef != "" {
+										mounts = append(mounts, corev1.VolumeMount{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true})
+									}
 								}
-								// Only mount search-tls if search is internal
+								// Mount search TLS certs: same pattern as timeseries above.
 								if !isSearchExternal(server) {
 									mounts = append(mounts, corev1.VolumeMount{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true})
+								} else if server.Spec.Search != nil {
+									searchTLS := server.Spec.Search.External.TLS
+									if searchTLS.Enabled && !searchTLS.InsecureSkipVerify && searchTLS.CertSecretRef != "" {
+										mounts = append(mounts, corev1.VolumeMount{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true})
+									}
 								}
 								return mounts
 							}(),
@@ -3023,7 +3086,9 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 								},
 							},
 						}
-						// Only include timeseries-tls volume if timeseries is internal
+						// timeseries-tls volume: for internal components use the cert-manager
+						// issued secret; for external components with verified TLS use the
+						// user-supplied CertSecretRef.
 						if !isTimeSeriesExternal(server) {
 							volumes = append(volumes, corev1.Volume{
 								Name: "timeseries-tls",
@@ -3038,8 +3103,25 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 									},
 								},
 							})
+						} else if server.Spec.TimeSeries != nil {
+							tsTLS := server.Spec.TimeSeries.External.TLS
+							if tsTLS.Enabled && !tsTLS.InsecureSkipVerify && tsTLS.CertSecretRef != "" {
+								volumes = append(volumes, corev1.Volume{
+									Name: "timeseries-tls",
+									VolumeSource: corev1.VolumeSource{
+										Secret: &corev1.SecretVolumeSource{
+											SecretName: tsTLS.CertSecretRef,
+											Items: []corev1.KeyToPath{
+												{Key: "ca.crt", Path: "ca.crt"},
+												{Key: "tls.crt", Path: "tls.crt"},
+												{Key: "tls.key", Path: "tls.key"},
+											},
+										},
+									},
+								})
+							}
 						}
-						// Only include search-tls volume if search is internal
+						// search-tls volume: same pattern as timeseries above.
 						if !isSearchExternal(server) {
 							volumes = append(volumes, corev1.Volume{
 								Name: "search-tls",
@@ -3054,6 +3136,23 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 									},
 								},
 							})
+						} else if server.Spec.Search != nil {
+							searchTLS := server.Spec.Search.External.TLS
+							if searchTLS.Enabled && !searchTLS.InsecureSkipVerify && searchTLS.CertSecretRef != "" {
+								volumes = append(volumes, corev1.Volume{
+									Name: "search-tls",
+									VolumeSource: corev1.VolumeSource{
+										Secret: &corev1.SecretVolumeSource{
+											SecretName: searchTLS.CertSecretRef,
+											Items: []corev1.KeyToPath{
+												{Key: "ca.crt", Path: "ca.crt"},
+												{Key: "tls.crt", Path: "tls.crt"},
+												{Key: "tls.key", Path: "tls.key"},
+											},
+										},
+									},
+								})
+							}
 						}
 						return volumes
 					}(),

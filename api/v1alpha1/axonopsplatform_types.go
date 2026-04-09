@@ -198,9 +198,18 @@ type AxonTLSConfig struct {
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 
-	// InsecureSkipVerify skips TLS certificate verification
+	// InsecureSkipVerify skips TLS certificate verification.
+	// When false (the default), CertSecretRef must be set so the operator
+	// can mount the CA and client certificates into the Server pod.
 	// +optional
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+
+	// CertSecretRef is the name of a Secret containing TLS certificates for
+	// this external connection. Required when Enabled is true and
+	// InsecureSkipVerify is false. The Secret must contain the keys:
+	// ca.crt, tls.crt, tls.key.
+	// +optional
+	CertSecretRef string `json:"certSecretRef,omitempty"`
 }
 
 // Ingress defines an ingress configuration for the AxonOps Workbench.

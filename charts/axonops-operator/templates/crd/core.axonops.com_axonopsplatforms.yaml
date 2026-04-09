@@ -104,12 +104,21 @@ spec:
                       tls:
                         description: TLS configures TLS settings for external connections
                         properties:
+                          certSecretRef:
+                            description: |-
+                              CertSecretRef is the name of a Secret containing TLS certificates for
+                              this external connection. Required when Enabled is true and
+                              InsecureSkipVerify is false. The Secret must contain the keys:
+                              ca.crt, tls.crt, tls.key.
+                            type: string
                           enabled:
                             description: Enabled enables TLS for connections
                             type: boolean
                           insecureSkipVerify:
-                            description: InsecureSkipVerify skips TLS certificate
-                              verification
+                            description: |-
+                              InsecureSkipVerify skips TLS certificate verification.
+                              When false (the default), CertSecretRef must be set so the operator
+                              can mount the CA and client certificates into the Server pod.
                             type: boolean
                         type: object
                     type: object
@@ -242,12 +251,21 @@ spec:
                       tls:
                         description: TLS configures TLS settings for external connections
                         properties:
+                          certSecretRef:
+                            description: |-
+                              CertSecretRef is the name of a Secret containing TLS certificates for
+                              this external connection. Required when Enabled is true and
+                              InsecureSkipVerify is false. The Secret must contain the keys:
+                              ca.crt, tls.crt, tls.key.
+                            type: string
                           enabled:
                             description: Enabled enables TLS for connections
                             type: boolean
                           insecureSkipVerify:
-                            description: InsecureSkipVerify skips TLS certificate
-                              verification
+                            description: |-
+                              InsecureSkipVerify skips TLS certificate verification.
+                              When false (the default), CertSecretRef must be set so the operator
+                              can mount the CA and client certificates into the Server pod.
                             type: boolean
                         type: object
                     type: object
@@ -370,12 +388,21 @@ spec:
                       tls:
                         description: TLS configures TLS settings for external connections
                         properties:
+                          certSecretRef:
+                            description: |-
+                              CertSecretRef is the name of a Secret containing TLS certificates for
+                              this external connection. Required when Enabled is true and
+                              InsecureSkipVerify is false. The Secret must contain the keys:
+                              ca.crt, tls.crt, tls.key.
+                            type: string
                           enabled:
                             description: Enabled enables TLS for connections
                             type: boolean
                           insecureSkipVerify:
-                            description: InsecureSkipVerify skips TLS certificate
-                              verification
+                            description: |-
+                              InsecureSkipVerify skips TLS certificate verification.
+                              When false (the default), CertSecretRef must be set so the operator
+                              can mount the CA and client certificates into the Server pod.
                             type: boolean
                         type: object
                     type: object
@@ -486,12 +513,21 @@ spec:
                       tls:
                         description: TLS configures TLS settings for external connections
                         properties:
+                          certSecretRef:
+                            description: |-
+                              CertSecretRef is the name of a Secret containing TLS certificates for
+                              this external connection. Required when Enabled is true and
+                              InsecureSkipVerify is false. The Secret must contain the keys:
+                              ca.crt, tls.crt, tls.key.
+                            type: string
                           enabled:
                             description: Enabled enables TLS for connections
                             type: boolean
                           insecureSkipVerify:
-                            description: InsecureSkipVerify skips TLS certificate
-                              verification
+                            description: |-
+                              InsecureSkipVerify skips TLS certificate verification.
+                              When false (the default), CertSecretRef must be set so the operator
+                              can mount the CA and client certificates into the Server pod.
                             type: boolean
                         type: object
                     type: object
