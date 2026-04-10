@@ -4,5 +4,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
-  newName: controller
-  newTag: latest
+  newName: 172.20.0.3:5000/axonops-operator
+  newTag: e2e-test

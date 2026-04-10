@@ -4,8 +4,8 @@
     "dockerfile": "Dockerfile",
     "args": {
       "TZ": "${localEnv:TZ:Europe/London}",
-      "USER_UID": "${localEnv:UID:1000}",
-      "USER_GID": "${localEnv:GID:1000}",
+      "USER_UID": "${localEnv:HOST_UID:1000}",
+      "USER_GID": "${localEnv:HOST_GID:1000}",
       "CLAUDE_CODE_VERSION": "latest",
       "GIT_DELTA_VERSION": "0.18.2",
       "ZSH_IN_DOCKER_VERSION": "1.2.0",
@@ -28,8 +28,7 @@
     // Optional: Only if you want to persist Docker data between container rebuilds
     "source=dind-var-lib-docker,target=/var/lib/docker,type=volume",
     "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
-    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,type=bind,readonly",
+    "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind",
     "source=${localEnv:HOME}/.kube,target=/home/node/.kube,type=bind,readonly"
   ],
 

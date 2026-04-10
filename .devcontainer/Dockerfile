@@ -33,8 +33,8 @@ RUN mkdir -p /usr/local/share/npm-global && \
   chown -R node:node /usr/local/share
 
 ARG USERNAME=node
-ARG USER_UID=1000
-ARG USER_GID=1000
+ARG USER_UID=5025
+ARG USER_GID=5025
 
 # Remap node user/group to match host UID/GID to avoid bind-mount permission issues
 RUN groupmod -g ${USER_GID} node && \
@@ -84,9 +84,6 @@ ARG KUBEBUILDER_VERSION=v4.13.0
 RUN ARCH=$(dpkg --print-architecture) && \
   wget -q "https://github.com/kubernetes-sigs/kubebuilder/releases/download/${KUBEBUILDER_VERSION}/kubebuilder_linux_${ARCH}" -O /usr/local/bin/kubebuilder && \
   chmod +x /usr/local/bin/kubebuilder
-
-# Set up non-root user
-USER node
 
 # Install global packages
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
