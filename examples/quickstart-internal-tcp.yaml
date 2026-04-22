@@ -10,7 +10,7 @@ metadata:
   name: cassandra-cql-tcp
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra CQL Port Check"
@@ -26,7 +26,7 @@ metadata:
   name: cassandra-jmx-tcp
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra JMX Port Check"
@@ -42,7 +42,7 @@ metadata:
   name: cassandra-storage-tcp
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra Storage Port Check"
@@ -58,7 +58,7 @@ metadata:
   name: cassandra-ssl-storage-tcp
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra SSL Storage Port Check"
@@ -74,7 +74,7 @@ metadata:
   name: cassandra-native-tcp
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra Native Transport Port Check"

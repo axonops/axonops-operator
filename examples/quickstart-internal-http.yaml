@@ -10,7 +10,7 @@ metadata:
   name: cassandra-health-http
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra Node HTTP Health Check"
@@ -28,7 +28,7 @@ metadata:
   name: cassandra-jolokia-http
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra Jolokia HTTP Check"
@@ -46,7 +46,7 @@ metadata:
   name: api-health-post-check
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "API Health POST Check"

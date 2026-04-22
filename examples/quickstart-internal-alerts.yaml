@@ -10,7 +10,7 @@ metadata:
   name: tombstone-scanned-alert
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Tombstones Scanned per Table - 99thPercentile - system.peers table"
@@ -29,7 +29,7 @@ metadata:
   name: tombstone-error-alert
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra Tombstone Exception Alert"
@@ -52,7 +52,7 @@ metadata:
   name: slack-metrics-error
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   integrationName: my-slack-channel

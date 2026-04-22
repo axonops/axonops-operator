@@ -8,7 +8,7 @@ metadata:
   namespace: default
 spec:
   # Reference the AxonOpsConnection for API credentials
-  connectionRef: gridindia
+  connectionRef: example
 
   # Cluster information
   clusterName: test-cluster-000

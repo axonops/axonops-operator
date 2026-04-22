@@ -15,10 +15,10 @@ stringData:
 apiVersion: core.axonops.com/v1alpha1
 kind: AxonOpsConnection
 metadata:
-  name: gridindia
+  name: example
   namespace: default
 spec:
-  orgId: gridindia
+  orgId: example
   host: dash.10.16.0.25.nip.io
   tokenType: AxonApi
   protocol: https

@@ -10,7 +10,7 @@ metadata:
   name: disk-space-check
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Disk Space Check"
@@ -27,7 +27,7 @@ metadata:
   name: cassandra-process-check
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Cassandra Process Running Check"
@@ -44,7 +44,7 @@ metadata:
   name: custom-health-script
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "Custom Health Script"
@@ -61,7 +61,7 @@ metadata:
   name: jvm-heap-check
   namespace: default
 spec:
-  connectionRef: gridindia
+  connectionRef: example
   clusterName: test-cluster-000
   clusterType: cassandra
   name: "JVM Heap Usage Check"
