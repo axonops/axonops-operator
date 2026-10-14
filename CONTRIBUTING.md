@@ -92,7 +92,7 @@ PR body should include:
 
 ### Prerequisites
 
-- Go 1.25+ (check `go.mod`)
+- Go 1.27+ (check `go.mod`)
 - Kubernetes 1.28+ (for testing)
 - Make
 - kubebuilder (optional, for code generation)

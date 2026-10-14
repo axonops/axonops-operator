@@ -62,7 +62,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
   rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
 
 # Install Go — version must match go.mod (go 1.25.3)
-ARG GO_VERSION=1.25.3
+ARG GO_VERSION=1.27.2
 RUN ARCH=$(dpkg --print-architecture) && \
   wget -q "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" && \
   tar -C /usr/local -xzf "go${GO_VERSION}.linux-${ARCH}.tar.gz" && \
