@@ -124,9 +124,9 @@ func logAlertRuleToResource(rule axonops.MetricAlertRule, opts *Options) Resourc
 		f := &alertsv1alpha1.LogAlertFilters{}
 		for _, af := range rule.Filters {
 			switch af.Name {
-			case "dc":
+			case filterDC:
 				f.DataCenter = af.Value
-			case "rack":
+			case filterRack:
 				f.Rack = af.Value
 			case filterHostID:
 				f.HostID = af.Value
@@ -293,25 +293,25 @@ func convertFilters(apiFilters []axonops.MetricAlertFilter) *alertsv1alpha1.Metr
 			continue
 		}
 		switch af.Name {
-		case "dc":
+		case filterDC:
 			f.DataCenter = af.Value
-		case "rack":
+		case filterRack:
 			f.Rack = af.Value
 		case filterHostID:
 			f.HostID = af.Value
-		case "scope":
+		case filterScope:
 			f.Scope = af.Value
-		case "keyspace":
+		case filterKeyspace:
 			f.Keyspace = af.Value
-		case "percentile":
+		case filterPercentile:
 			f.Percentile = af.Value
-		case "consistency":
+		case filterConsistency:
 			f.Consistency = af.Value
-		case "topic":
+		case filterTopic:
 			f.Topic = af.Value
-		case "group_id":
+		case filterGroupID:
 			f.GroupID = af.Value
-		case "group_by":
+		case filterGroupBy:
 			f.GroupBy = af.Value
 		}
 	}

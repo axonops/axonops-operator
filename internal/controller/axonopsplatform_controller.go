@@ -392,6 +392,9 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
+	// Kept outside server.Status so it survives the re-fetches before each status update.
+	var certManagerReadyCond *metav1.Condition
+
 	// Verify cert-manager CRDs are available (only needed for internal database/workload resources)
 	if needsInternalResources(server) {
 		if !r.isCertManagerAvailable() {
@@ -436,13 +439,14 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		}
-		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
+		certManagerReadyCond = &metav1.Condition{
 			Type:               condTypeCertManagerReady,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: server.Generation,
 			Reason:             "IssuerReady",
 			Message:            "cert-manager is available and ClusterIssuer is ready",
-		})
+		}
+		meta.SetStatusCondition(&server.Status.Conditions, *certManagerReadyCond)
 	}
 
 	var timeSeriesSecretName, searchSecretName string
@@ -650,6 +654,9 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if err := r.Get(ctx, req.NamespacedName, server); err != nil {
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
+			if certManagerReadyCond != nil {
+				meta.SetStatusCondition(&server.Status.Conditions, *certManagerReadyCond)
+			}
 			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
 				Type:               "ServerReady",
 				Status:             metav1.ConditionFalse,
@@ -693,6 +700,9 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if err := r.Get(ctx, req.NamespacedName, server); err != nil {
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
+			if certManagerReadyCond != nil {
+				meta.SetStatusCondition(&server.Status.Conditions, *certManagerReadyCond)
+			}
 			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
 				Type:               "DashboardReady",
 				Status:             metav1.ConditionFalse,
@@ -734,6 +744,11 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		server.Status.SearchSecretName != searchSecretName ||
 		server.Status.TimeSeriesCertSecretName != timeSeriesCertSecretName ||
 		server.Status.SearchCertSecretName != searchCertSecretName
+
+	if certManagerReadyCond != nil {
+		meta.SetStatusCondition(&server.Status.Conditions, *certManagerReadyCond)
+		statusChanged = true
+	}
 
 	// Set ServerReady and DashboardReady conditions — must be done after the
 	// re-fetch above, otherwise SetStatusCondition changes are discarded.

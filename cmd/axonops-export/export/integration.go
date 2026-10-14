@@ -26,18 +26,6 @@ import (
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
 
-const (
-	intTypeMicrosoftTeams = "microsoft_teams"
-	intTypePagerDuty      = "pagerduty"
-
-	alertsAPIVersion = "alerts.axonops.com/v1alpha1"
-	kindMetricAlert  = "AxonOpsMetricAlert"
-	kindSecret       = "Secret"
-	fieldAPIVersion  = "apiVersion"
-	fieldKind        = "kind"
-	filterHostID     = "host_id"
-)
-
 // exportIntegrations fetches integration definitions and routing and converts them
 // to AxonOpsAlertEndpoint and AxonOpsAlertRoute CRD resources.
 func exportIntegrations(ctx context.Context, client *axonops.Client, opts *Options) ([]Resource, error) {
