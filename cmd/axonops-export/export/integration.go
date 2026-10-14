@@ -22,8 +22,6 @@ import (
 	"maps"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
@@ -31,6 +29,13 @@ import (
 const (
 	intTypeMicrosoftTeams = "microsoft_teams"
 	intTypePagerDuty      = "pagerduty"
+
+	alertsAPIVersion = "alerts.axonops.com/v1alpha1"
+	kindMetricAlert  = "AxonOpsMetricAlert"
+	kindSecret       = "Secret"
+	fieldAPIVersion  = "apiVersion"
+	fieldKind        = "kind"
+	filterHostID     = "host_id"
 )
 
 // exportIntegrations fetches integration definitions and routing and converts them
@@ -91,14 +96,10 @@ func integrationDefToResource(def axonops.IntegrationDefinition, opts *Options) 
 	name := toDNSLabel(endpointName)
 
 	obj := &alertsv1alpha1.AxonOpsAlertEndpoint{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "alerts.axonops.com/v1alpha1",
-			Kind:       "AxonOpsAlertEndpoint",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: opts.Namespace,
-		},
+		APIVersion: alertsAPIVersion,
+		Kind:       "AxonOpsAlertEndpoint",
+		Name:       name,
+		Namespace:  opts.Namespace,
 		Spec: alertsv1alpha1.AxonOpsAlertEndpointSpec{
 			ConnectionRef: opts.ConnectionName,
 			ClusterName:   opts.ClusterName,
@@ -196,14 +197,10 @@ func integrationRouteToResource(
 
 	enableOverride := true
 	obj := &alertsv1alpha1.AxonOpsAlertRoute{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "alerts.axonops.com/v1alpha1",
-			Kind:       "AxonOpsAlertRoute",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: opts.Namespace,
-		},
+		APIVersion: alertsAPIVersion,
+		Kind:       "AxonOpsAlertRoute",
+		Name:       name,
+		Namespace:  opts.Namespace,
 		Spec: alertsv1alpha1.AxonOpsAlertRouteSpec{
 			ConnectionRef:   opts.ConnectionName,
 			ClusterName:     opts.ClusterName,

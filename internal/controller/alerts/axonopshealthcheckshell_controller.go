@@ -177,10 +177,10 @@ func (r *AxonOpsHealthcheckShellReconciler) Reconcile(ctx context.Context, req c
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
-		Message:            "Healthcheck synced with AxonOps",
+		Reason:             reasonSynced,
+		Message:            msgHealthcheckSynced,
 	})
-	meta.RemoveStatusCondition(&healthcheck.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&healthcheck.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, healthcheck); err != nil {
 		log.Error(err, "Failed to update status")
@@ -198,7 +198,7 @@ func (r *AxonOpsHealthcheckShellReconciler) checkDrift(ctx context.Context, heal
 	allHealthchecks, err := apiClient.GetHealthchecks(ctx, healthcheck.Spec.ClusterType, healthcheck.Spec.ClusterName)
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
-		r.setFailedCondition(ctx, healthcheck, "DriftCheckFailed", common.SafeConditionMsg("Failed to check for drift", err))
+		r.setFailedCondition(ctx, healthcheck, reasonDriftCheckFailed, common.SafeConditionMsg("Failed to check for drift", err))
 		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
 	}
 	for _, hc := range allHealthchecks.ShellChecks {
@@ -209,10 +209,10 @@ func (r *AxonOpsHealthcheckShellReconciler) checkDrift(ctx context.Context, heal
 	}
 	log.Info("Drift detected: shell healthcheck no longer exists in AxonOps", "healthcheckID", healthcheck.Status.SyncedHealthcheckID)
 	meta.SetStatusCondition(&healthcheck.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: healthcheck.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Shell healthcheck was deleted externally; recreating",
 	})
 	healthcheck.Status.SyncedHealthcheckID = ""
@@ -308,7 +308,7 @@ func (r *AxonOpsHealthcheckShellReconciler) buildHealthcheckEntry(healthcheck *a
 // setFailedCondition sets a failed condition on the healthcheck
 func (r *AxonOpsHealthcheckShellReconciler) setFailedCondition(ctx context.Context, healthcheck *alertsv1alpha1.AxonOpsHealthcheckShell, reason, message string) {
 	meta.SetStatusCondition(&healthcheck.Status.Conditions, metav1.Condition{
-		Type:               "Failed",
+		Type:               condTypeFailed,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: healthcheck.Generation,
 		Reason:             reason,

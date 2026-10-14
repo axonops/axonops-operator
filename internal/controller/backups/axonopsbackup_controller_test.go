@@ -42,10 +42,8 @@ var _ = Describe("AxonOpsBackup Controller", func() {
 
 	newBackupCR := func(name string) *backupsv1alpha1.AxonOpsBackup {
 		return &backupsv1alpha1.AxonOpsBackup{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: testNamespace,
-			},
+			Name:      name,
+			Namespace: testNamespace,
 			Spec: backupsv1alpha1.AxonOpsBackupSpec{
 				ConnectionRef:      connName,
 				ClusterName:        testClusterName,
@@ -143,7 +141,7 @@ var _ = Describe("AxonOpsBackup Controller", func() {
 
 			// Create S3 credentials Secret
 			s3Secret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "s3-creds", Namespace: testNamespace},
+				Name: "s3-creds", Namespace: testNamespace,
 				Data: map[string][]byte{
 					"access_key_id":     []byte("AKIATEST"),
 					"secret_access_key": []byte("secrettest"),
@@ -336,7 +334,7 @@ var _ = Describe("AxonOpsBackup Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Status).To(Equal(metav1.ConditionTrue))
 			Expect(failedCond.Reason).To(Equal("FailedToResolveConnection"))
@@ -373,7 +371,7 @@ var _ = Describe("AxonOpsBackup Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("SyncFailed"))
 		})
@@ -412,7 +410,7 @@ var _ = Describe("AxonOpsBackup Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("ValidationError"))
 		})

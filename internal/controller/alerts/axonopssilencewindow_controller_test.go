@@ -37,10 +37,8 @@ var _ = Describe("AxonOpsSilenceWindow Controller", func() {
 
 	newSilenceCR := func(name string) *alertsv1alpha1.AxonOpsSilenceWindow {
 		return &alertsv1alpha1.AxonOpsSilenceWindow{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: testNamespace,
-			},
+			Name:      name,
+			Namespace: testNamespace,
 			Spec: alertsv1alpha1.AxonOpsSilenceWindowSpec{
 				ConnectionRef: connName,
 				ClusterName:   testClusterName,
@@ -162,9 +160,9 @@ var _ = Describe("AxonOpsSilenceWindow Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
-			Expect(failedCond.Reason).To(Equal("FailedToResolveConnection"))
+			Expect(failedCond.Reason).To(Equal(reasonFailedToResolveConnection))
 		})
 	})
 
@@ -198,9 +196,9 @@ var _ = Describe("AxonOpsSilenceWindow Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
-			Expect(failedCond.Reason).To(Equal("SyncFailed"))
+			Expect(failedCond.Reason).To(Equal(reasonSyncFailed))
 		})
 	})
 })

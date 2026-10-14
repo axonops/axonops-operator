@@ -203,10 +203,10 @@ func (r *AxonOpsDashboardTemplateReconciler) Reconcile(ctx context.Context, req 
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Dashboard template synced with AxonOps",
 	})
-	meta.RemoveStatusCondition(&dashboard.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&dashboard.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, dashboard); err != nil {
 		log.Error(err, "Failed to update status")
@@ -225,10 +225,10 @@ func (r *AxonOpsDashboardTemplateReconciler) checkDrift(ctx context.Context, das
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
 		meta.SetStatusCondition(&dashboard.Status.Conditions, metav1.Condition{
-			Type:               "DriftCheckFailed",
+			Type:               condTypeDriftCheckFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: dashboard.Generation,
-			Reason:             "DriftCheckFailed",
+			Reason:             reasonDriftCheckFailed,
 			Message:            common.SafeConditionMsg("Failed to check for drift", err),
 		})
 		if statusErr := r.Status().Update(ctx, dashboard); statusErr != nil {
@@ -242,10 +242,10 @@ func (r *AxonOpsDashboardTemplateReconciler) checkDrift(ctx context.Context, das
 	}
 	log.Info("Drift detected: dashboard templates no longer exist in AxonOps")
 	meta.SetStatusCondition(&dashboard.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: dashboard.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Dashboard templates were removed externally; recreating",
 	})
 	dashboard.Status.LastSyncTime = nil
@@ -402,7 +402,7 @@ func (r *AxonOpsDashboardTemplateReconciler) handleDeletion(ctx context.Context,
 // setFailedCondition sets a failed condition on the dashboard template CR
 func (r *AxonOpsDashboardTemplateReconciler) setFailedCondition(ctx context.Context, dashboard *alertsv1alpha1.AxonOpsDashboardTemplate, reason, message string) {
 	meta.SetStatusCondition(&dashboard.Status.Conditions, metav1.Condition{
-		Type:               "Failed",
+		Type:               condTypeFailed,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: dashboard.Generation,
 		Reason:             reason,
@@ -426,10 +426,8 @@ func (r *AxonOpsDashboardTemplateReconciler) findDashboardsForConfigMap(ctx cont
 	requests := make([]reconcile.Request, 0, len(dashboardList.Items))
 	for _, d := range dashboardList.Items {
 		requests = append(requests, reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      d.Name,
-				Namespace: d.Namespace,
-			},
+			Name:      d.Name,
+			Namespace: d.Namespace,
 		})
 	}
 	return requests

@@ -104,10 +104,10 @@ func (r *AxonOpsSilenceWindowReconciler) Reconcile(ctx context.Context, req ctrl
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&silence.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: silence.Generation,
-			Reason:             "FailedToResolveConnection",
+			Reason:             reasonFailedToResolveConnection,
 			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		silence.Status.ObservedGeneration = silence.Generation
@@ -163,10 +163,10 @@ func (r *AxonOpsSilenceWindowReconciler) Reconcile(ctx context.Context, req ctrl
 		if err := apiClient.CreateSilenceWindow(ctx, silence.Spec.ClusterType, silence.Spec.ClusterName, payload); err != nil {
 			log.Error(err, "Failed to create silence window")
 			meta.SetStatusCondition(&silence.Status.Conditions, metav1.Condition{
-				Type:               "Failed",
+				Type:               condTypeFailed,
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: silence.Generation,
-				Reason:             "SyncFailed",
+				Reason:             reasonSyncFailed,
 				Message:            common.SafeConditionMsg("Failed to sync with AxonOps", err),
 			})
 			silence.Status.ObservedGeneration = silence.Generation
@@ -197,10 +197,10 @@ func (r *AxonOpsSilenceWindowReconciler) Reconcile(ctx context.Context, req ctrl
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Silence window synced with AxonOps",
 	})
-	meta.RemoveStatusCondition(&silence.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&silence.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, silence); err != nil {
 		return ctrl.Result{}, err
@@ -218,10 +218,10 @@ func (r *AxonOpsSilenceWindowReconciler) checkDrift(ctx context.Context, silence
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
 		meta.SetStatusCondition(&silence.Status.Conditions, metav1.Condition{
-			Type:               "DriftCheckFailed",
+			Type:               condTypeDriftCheckFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: silence.Generation,
-			Reason:             "DriftCheckFailed",
+			Reason:             reasonDriftCheckFailed,
 			Message:            common.SafeConditionMsg("Failed to check for drift", err),
 		})
 		if statusErr := r.Status().Update(ctx, silence); statusErr != nil {
@@ -237,10 +237,10 @@ func (r *AxonOpsSilenceWindowReconciler) checkDrift(ctx context.Context, silence
 	}
 	log.Info("Drift detected: silence window no longer exists in AxonOps", "silenceID", silence.Status.SyncedSilenceID)
 	meta.SetStatusCondition(&silence.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: silence.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Silence window was deleted externally; recreating",
 	})
 	silence.Status.SyncedSilenceID = ""

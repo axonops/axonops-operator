@@ -292,7 +292,7 @@ func (r *AxonOpsAlertRouteReconciler) checkDrift(ctx context.Context, route *ale
 	if err != nil {
 		log.Error(err, "Failed to get integrations during drift check")
 		meta.SetStatusCondition(&route.Status.Conditions, metav1.Condition{
-			Type:               "DriftCheckFailed",
+			Type:               condTypeDriftCheckFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: route.Generation,
 			Reason:             "APIError",
@@ -309,10 +309,10 @@ func (r *AxonOpsAlertRouteReconciler) checkDrift(ctx context.Context, route *ale
 	}
 	log.Info("Drift detected: alert route no longer exists in AxonOps, will recreate")
 	meta.SetStatusCondition(&route.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: route.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Alert route was deleted externally; reapplying",
 	})
 	route.Status.IntegrationID = ""

@@ -23,6 +23,13 @@ import (
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
 
+const (
+	testDatacenter = "dc1"
+	testChartName  = "CPU Usage"
+	testAlertName  = "alert-1"
+	testSecretName = "my-secret"
+)
+
 func TestExtractMetric(t *testing.T) {
 	tests := []struct {
 		expr     string
@@ -56,10 +63,10 @@ func TestConvertFilters(t *testing.T) {
 
 	// Populated filters
 	apiFilters := []axonops.MetricAlertFilter{
-		{Name: "dc", Value: []string{"dc1", "dc2"}},
-		{Name: "host_id", Value: []string{"host-1"}},
+		{Name: "dc", Value: []string{testDatacenter, "dc2"}},
+		{Name: filterHostID, Value: []string{"host-1"}},
 		{Name: "keyspace", Value: []string{"system"}},
-		{Name: "group_by", Value: []string{"host_id"}},
+		{Name: "group_by", Value: []string{filterHostID}},
 		{Name: "unknown_filter", Value: []string{"val"}}, // Should be ignored
 		{Name: "rack", Value: []string{}},                // Empty value, should be skipped
 	}
@@ -69,10 +76,10 @@ func TestConvertFilters(t *testing.T) {
 		t.Fatal("convertFilters returned nil for non-empty input")
 	}
 
-	assertStrSlice(t, "DataCenter", got.DataCenter, []string{"dc1", "dc2"})
+	assertStrSlice(t, "DataCenter", got.DataCenter, []string{testDatacenter, "dc2"})
 	assertStrSlice(t, "HostID", got.HostID, []string{"host-1"})
 	assertStrSlice(t, "Keyspace", got.Keyspace, []string{"system"})
-	assertStrSlice(t, "GroupBy", got.GroupBy, []string{"host_id"})
+	assertStrSlice(t, "GroupBy", got.GroupBy, []string{filterHostID})
 	assertStrSlice(t, "Rack", got.Rack, nil) // Empty value was skipped
 }
 
@@ -85,31 +92,31 @@ func TestMetricAlertRuleToResource(t *testing.T) {
 	}
 
 	panelIndex := map[string]panelInfo{
-		"panel-uuid-123": {Dashboard: "System", Chart: "CPU Usage"},
+		"panel-uuid-123": {Dashboard: "System", Chart: testChartName},
 	}
 
 	rule := axonops.MetricAlertRule{
-		ID:            "alert-1",
+		ID:            testAlertName,
 		Alert:         "High CPU Usage",
 		For:           "15m",
 		Operator:      ">=",
 		WarningValue:  80,
 		CriticalValue: 95,
 		Expr:          "cpu_usage >= 80",
-		WidgetTitle:   "CPU Usage",
+		WidgetTitle:   testChartName,
 		CorrelationId: "panel-uuid-123",
 		Annotations: axonops.MetricAlertAnnotations{
 			Summary:     "CPU is high",
 			Description: "CPU usage exceeded threshold",
 		},
 		Filters: []axonops.MetricAlertFilter{
-			{Name: "dc", Value: []string{"dc1"}},
+			{Name: "dc", Value: []string{testDatacenter}},
 		},
 	}
 
 	r := metricAlertRuleToResource(rule, opts, panelIndex)
 
-	if r.Kind != "AxonOpsMetricAlert" {
+	if r.Kind != kindMetricAlert {
 		t.Errorf("Kind = %q, want AxonOpsMetricAlert", r.Kind)
 	}
 	if r.Name != "high-cpu-usage" {
@@ -143,7 +150,7 @@ func TestMetricAlertRuleToResource(t *testing.T) {
 	if alert.Spec.Dashboard != "System" {
 		t.Errorf("Dashboard = %q, want System", alert.Spec.Dashboard)
 	}
-	if alert.Spec.Chart != "CPU Usage" {
+	if alert.Spec.Chart != testChartName {
 		t.Errorf("Chart = %q, want CPU Usage", alert.Spec.Chart)
 	}
 	// Annotations
@@ -157,7 +164,7 @@ func TestMetricAlertRuleToResource(t *testing.T) {
 	if alert.Spec.Filters == nil {
 		t.Fatal("Filters is nil")
 	}
-	assertStrSlice(t, "Filters.DataCenter", alert.Spec.Filters.DataCenter, []string{"dc1"})
+	assertStrSlice(t, "Filters.DataCenter", alert.Spec.Filters.DataCenter, []string{testDatacenter})
 	// Namespace
 	if alert.Namespace != "monitoring" {
 		t.Errorf("Namespace = %q, want monitoring", alert.Namespace)

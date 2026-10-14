@@ -18,7 +18,6 @@ package export
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
@@ -29,28 +28,20 @@ func buildConnectionResources(opts *Options) []Resource {
 	secretName := opts.ConnectionName + "-api-key"
 
 	secret := &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: opts.Namespace,
-		},
+		APIVersion: "v1",
+		Kind:       kindSecret,
+		Name:       secretName,
+		Namespace:  opts.Namespace,
 		StringData: map[string]string{
 			"api-key": "<REPLACE_WITH_API_KEY>",
 		},
 	}
 
 	conn := &v1alpha1.AxonOpsConnection{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "core.axonops.com/v1alpha1",
-			Kind:       "AxonOpsConnection",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      opts.ConnectionName,
-			Namespace: opts.Namespace,
-		},
+		APIVersion: "core.axonops.com/v1alpha1",
+		Kind:       "AxonOpsConnection",
+		Name:       opts.ConnectionName,
+		Namespace:  opts.Namespace,
 		Spec: v1alpha1.AxonOpsConnectionSpec{
 			OrgID: opts.OrgID,
 			APIKeyRef: v1alpha1.AxonOpsSecretKeyRef{
@@ -75,7 +66,7 @@ func buildConnectionResources(opts *Options) []Resource {
 	}
 
 	return []Resource{
-		{Kind: "Secret", Name: secretName, Object: secret},
+		{Kind: kindSecret, Name: secretName, Object: secret},
 		{Kind: "AxonOpsConnection", Name: opts.ConnectionName, Object: conn},
 	}
 }

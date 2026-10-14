@@ -38,7 +38,7 @@ var _ = Describe("AxonOpsAlertEndpoint Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default",
+			Namespace: testNamespace,
 		}
 		axonopsalertendpoint := &alertsv1alpha1.AxonOpsAlertEndpoint{}
 
@@ -47,16 +47,14 @@ var _ = Describe("AxonOpsAlertEndpoint Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, axonopsalertendpoint)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &alertsv1alpha1.AxonOpsAlertEndpoint{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
+					Name:      resourceName,
+					Namespace: testNamespace,
 					Spec: alertsv1alpha1.AxonOpsAlertEndpointSpec{
-						ConnectionRef: "test-connection",
-						ClusterName:   "test-cluster",
-						ClusterType:   "cassandra",
+						ConnectionRef: testConnectionName,
+						ClusterName:   testClusterName,
+						ClusterType:   testClusterType,
 						Name:          "test-slack-endpoint",
-						Type:          "slack",
+						Type:          testIntegrationSlack,
 						Slack: &alertsv1alpha1.SlackEndpointConfig{
 							URL:     "https://hooks.slack.com/services/test",
 							Channel: "#test-alerts",
@@ -132,16 +130,14 @@ var _ = Describe("AxonOpsAlertEndpoint Controller", func() {
 		It("should set Ready=False with InvalidConfig when type-config mismatch", func() {
 			By("Creating a slack endpoint without slack config")
 			mismatchName := "test-mismatch"
-			mismatchNN := types.NamespacedName{Name: mismatchName, Namespace: "default"}
+			mismatchNN := types.NamespacedName{Name: mismatchName, Namespace: testNamespace}
 			resource := &alertsv1alpha1.AxonOpsAlertEndpoint{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mismatchName,
-					Namespace: "default",
-				},
+				Name:      mismatchName,
+				Namespace: testNamespace,
 				Spec: alertsv1alpha1.AxonOpsAlertEndpointSpec{
-					ConnectionRef: "test-connection",
-					ClusterName:   "test-cluster",
-					ClusterType:   "cassandra",
+					ConnectionRef: testConnectionName,
+					ClusterName:   testClusterName,
+					ClusterType:   testClusterType,
 					Name:          "test-endpoint",
 					Type:          "pagerduty",
 					// PagerDuty config intentionally nil
@@ -167,7 +163,7 @@ var _ = Describe("AxonOpsAlertEndpoint Controller", func() {
 			readyCond := findCondition(updated.Status.Conditions, condTypeReady)
 			Expect(readyCond).NotTo(BeNil())
 			Expect(string(readyCond.Status)).To(Equal("False"))
-			Expect(readyCond.Reason).To(Equal("InvalidConfig"))
+			Expect(readyCond.Reason).To(Equal(reasonInvalidConfig))
 
 			// Cleanup
 			updated.Finalizers = nil

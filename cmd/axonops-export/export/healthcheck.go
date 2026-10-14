@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
@@ -63,14 +61,10 @@ func httpHealthcheckToResource(h axonops.HealthcheckHTTP, opts *Options) Resourc
 	}
 
 	obj := &alertsv1alpha1.AxonOpsHealthcheckHTTP{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "alerts.axonops.com/v1alpha1",
-			Kind:       "AxonOpsHealthcheckHTTP",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: opts.Namespace,
-		},
+		APIVersion: alertsAPIVersion,
+		Kind:       "AxonOpsHealthcheckHTTP",
+		Name:       name,
+		Namespace:  opts.Namespace,
 		Spec: alertsv1alpha1.AxonOpsHealthcheckHTTPSpec{
 			ConnectionRef:       opts.ConnectionName,
 			ClusterName:         opts.ClusterName,
@@ -101,14 +95,10 @@ func tcpHealthcheckToResource(t axonops.HealthcheckTCP, opts *Options) Resource 
 		Kind: "AxonOpsHealthcheckTCP",
 		Name: name,
 		Object: &alertsv1alpha1.AxonOpsHealthcheckTCP{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "alerts.axonops.com/v1alpha1",
-				Kind:       "AxonOpsHealthcheckTCP",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: opts.Namespace,
-			},
+			APIVersion: alertsAPIVersion,
+			Kind:       "AxonOpsHealthcheckTCP",
+			Name:       name,
+			Namespace:  opts.Namespace,
 			Spec: alertsv1alpha1.AxonOpsHealthcheckTCPSpec{
 				ConnectionRef:       opts.ConnectionName,
 				ClusterName:         opts.ClusterName,
@@ -131,14 +121,10 @@ func shellHealthcheckToResource(s axonops.HealthcheckShell, opts *Options) Resou
 		Kind: "AxonOpsHealthcheckShell",
 		Name: name,
 		Object: &alertsv1alpha1.AxonOpsHealthcheckShell{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "alerts.axonops.com/v1alpha1",
-				Kind:       "AxonOpsHealthcheckShell",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: opts.Namespace,
-			},
+			APIVersion: alertsAPIVersion,
+			Kind:       "AxonOpsHealthcheckShell",
+			Name:       name,
+			Namespace:  opts.Namespace,
 			Spec: alertsv1alpha1.AxonOpsHealthcheckShellSpec{
 				ConnectionRef: opts.ConnectionName,
 				ClusterName:   opts.ClusterName,

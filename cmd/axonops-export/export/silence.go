@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
@@ -45,14 +43,10 @@ func exportSilenceWindows(ctx context.Context, client *axonops.Client, opts *Opt
 
 		active := sw.Active
 		obj := &alertsv1alpha1.AxonOpsSilenceWindow{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "alerts.axonops.com/v1alpha1",
-				Kind:       "AxonOpsSilenceWindow",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: opts.Namespace,
-			},
+			APIVersion: alertsAPIVersion,
+			Kind:       "AxonOpsSilenceWindow",
+			Name:       name,
+			Namespace:  opts.Namespace,
 			Spec: alertsv1alpha1.AxonOpsSilenceWindowSpec{
 				ConnectionRef:  opts.ConnectionName,
 				ClusterName:    opts.ClusterName,

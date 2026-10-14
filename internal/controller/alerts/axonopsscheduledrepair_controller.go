@@ -100,7 +100,7 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 	// Validate mutual exclusivity
 	if repair.Spec.SkipPaxos && repair.Spec.PaxosOnly {
 		meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: repair.Generation,
 			Reason:             "ValidationError",
@@ -120,10 +120,10 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: repair.Generation,
-			Reason:             "FailedToResolveConnection",
+			Reason:             reasonFailedToResolveConnection,
 			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		repair.Status.ObservedGeneration = repair.Generation
@@ -160,10 +160,10 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 	if err := apiClient.CreateScheduledRepair(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName, params); err != nil {
 		log.Error(err, "Failed to create scheduled repair")
 		meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: repair.Generation,
-			Reason:             "SyncFailed",
+			Reason:             reasonSyncFailed,
 			Message:            common.SafeConditionMsg("Failed to sync with AxonOps", err),
 		})
 		repair.Status.ObservedGeneration = repair.Generation
@@ -201,10 +201,10 @@ func (r *AxonOpsScheduledRepairReconciler) Reconcile(ctx context.Context, req ct
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Scheduled repair synced with AxonOps",
 	})
-	meta.RemoveStatusCondition(&repair.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&repair.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, repair); err != nil {
 		log.Error(err, "Failed to update status")
@@ -223,10 +223,10 @@ func (r *AxonOpsScheduledRepairReconciler) checkDrift(ctx context.Context, repai
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
 		meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
-			Type:               "DriftCheckFailed",
+			Type:               condTypeDriftCheckFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: repair.Generation,
-			Reason:             "DriftCheckFailed",
+			Reason:             reasonDriftCheckFailed,
 			Message:            common.SafeConditionMsg("Failed to check for drift", err),
 		})
 		if statusErr := r.Status().Update(ctx, repair); statusErr != nil {
@@ -242,10 +242,10 @@ func (r *AxonOpsScheduledRepairReconciler) checkDrift(ctx context.Context, repai
 	}
 	log.Info("Drift detected: scheduled repair no longer exists in AxonOps", "repairID", repair.Status.SyncedRepairID)
 	meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: repair.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Scheduled repair was deleted externally; recreating",
 	})
 	repair.Status.SyncedRepairID = ""

@@ -41,15 +41,13 @@ var _ = Describe("AxonOpsScheduledRepair Controller", func() {
 
 	newRepairCR := func(name string) *alertsv1alpha1.AxonOpsScheduledRepair {
 		return &alertsv1alpha1.AxonOpsScheduledRepair{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: testNamespace,
-			},
+			Name:      name,
+			Namespace: testNamespace,
 			Spec: alertsv1alpha1.AxonOpsScheduledRepairSpec{
 				ConnectionRef:      connName,
 				ClusterName:        testClusterName,
 				ClusterType:        testClusterType,
-				Tag:                "test-repair",
+				Tag:                testRepairTag,
 				ScheduleExpression: "0 0 1 * *",
 			},
 		}
@@ -66,7 +64,7 @@ var _ = Describe("AxonOpsScheduledRepair Controller", func() {
 						{
 							ID: "mock-repair-id",
 							Params: []axonops.ScheduledRepairParams{
-								{Tag: "test-repair", ScheduleExpr: "0 0 1 * *"},
+								{Tag: testRepairTag, ScheduleExpr: "0 0 1 * *"},
 							},
 						},
 					},
@@ -151,7 +149,7 @@ var _ = Describe("AxonOpsScheduledRepair Controller", func() {
 			cr.Spec.Tag = "full-config"
 			cr.Spec.Keyspace = "analytics"
 			cr.Spec.BlacklistedTables = []string{"large_events"}
-			cr.Spec.SpecificDataCenters = []string{"dc1"}
+			cr.Spec.SpecificDataCenters = []string{testDatacenter}
 			cr.Spec.Parallelism = "DC-Aware"
 			cr.Spec.Segmented = true
 			cr.Spec.SegmentsPerNode = 4
@@ -197,7 +195,7 @@ var _ = Describe("AxonOpsScheduledRepair Controller", func() {
 				case http.MethodGet:
 					resp := axonops.ScheduledRepairsResponse{
 						Repairs: []axonops.ScheduledRepairEntry{
-							{ID: "del-id", Params: []axonops.ScheduledRepairParams{{Tag: "test-repair"}}},
+							{ID: "del-id", Params: []axonops.ScheduledRepairParams{{Tag: testRepairTag}}},
 						},
 					}
 					_ = json.NewEncoder(w).Encode(resp)
@@ -257,9 +255,9 @@ var _ = Describe("AxonOpsScheduledRepair Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
-			Expect(failedCond.Reason).To(Equal("FailedToResolveConnection"))
+			Expect(failedCond.Reason).To(Equal(reasonFailedToResolveConnection))
 		})
 	})
 
@@ -293,9 +291,9 @@ var _ = Describe("AxonOpsScheduledRepair Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
-			Expect(failedCond.Reason).To(Equal("SyncFailed"))
+			Expect(failedCond.Reason).To(Equal(reasonSyncFailed))
 		})
 	})
 
@@ -330,7 +328,7 @@ var _ = Describe("AxonOpsScheduledRepair Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("ValidationError"))
 		})

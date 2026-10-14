@@ -47,6 +47,9 @@ import (
 const (
 	backupFinalizerName = "backups.axonops.com/backup-finalizer"
 	condTypeReady       = "Ready"
+	condTypeFailed      = "Failed"
+
+	remoteConfigKeyType = "type"
 )
 
 // AxonOpsBackupReconciler reconciles a AxonOpsBackup object
@@ -111,7 +114,7 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		validationErr := fmt.Errorf("spec.tables and spec.keyspaces are mutually exclusive — specify one or neither")
 		log.Error(validationErr, "Validation failed", "backup", req.NamespacedName)
 		meta.SetStatusCondition(&backup.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: backup.Generation,
 			Reason:             "ValidationError",
@@ -135,7 +138,7 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&backup.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: backup.Generation,
 			Reason:             "FailedToResolveConnection",
@@ -163,7 +166,7 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		log.Error(err, "Failed to build backup payload")
 		meta.SetStatusCondition(&backup.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: backup.Generation,
 			Reason:             "PayloadBuildError",
@@ -192,7 +195,7 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := apiClient.CreateScheduledSnapshot(ctx, backup.Spec.ClusterType, backup.Spec.ClusterName, payload); err != nil {
 		log.Error(err, "Failed to create scheduled snapshot")
 		meta.SetStatusCondition(&backup.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: backup.Generation,
 			Reason:             "SyncFailed",
@@ -229,7 +232,7 @@ func (r *AxonOpsBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		Message:            "Backup schedule synced with AxonOps",
 	})
 	meta.RemoveStatusCondition(&backup.Status.Conditions, "Progressing")
-	meta.RemoveStatusCondition(&backup.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&backup.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, backup); err != nil {
 		log.Error(err, "Failed to update status")
@@ -415,7 +418,7 @@ func (r *AxonOpsBackupReconciler) buildS3RemoteConfig(ctx context.Context, names
 	}
 
 	config := map[string]string{
-		"type":                   "s3",
+		remoteConfigKeyType:      "s3",
 		"provider":               "AWS",
 		"region":                 s3.Region,
 		"acl":                    s3.ACL,
@@ -447,11 +450,11 @@ func (r *AxonOpsBackupReconciler) buildSFTPRemoteConfig(ctx context.Context, nam
 	}
 
 	config := map[string]string{
-		"type":     "sftp",
-		"host":     sftp.Host,
-		"user":     user,
-		"pass":     pass,
-		"key_file": keyFile,
+		remoteConfigKeyType: "sftp",
+		"host":              sftp.Host,
+		"user":              user,
+		"pass":              pass,
+		"key_file":          keyFile,
 	}
 
 	return formatRemoteConfig(config), nil
@@ -468,8 +471,8 @@ func (r *AxonOpsBackupReconciler) buildAzureRemoteConfig(ctx context.Context, na
 	}
 
 	config := map[string]string{
-		"type":    "azureblob",
-		"account": azure.Account,
+		remoteConfigKeyType: "azureblob",
+		"account":           azure.Account,
 	}
 
 	if key != "" {

@@ -164,10 +164,10 @@ func (r *AxonOpsKafkaConnectorReconciler) Reconcile(ctx context.Context, req ctr
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Kafka connector synced with AxonOps",
 	})
-	meta.RemoveStatusCondition(&connector.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&connector.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, connector); err != nil {
 		return ctrl.Result{}, err
@@ -214,7 +214,7 @@ func (r *AxonOpsKafkaConnectorReconciler) handleDeletion(ctx context.Context, co
 
 func (r *AxonOpsKafkaConnectorReconciler) setFailedCondition(ctx context.Context, connector *kafkav1alpha1.AxonOpsKafkaConnector, reason, message string) {
 	meta.SetStatusCondition(&connector.Status.Conditions, metav1.Condition{
-		Type:               "Failed",
+		Type:               condTypeFailed,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: connector.Generation,
 		Reason:             reason,

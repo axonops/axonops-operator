@@ -42,6 +42,17 @@ import (
 const (
 	finalizerName = "alerts.axonops.com/metric-alert-finalizer"
 	condTypeReady = "Ready"
+
+	condTypeFailed           = "Failed"
+	condTypeDriftDetected    = "DriftDetected"
+	condTypeDriftCheckFailed = "DriftCheckFailed"
+
+	reasonSynced                    = "Synced"
+	reasonSyncFailed                = "SyncFailed"
+	reasonDriftCheckFailed          = "DriftCheckFailed"
+	reasonResourceDeleted           = "ResourceDeleted"
+	reasonFailedToResolveConnection = "FailedToResolveConnection"
+	reasonInvalidConfig             = "InvalidConfig"
 )
 
 // AxonOpsMetricAlertReconciler reconciles a AxonOpsMetricAlert object
@@ -112,10 +123,10 @@ func (r *AxonOpsMetricAlertReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
-			Reason:             "FailedToResolveConnection",
+			Reason:             reasonFailedToResolveConnection,
 			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		alert.Status.ObservedGeneration = alert.Generation
@@ -149,7 +160,7 @@ func (r *AxonOpsMetricAlertReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if err != nil {
 		log.Error(err, "Failed to resolve dashboard panel", "dashboard", alert.Spec.Dashboard, "chart", alert.Spec.Chart)
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
 			Reason:             "DashboardResolutionFailed",
@@ -172,10 +183,10 @@ func (r *AxonOpsMetricAlertReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if err != nil {
 		log.Error(err, "Failed to create/update alert rule")
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
-			Reason:             "SyncFailed",
+			Reason:             reasonSyncFailed,
 			Message:            common.SafeConditionMsg("Failed to sync with AxonOps", err),
 		})
 		alert.Status.ObservedGeneration = alert.Generation
@@ -212,13 +223,13 @@ func (r *AxonOpsMetricAlertReconciler) Reconcile(ctx context.Context, req ctrl.R
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Alert rule synced with AxonOps",
 	})
 
 	// Remove Progressing and Failed conditions
 	meta.RemoveStatusCondition(&alert.Status.Conditions, "Progressing")
-	meta.RemoveStatusCondition(&alert.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&alert.Status.Conditions, condTypeFailed)
 
 	// Update the CR status
 	if err := r.Status().Update(ctx, alert); err != nil {
@@ -238,10 +249,10 @@ func (r *AxonOpsMetricAlertReconciler) checkDrift(ctx context.Context, alert *al
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-			Type:               "DriftCheckFailed",
+			Type:               condTypeDriftCheckFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
-			Reason:             "DriftCheckFailed",
+			Reason:             reasonDriftCheckFailed,
 			Message:            common.SafeConditionMsg("Failed to check for drift", err),
 		})
 		if statusErr := r.Status().Update(ctx, alert); statusErr != nil {
@@ -257,10 +268,10 @@ func (r *AxonOpsMetricAlertReconciler) checkDrift(ctx context.Context, alert *al
 	}
 	log.Info("Drift detected: alert rule no longer exists in AxonOps", "alertID", alert.Status.SyncedAlertID)
 	meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: alert.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Alert rule was deleted externally; recreating",
 	})
 	alert.Status.SyncedAlertID = ""

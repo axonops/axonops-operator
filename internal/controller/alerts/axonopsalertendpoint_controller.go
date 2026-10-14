@@ -129,10 +129,9 @@ func (r *AxonOpsAlertEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 	params, err := r.buildParams(ctx, endpoint)
 	if err != nil {
 		log.Error(err, "Failed to build integration params")
-		reason := "InvalidConfig"
+		reason := reasonInvalidConfig
 		retryable := false
-		var cfgErr *endpointConfigError
-		if errors.As(err, &cfgErr) {
+		if cfgErr, ok := errors.AsType[*endpointConfigError](err); ok {
 			reason = cfgErr.Reason
 			retryable = cfgErr.Retryable
 		}
@@ -241,10 +240,10 @@ func (r *AxonOpsAlertEndpointReconciler) checkDrift(ctx context.Context, endpoin
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
 		meta.SetStatusCondition(&endpoint.Status.Conditions, metav1.Condition{
-			Type:               "DriftCheckFailed",
+			Type:               condTypeDriftCheckFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: endpoint.Generation,
-			Reason:             "DriftCheckFailed",
+			Reason:             reasonDriftCheckFailed,
 			Message:            common.SafeConditionMsg("Failed to check for drift", err),
 		})
 		if statusErr := r.Status().Update(ctx, endpoint); statusErr != nil {
@@ -261,10 +260,10 @@ func (r *AxonOpsAlertEndpointReconciler) checkDrift(ctx context.Context, endpoin
 	}
 	log.Info("Drift detected: integration no longer exists in AxonOps", "integrationID", endpoint.Status.SyncedIntegrationID)
 	meta.SetStatusCondition(&endpoint.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: endpoint.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Integration was deleted externally; recreating",
 	})
 	endpoint.Status.SyncedIntegrationID = ""
@@ -343,7 +342,7 @@ func (r *AxonOpsAlertEndpointReconciler) buildParams(ctx context.Context, endpoi
 	case "slack":
 		if endpoint.Spec.Slack == nil {
 			return nil, &endpointConfigError{
-				Reason:  "InvalidConfig",
+				Reason:  reasonInvalidConfig,
 				Message: "spec.slack must be set when spec.type is slack",
 			}
 		}
@@ -362,7 +361,7 @@ func (r *AxonOpsAlertEndpointReconciler) buildParams(ctx context.Context, endpoi
 	case "pagerduty":
 		if endpoint.Spec.PagerDuty == nil {
 			return nil, &endpointConfigError{
-				Reason:  "InvalidConfig",
+				Reason:  reasonInvalidConfig,
 				Message: "spec.pagerDuty must be set when spec.type is pagerduty",
 			}
 		}
@@ -375,7 +374,7 @@ func (r *AxonOpsAlertEndpointReconciler) buildParams(ctx context.Context, endpoi
 	case "opsgenie":
 		if endpoint.Spec.OpsGenie == nil {
 			return nil, &endpointConfigError{
-				Reason:  "InvalidConfig",
+				Reason:  reasonInvalidConfig,
 				Message: "spec.opsGenie must be set when spec.type is opsgenie",
 			}
 		}
@@ -388,7 +387,7 @@ func (r *AxonOpsAlertEndpointReconciler) buildParams(ctx context.Context, endpoi
 	case "servicenow":
 		if endpoint.Spec.ServiceNow == nil {
 			return nil, &endpointConfigError{
-				Reason:  "InvalidConfig",
+				Reason:  reasonInvalidConfig,
 				Message: "spec.serviceNow must be set when spec.type is servicenow",
 			}
 		}
@@ -403,7 +402,7 @@ func (r *AxonOpsAlertEndpointReconciler) buildParams(ctx context.Context, endpoi
 	case "microsoft_teams":
 		if endpoint.Spec.MicrosoftTeams == nil {
 			return nil, &endpointConfigError{
-				Reason:  "InvalidConfig",
+				Reason:  reasonInvalidConfig,
 				Message: "spec.microsoftTeams must be set when spec.type is microsoft_teams",
 			}
 		}
@@ -424,7 +423,7 @@ func (r *AxonOpsAlertEndpointReconciler) buildParams(ctx context.Context, endpoi
 			maps.Copy(params, endpoint.Spec.Params)
 		} else {
 			return nil, &endpointConfigError{
-				Reason:  "InvalidConfig",
+				Reason:  reasonInvalidConfig,
 				Message: fmt.Sprintf("spec.params must be set when spec.type is %s", endpoint.Spec.Type),
 			}
 		}

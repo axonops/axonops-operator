@@ -101,10 +101,10 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cr.Generation,
-			Reason:             "FailedToResolveConnection",
+			Reason:             reasonFailedToResolveConnection,
 			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		cr.Status.ObservedGeneration = cr.Generation
@@ -129,10 +129,10 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err != nil {
 		log.Error(err, "Failed to get log collectors")
 		meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cr.Generation,
-			Reason:             "SyncFailed",
+			Reason:             reasonSyncFailed,
 			Message:            common.SafeConditionMsg("Failed to get log collectors", err),
 		})
 		cr.Status.ObservedGeneration = cr.Generation
@@ -186,10 +186,10 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err := apiClient.PutLogCollectors(ctx, cr.Spec.ClusterType, cr.Spec.ClusterName, collectors); err != nil {
 		log.Error(err, "Failed to put log collectors")
 		meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cr.Generation,
-			Reason:             "SyncFailed",
+			Reason:             reasonSyncFailed,
 			Message:            common.SafeConditionMsg("Failed to sync log collectors", err),
 		})
 		cr.Status.ObservedGeneration = cr.Generation
@@ -218,10 +218,10 @@ func (r *AxonOpsLogCollectorReconciler) Reconcile(ctx context.Context, req ctrl.
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Log collector synced with AxonOps",
 	})
-	meta.RemoveStatusCondition(&cr.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&cr.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, cr); err != nil {
 		return ctrl.Result{}, err
@@ -239,10 +239,10 @@ func (r *AxonOpsLogCollectorReconciler) checkDrift(ctx context.Context, cr *aler
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
 		meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
-			Type:               "DriftCheckFailed",
+			Type:               condTypeDriftCheckFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: cr.Generation,
-			Reason:             "DriftCheckFailed",
+			Reason:             reasonDriftCheckFailed,
 			Message:            common.SafeConditionMsg("Failed to check for drift", err),
 		})
 		if statusErr := r.Status().Update(ctx, cr); statusErr != nil {
@@ -258,10 +258,10 @@ func (r *AxonOpsLogCollectorReconciler) checkDrift(ctx context.Context, cr *aler
 	}
 	log.Info("Drift detected: log collector no longer exists in AxonOps", "uuid", cr.Status.SyncedUUID)
 	meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: cr.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Log collector was deleted externally; recreating",
 	})
 	cr.Status.SyncedUUID = ""

@@ -22,8 +22,6 @@ import (
 	"os"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
@@ -91,14 +89,10 @@ func logAlertRuleToResource(rule axonops.MetricAlertRule, opts *Options) Resourc
 	name := toDNSLabel(rule.Alert)
 
 	alert := &alertsv1alpha1.AxonOpsLogAlert{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "alerts.axonops.com/v1alpha1",
-			Kind:       "AxonOpsLogAlert",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: opts.Namespace,
-		},
+		APIVersion: alertsAPIVersion,
+		Kind:       "AxonOpsLogAlert",
+		Name:       name,
+		Namespace:  opts.Namespace,
 		Spec: alertsv1alpha1.AxonOpsLogAlertSpec{
 			ConnectionRef: opts.ConnectionName,
 			ClusterName:   opts.ClusterName,
@@ -134,7 +128,7 @@ func logAlertRuleToResource(rule axonops.MetricAlertRule, opts *Options) Resourc
 				f.DataCenter = af.Value
 			case "rack":
 				f.Rack = af.Value
-			case "host_id":
+			case filterHostID:
 				f.HostID = af.Value
 			}
 		}
@@ -229,14 +223,10 @@ func metricAlertRuleToResource(rule axonops.MetricAlertRule, opts *Options, pane
 	metric := extractMetric(rule.Expr)
 
 	alert := &alertsv1alpha1.AxonOpsMetricAlert{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "alerts.axonops.com/v1alpha1",
-			Kind:       "AxonOpsMetricAlert",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: opts.Namespace,
-		},
+		APIVersion: alertsAPIVersion,
+		Kind:       kindMetricAlert,
+		Name:       name,
+		Namespace:  opts.Namespace,
 		Spec: alertsv1alpha1.AxonOpsMetricAlertSpec{
 			ConnectionRef: opts.ConnectionName,
 			ClusterName:   opts.ClusterName,
@@ -276,7 +266,7 @@ func metricAlertRuleToResource(rule axonops.MetricAlertRule, opts *Options, pane
 	}
 
 	return Resource{
-		Kind:   "AxonOpsMetricAlert",
+		Kind:   kindMetricAlert,
 		Name:   name,
 		Object: alert,
 	}
@@ -307,7 +297,7 @@ func convertFilters(apiFilters []axonops.MetricAlertFilter) *alertsv1alpha1.Metr
 			f.DataCenter = af.Value
 		case "rack":
 			f.Rack = af.Value
-		case "host_id":
+		case filterHostID:
 			f.HostID = af.Value
 		case "scope":
 			f.Scope = af.Value

@@ -186,8 +186,7 @@ func ClearPausedCondition(conditions *[]metav1.Condition) {
 // API response bodies. For APIErrors only the HTTP status code is shown; for
 // all other errors the full error message is included.
 func SafeConditionMsg(prefix string, err error) string {
-	var apiErr *axonops.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*axonops.APIError](err); ok {
 		return fmt.Sprintf("%s: %s", prefix, apiErr.SafeMessage())
 	}
 	return fmt.Sprintf("%s: %v", prefix, err)

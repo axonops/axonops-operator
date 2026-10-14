@@ -41,6 +41,8 @@ import (
 const (
 	kafkaTopicFinalizerName = "kafka.axonops.com/topic-finalizer"
 	condTypeReady           = "Ready"
+	condTypeFailed          = "Failed"
+	reasonSynced            = "Synced"
 )
 
 // AxonOpsKafkaTopicReconciler reconciles a AxonOpsKafkaTopic object
@@ -170,10 +172,10 @@ func (r *AxonOpsKafkaTopicReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Kafka topic synced with AxonOps",
 	})
-	meta.RemoveStatusCondition(&topic.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&topic.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, topic); err != nil {
 		return ctrl.Result{}, err
@@ -220,7 +222,7 @@ func (r *AxonOpsKafkaTopicReconciler) handleDeletion(ctx context.Context, topic 
 
 func (r *AxonOpsKafkaTopicReconciler) setFailedCondition(ctx context.Context, topic *kafkav1alpha1.AxonOpsKafkaTopic, reason, message string) {
 	meta.SetStatusCondition(&topic.Status.Conditions, metav1.Condition{
-		Type:               "Failed",
+		Type:               condTypeFailed,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: topic.Generation,
 		Reason:             reason,

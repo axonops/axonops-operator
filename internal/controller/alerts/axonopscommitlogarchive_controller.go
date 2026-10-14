@@ -121,7 +121,7 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 	}
 
 	if err := r.validateConfig(archive); err != nil {
-		r.setFailedCondition(ctx, archive, "InvalidConfig", err.Error())
+		r.setFailedCondition(ctx, archive, reasonInvalidConfig, err.Error())
 		return ctrl.Result{}, nil
 	}
 
@@ -182,10 +182,10 @@ func (r *AxonOpsCommitlogArchiveReconciler) Reconcile(ctx context.Context, req c
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Commitlog archive settings synced with AxonOps",
 	})
-	meta.RemoveStatusCondition(&archive.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&archive.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, archive); err != nil {
 		log.Error(err, "Failed to update status")
@@ -203,7 +203,7 @@ func (r *AxonOpsCommitlogArchiveReconciler) checkDrift(ctx context.Context, arch
 	settings, err := apiClient.GetCommitlogArchiveSettings(ctx, archive.Spec.ClusterType, archive.Spec.ClusterName)
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
-		r.setFailedCondition(ctx, archive, "DriftCheckFailed", common.SafeConditionMsg("Failed to check for drift", err))
+		r.setFailedCondition(ctx, archive, reasonDriftCheckFailed, common.SafeConditionMsg("Failed to check for drift", err))
 		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
 	}
 	if len(settings) > 0 {
@@ -212,10 +212,10 @@ func (r *AxonOpsCommitlogArchiveReconciler) checkDrift(ctx context.Context, arch
 	}
 	log.Info("Drift detected: commitlog archive settings no longer exist in AxonOps")
 	meta.SetStatusCondition(&archive.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: archive.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Commitlog archive settings were removed externally; recreating",
 	})
 	archive.Status.LastSyncTime = nil
@@ -364,7 +364,7 @@ func (r *AxonOpsCommitlogArchiveReconciler) handleDeletion(ctx context.Context, 
 
 func (r *AxonOpsCommitlogArchiveReconciler) setFailedCondition(ctx context.Context, archive *alertsv1alpha1.AxonOpsCommitlogArchive, reason, message string) {
 	meta.SetStatusCondition(&archive.Status.Conditions, metav1.Condition{
-		Type:               "Failed",
+		Type:               condTypeFailed,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: archive.Generation,
 		Reason:             reason,

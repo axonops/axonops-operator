@@ -26,6 +26,12 @@ import (
 	"time"
 )
 
+const (
+	testHost   = "localhost"
+	testAPIKey = "key"
+	testOrgID  = "org"
+)
+
 func TestURLPathEscaping_SpecialCharacters(t *testing.T) {
 	var receivedPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -475,10 +481,10 @@ func TestNewClient_Validation(t *testing.T) {
 		apiKey  string
 		wantErr bool
 	}{
-		{"valid", "localhost", "org", "key", false},
-		{"empty host", "", "org", "key", true},
-		{"empty orgID", "localhost", "", "key", true},
-		{"empty apiKey", "localhost", "org", "", true},
+		{"valid", testHost, testOrgID, testAPIKey, false},
+		{"empty host", "", testOrgID, testAPIKey, true},
+		{"empty orgID", testHost, "", testAPIKey, true},
+		{"empty apiKey", testHost, testOrgID, "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

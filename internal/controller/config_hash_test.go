@@ -20,6 +20,11 @@ import (
 	"testing"
 )
 
+const (
+	testDataKey   = "key"
+	testDataValue = "value"
+)
+
 func TestConfigDataHash_DeterministicOrder(t *testing.T) {
 	data := map[string][]byte{
 		"z-key": []byte("z-value"),
@@ -37,8 +42,8 @@ func TestConfigDataHash_DeterministicOrder(t *testing.T) {
 }
 
 func TestConfigDataHash_DifferentContent_DifferentHash(t *testing.T) {
-	data1 := map[string][]byte{"key": []byte("value1")}
-	data2 := map[string][]byte{"key": []byte("value2")}
+	data1 := map[string][]byte{testDataKey: []byte("value1")}
+	data2 := map[string][]byte{testDataKey: []byte("value2")}
 
 	h1 := configDataHash(data1)
 	h2 := configDataHash(data2)
@@ -49,8 +54,8 @@ func TestConfigDataHash_DifferentContent_DifferentHash(t *testing.T) {
 }
 
 func TestConfigDataHash_DifferentKey_DifferentHash(t *testing.T) {
-	data1 := map[string][]byte{"key1": []byte("value")}
-	data2 := map[string][]byte{"key2": []byte("value")}
+	data1 := map[string][]byte{"key1": []byte(testDataValue)}
+	data2 := map[string][]byte{"key2": []byte(testDataValue)}
 
 	h1 := configDataHash(data1)
 	h2 := configDataHash(data2)
@@ -98,7 +103,7 @@ func TestConfigStringDataHash_NilMap_ReturnsEmpty(t *testing.T) {
 }
 
 func TestConfigDataHash_Length(t *testing.T) {
-	data := map[string][]byte{"key": []byte("value")}
+	data := map[string][]byte{testDataKey: []byte(testDataValue)}
 	got := configDataHash(data)
 	if len(got) != 32 {
 		t.Fatalf("expected hash length 32, got %d (%q)", len(got), got)
@@ -107,13 +112,13 @@ func TestConfigDataHash_Length(t *testing.T) {
 
 func TestMergeAnnotationsWithChecksum_PreservesUserAnnotations(t *testing.T) {
 	user := map[string]string{
-		"app.io/custom": "value",
+		"app.io/custom": testDataValue,
 		"another":       "annotation",
 	}
 
 	result := mergeAnnotationsWithChecksum(user, "checksum/config", "abc123")
 
-	if result["app.io/custom"] != "value" {
+	if result["app.io/custom"] != testDataValue {
 		t.Fatalf("expected user annotation preserved, got %q", result["app.io/custom"])
 	}
 	if result["another"] != "annotation" {
@@ -148,14 +153,14 @@ func TestMergeAnnotationsWithChecksum_NilAnnotations(t *testing.T) {
 }
 
 func TestMergeAnnotationsWithChecksum_EmptyChecksum(t *testing.T) {
-	user := map[string]string{"app/custom": "value"}
+	user := map[string]string{"app/custom": testDataValue}
 
 	result := mergeAnnotationsWithChecksum(user, "checksum/config", "")
 
 	if _, ok := result["checksum/config"]; ok {
 		t.Fatal("expected no checksum annotation for empty value")
 	}
-	if result["app/custom"] != "value" {
+	if result["app/custom"] != testDataValue {
 		t.Fatalf("expected user annotation preserved, got %q", result["app/custom"])
 	}
 }

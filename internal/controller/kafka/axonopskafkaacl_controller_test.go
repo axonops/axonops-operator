@@ -37,13 +37,11 @@ var _ = Describe("AxonOpsKafkaACL Controller", func() {
 
 	newACLCR := func(name string) *kafkav1alpha1.AxonOpsKafkaACL {
 		return &kafkav1alpha1.AxonOpsKafkaACL{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: testNamespace,
-			},
+			Name:      name,
+			Namespace: testNamespace,
 			Spec: kafkav1alpha1.AxonOpsKafkaACLSpec{
 				ConnectionRef:       connName,
-				ClusterName:         "test-kafka",
+				ClusterName:         testKafkaClusterName,
 				ResourceType:        "TOPIC",
 				ResourceName:        "my-topic",
 				ResourcePatternType: "LITERAL",
@@ -160,7 +158,7 @@ var _ = Describe("AxonOpsKafkaACL Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("FailedToResolveConnection"))
 		})
@@ -201,7 +199,7 @@ var _ = Describe("AxonOpsKafkaACL Controller", func() {
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(cr.Status.Synced).To(BeFalse())
 
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("CreateFailed"))
 			Expect(failedCond.Message).To(ContainSubstring("status 200"))
@@ -246,7 +244,7 @@ var _ = Describe("AxonOpsKafkaACL Controller", func() {
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(cr.Status.Synced).To(BeFalse())
 
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("CreateFailed"))
 			Expect(failedCond.Message).To(ContainSubstring("status 500"))
@@ -283,7 +281,7 @@ var _ = Describe("AxonOpsKafkaACL Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("CreateFailed"))
 		})
