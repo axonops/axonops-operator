@@ -112,10 +112,10 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		log.Error(err, "Failed to resolve AxonOps API client")
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
-			Reason:             "FailedToResolveConnection",
+			Reason:             reasonFailedToResolveConnection,
 			Message:            common.SafeConditionMsg("Failed to resolve connection", err),
 		})
 		alert.Status.ObservedGeneration = alert.Generation
@@ -152,10 +152,10 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		log.Error(err, "Failed to create/update alert rule")
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-			Type:               "Failed",
+			Type:               condTypeFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
-			Reason:             "SyncFailed",
+			Reason:             reasonSyncFailed,
 			Message:            common.SafeConditionMsg("Failed to sync with AxonOps", err),
 		})
 		alert.Status.ObservedGeneration = alert.Generation
@@ -188,13 +188,13 @@ func (r *AxonOpsLogAlertReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		Type:               logAlertCondTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Alert rule synced with AxonOps",
 	})
 
 	// Remove Progressing and Failed conditions
 	meta.RemoveStatusCondition(&alert.Status.Conditions, "Progressing")
-	meta.RemoveStatusCondition(&alert.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&alert.Status.Conditions, condTypeFailed)
 
 	// Update the CR status
 	if err := r.Status().Update(ctx, alert); err != nil {
@@ -214,10 +214,10 @@ func (r *AxonOpsLogAlertReconciler) checkDrift(ctx context.Context, alert *alert
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
 		meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-			Type:               "DriftCheckFailed",
+			Type:               condTypeDriftCheckFailed,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: alert.Generation,
-			Reason:             "DriftCheckFailed",
+			Reason:             reasonDriftCheckFailed,
 			Message:            common.SafeConditionMsg("Failed to check for drift", err),
 		})
 		if statusErr := r.Status().Update(ctx, alert); statusErr != nil {
@@ -233,10 +233,10 @@ func (r *AxonOpsLogAlertReconciler) checkDrift(ctx context.Context, alert *alert
 	}
 	log.Info("Drift detected: log alert rule no longer exists in AxonOps", "alertID", alert.Status.SyncedAlertID)
 	meta.SetStatusCondition(&alert.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: alert.Generation,
-		Reason:             "ResourceDeleted",
+		Reason:             reasonResourceDeleted,
 		Message:            "Log alert rule was deleted externally; recreating",
 	})
 	alert.Status.SyncedAlertID = ""

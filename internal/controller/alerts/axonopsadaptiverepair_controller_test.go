@@ -25,8 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 )
 
@@ -38,7 +36,7 @@ var _ = Describe("AxonOpsAdaptiveRepair Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default",
+			Namespace: testNamespace,
 		}
 		adaptiveRepair := &alertsv1alpha1.AxonOpsAdaptiveRepair{}
 
@@ -48,14 +46,12 @@ var _ = Describe("AxonOpsAdaptiveRepair Controller", func() {
 			if err != nil && errors.IsNotFound(err) {
 				active := true
 				resource := &alertsv1alpha1.AxonOpsAdaptiveRepair{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
+					Name:      resourceName,
+					Namespace: testNamespace,
 					Spec: alertsv1alpha1.AxonOpsAdaptiveRepairSpec{
-						ConnectionRef: "test-connection",
-						ClusterName:   "test-cluster",
-						ClusterType:   "cassandra",
+						ConnectionRef: testConnectionName,
+						ClusterName:   testClusterName,
+						ClusterType:   testClusterType,
 						Active:        &active,
 					},
 				}
@@ -119,7 +115,7 @@ var _ = Describe("AxonOpsAdaptiveRepair Controller", func() {
 			resource := &alertsv1alpha1.AxonOpsAdaptiveRepair{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
 			Expect(resource.Status.Conditions).NotTo(BeEmpty())
-			failedCond := findCondition(resource.Status.Conditions, "Failed")
+			failedCond := findCondition(resource.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(string(failedCond.Status)).To(Equal("True"))
 			Expect(failedCond.Reason).To(Equal(ReasonConnectionError))

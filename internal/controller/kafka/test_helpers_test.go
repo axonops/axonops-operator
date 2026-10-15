@@ -7,7 +7,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
@@ -17,6 +16,9 @@ const (
 	testOrgID           = "test-org"
 	testNamespace       = "default"
 	nonexistentConnName = "nonexistent-conn"
+
+	testKafkaClusterName = "test-kafka"
+	testConnectorName    = "my-connector"
 )
 
 func createTestConnectionAndSecret(ctx context.Context, connName string, server *httptest.Server) func() {
@@ -26,13 +28,13 @@ func createTestConnectionAndSecret(ctx context.Context, connName string, server 
 	secretName := connName + "-api-key"
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: testNamespace},
-		Data:       map[string][]byte{"api_key": []byte("test-api-key")},
+		Name: secretName, Namespace: testNamespace,
+		Data: map[string][]byte{"api_key": []byte("test-api-key")},
 	}
 	Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
 	conn := &corev1alpha1.AxonOpsConnection{
-		ObjectMeta: metav1.ObjectMeta{Name: connName, Namespace: testNamespace},
+		Name: connName, Namespace: testNamespace,
 		Spec: corev1alpha1.AxonOpsConnectionSpec{
 			OrgID:         testOrgID,
 			APIKeyRef:     corev1alpha1.AxonOpsSecretKeyRef{Name: secretName},

@@ -39,15 +39,13 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 
 	newConnectorCR := func(name string) *kafkav1alpha1.AxonOpsKafkaConnector {
 		return &kafkav1alpha1.AxonOpsKafkaConnector{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: testNamespace,
-			},
+			Name:      name,
+			Namespace: testNamespace,
 			Spec: kafkav1alpha1.AxonOpsKafkaConnectorSpec{
 				ConnectionRef:      connName,
-				ClusterName:        "test-kafka",
+				ClusterName:        testKafkaClusterName,
 				ConnectClusterName: "connect-cluster",
-				Name:               "my-connector",
+				Name:               testConnectorName,
 				Config: map[string]string{
 					"connector.class": "org.apache.kafka.connect.file.FileStreamSourceConnector",
 					"topic":           "test-topic",
@@ -66,7 +64,7 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 					return
 				}
 				resp := axonops.KafkaConnectorResponse{
-					Name: "my-connector",
+					Name: testConnectorName,
 					Type: "source",
 				}
 				w.Header().Set("Content-Type", "application/json")
@@ -121,7 +119,7 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 					deleteCalled.Store(true)
 					w.WriteHeader(http.StatusNoContent)
 				case http.MethodPost:
-					resp := axonops.KafkaConnectorResponse{Name: "my-connector", Type: "source"}
+					resp := axonops.KafkaConnectorResponse{Name: testConnectorName, Type: "source"}
 					w.WriteHeader(http.StatusCreated)
 					_ = json.NewEncoder(w).Encode(resp)
 				default:
@@ -190,7 +188,7 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(cr.Status.Synced).To(BeFalse())
 
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("CreateFailed"))
 			Expect(failedCond.Message).To(ContainSubstring("status 200"))
@@ -235,7 +233,7 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
 			Expect(cr.Status.Synced).To(BeFalse())
 
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("CreateFailed"))
 			Expect(failedCond.Message).To(ContainSubstring("status 500"))
@@ -266,7 +264,7 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal("FailedToResolveConnection"))
 		})
@@ -278,7 +276,7 @@ var _ = Describe("AxonOpsKafkaConnector Controller", func() {
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.Method {
 				case http.MethodPost:
-					resp := axonops.KafkaConnectorResponse{Name: "my-connector", Type: "sink"}
+					resp := axonops.KafkaConnectorResponse{Name: testConnectorName, Type: "sink"}
 					w.WriteHeader(http.StatusCreated)
 					_ = json.NewEncoder(w).Encode(resp)
 				case http.MethodPut:

@@ -22,6 +22,15 @@ import (
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 )
 
+const (
+	testImageGHCR       = "ghcr.io/axonops/img"
+	testImageLocal      = "registry.local/axonops/img"
+	testRegistryLocal   = "registry.local"
+	testRegistryHarbor  = "harbor.internal.com"
+	testInitImageLocal  = "registry.local/library/busybox:1.37.0"
+	testCustomInitImage = "my.io/custom-busybox:2.0"
+)
+
 func TestReplaceImageRegistry(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -31,92 +40,92 @@ func TestReplaceImageRegistry(t *testing.T) {
 	}{
 		{
 			name:        "ExplicitRegistry_SingleSegmentPath",
-			image:       "ghcr.io/axonops/img",
-			newRegistry: "registry.local",
-			want:        "registry.local/axonops/img",
+			image:       testImageGHCR,
+			newRegistry: testRegistryLocal,
+			want:        testImageLocal,
 		},
 		{
 			name:        "ExplicitRegistry_MultiSegmentPath",
 			image:       "registry.axonops.com/axonops-public/axonops-docker/axon-server",
-			newRegistry: "registry.local",
+			newRegistry: testRegistryLocal,
 			want:        "registry.local/axonops-public/axonops-docker/axon-server",
 		},
 		{
 			name:        "ExplicitRegistry_WithPort",
-			image:       "ghcr.io/axonops/img",
+			image:       testImageGHCR,
 			newRegistry: "registry.local:5000",
 			want:        "registry.local:5000/axonops/img",
 		},
 		{
 			name:        "DockerHubImage_FullyQualified",
-			image:       "docker.io/library/busybox:1.37.0",
-			newRegistry: "registry.local",
-			want:        "registry.local/library/busybox:1.37.0",
+			image:       defaultInitImage,
+			newRegistry: testRegistryLocal,
+			want:        testInitImageLocal,
 		},
 		{
 			name:        "DockerHubImage_ShortForm",
 			image:       "busybox:1.37.0",
-			newRegistry: "registry.local",
+			newRegistry: testRegistryLocal,
 			want:        "registry.local/busybox:1.37.0",
 		},
 		{
 			name:        "DockerHubImage_LibraryPath",
 			image:       "library/nginx:latest",
-			newRegistry: "registry.local",
+			newRegistry: testRegistryLocal,
 			want:        "registry.local/library/nginx:latest",
 		},
 		{
 			name:        "EmptyRegistry_ReturnsOriginal",
-			image:       "ghcr.io/axonops/img",
+			image:       testImageGHCR,
 			newRegistry: "",
-			want:        "ghcr.io/axonops/img",
+			want:        testImageGHCR,
 		},
 		{
 			name:        "TrailingSlash_Stripped",
-			image:       "ghcr.io/axonops/img",
+			image:       testImageGHCR,
 			newRegistry: "registry.local/",
-			want:        "registry.local/axonops/img",
+			want:        testImageLocal,
 		},
 		{
 			name:        "RegistryWithPort_ColonInFirstSegment",
 			image:       "localhost:5000/myimg",
-			newRegistry: "registry.local",
+			newRegistry: testRegistryLocal,
 			want:        "registry.local/myimg",
 		},
 		{
 			name:        "ImageOnly_NoTag",
-			image:       "busybox",
-			newRegistry: "registry.local",
+			image:       testImageBusybox,
+			newRegistry: testRegistryLocal,
 			want:        "registry.local/busybox",
 		},
 		{
 			name:        "AllDefaultImages_TimeSeries",
 			image:       defaultTimeseriesImage,
-			newRegistry: "harbor.internal.com",
+			newRegistry: testRegistryHarbor,
 			want:        "harbor.internal.com/axonops/axondb-timeseries",
 		},
 		{
 			name:        "AllDefaultImages_Search",
 			image:       defaultSearchImage,
-			newRegistry: "harbor.internal.com",
+			newRegistry: testRegistryHarbor,
 			want:        "harbor.internal.com/axonops/axondb-search",
 		},
 		{
 			name:        "AllDefaultImages_Server",
 			image:       defaultServerImage,
-			newRegistry: "harbor.internal.com",
+			newRegistry: testRegistryHarbor,
 			want:        "harbor.internal.com/axonops-public/axonops-docker/axon-server",
 		},
 		{
 			name:        "AllDefaultImages_Dashboard",
 			image:       defaultDashboardImage,
-			newRegistry: "harbor.internal.com",
+			newRegistry: testRegistryHarbor,
 			want:        "harbor.internal.com/axonops-public/axonops-docker/axon-dash",
 		},
 		{
 			name:        "AllDefaultImages_InitContainer",
 			image:       defaultInitImage,
-			newRegistry: "harbor.internal.com",
+			newRegistry: testRegistryHarbor,
 			want:        "harbor.internal.com/library/busybox:1.37.0",
 		},
 	}
@@ -141,38 +150,38 @@ func TestResolveImage(t *testing.T) {
 	}{
 		{
 			name:              "ComponentOverride_TakesPrecedence",
-			defaultImage:      "ghcr.io/axonops/img",
-			globalRegistry:    "registry.local",
+			defaultImage:      testImageGHCR,
+			globalRegistry:    testRegistryLocal,
 			componentOverride: "custom.io/my-img",
 			want:              "custom.io/my-img",
 		},
 		{
 			name:              "GlobalRegistry_Applied",
-			defaultImage:      "ghcr.io/axonops/img",
-			globalRegistry:    "registry.local",
+			defaultImage:      testImageGHCR,
+			globalRegistry:    testRegistryLocal,
 			componentOverride: "",
-			want:              "registry.local/axonops/img",
+			want:              testImageLocal,
 		},
 		{
 			name:              "Default_WhenNothingSet",
-			defaultImage:      "ghcr.io/axonops/img",
+			defaultImage:      testImageGHCR,
 			globalRegistry:    "",
 			componentOverride: "",
-			want:              "ghcr.io/axonops/img",
+			want:              testImageGHCR,
 		},
 		{
 			name:              "ComponentOverride_IgnoresGlobalRegistry",
-			defaultImage:      "docker.io/library/busybox:1.37.0",
-			globalRegistry:    "registry.local",
-			componentOverride: "my.io/custom-busybox:2.0",
-			want:              "my.io/custom-busybox:2.0",
+			defaultImage:      defaultInitImage,
+			globalRegistry:    testRegistryLocal,
+			componentOverride: testCustomInitImage,
+			want:              testCustomInitImage,
 		},
 		{
 			name:              "GlobalRegistry_DockerHubImage",
-			defaultImage:      "docker.io/library/busybox:1.37.0",
-			globalRegistry:    "registry.local",
+			defaultImage:      defaultInitImage,
+			globalRegistry:    testRegistryLocal,
 			componentOverride: "",
-			want:              "registry.local/library/busybox:1.37.0",
+			want:              testInitImageLocal,
 		},
 	}
 
@@ -202,20 +211,20 @@ func TestResolveInitImage_ImageRegistry(t *testing.T) {
 			name: "CustomInitImage_TakesPrecedence",
 			server: &corev1alpha1.AxonOpsPlatform{
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
-					ImageRegistry: "registry.local",
-					InitImage:     "my.io/custom-busybox:2.0",
+					ImageRegistry: testRegistryLocal,
+					InitImage:     testCustomInitImage,
 				},
 			},
-			want: "my.io/custom-busybox:2.0",
+			want: testCustomInitImage,
 		},
 		{
 			name: "ImageRegistry_AppliedToDefault",
 			server: &corev1alpha1.AxonOpsPlatform{
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
-					ImageRegistry: "registry.local",
+					ImageRegistry: testRegistryLocal,
 				},
 			},
-			want: "registry.local/library/busybox:1.37.0",
+			want: testInitImageLocal,
 		},
 	}
 

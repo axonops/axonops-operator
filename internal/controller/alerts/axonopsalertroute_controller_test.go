@@ -40,16 +40,14 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 	const connName = "route-conn"
 	newAlertRouteCR := func(name string) *alertsv1alpha1.AxonOpsAlertRoute {
 		return &alertsv1alpha1.AxonOpsAlertRoute{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: testNamespace,
-			},
+			Name:      name,
+			Namespace: testNamespace,
 			Spec: alertsv1alpha1.AxonOpsAlertRouteSpec{
 				ConnectionRef:   connName,
 				ClusterName:     testClusterName,
 				ClusterType:     testClusterType,
 				IntegrationName: "test-slack",
-				IntegrationType: "slack",
+				IntegrationType: testIntegrationSlack,
 				Type:            "metrics",
 				Severity:        "error",
 			},
@@ -62,7 +60,7 @@ var _ = Describe("AxonOpsAlertRoute Controller", func() {
 			Definitions: []axonops.IntegrationDefinition{
 				{
 					ID:     "int-123",
-					Type:   "slack",
+					Type:   testIntegrationSlack,
 					Params: map[string]string{"name": "test-slack"},
 				},
 			},

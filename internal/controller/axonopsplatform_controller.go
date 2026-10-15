@@ -98,12 +98,48 @@ const (
 	componentSearch     = "search"
 	componentServer     = "server"
 	componentDashboard  = "dashboard"
+	componentAgent      = "agent"
+	componentAPI        = "api"
 
 	// Finalizer name for cleanup
 	axonOpsServerFinalizer = "core.axonops.com/finalizer"
 
 	// App managed-by label value
 	appManagedBy = "axonops-operator"
+
+	appName       = "axonops"
+	labelName     = "app.kubernetes.io/name"
+	labelInstance = "app.kubernetes.io/instance"
+
+	condTypeReady            = "Ready"
+	condTypeCertManagerReady = "CertManagerReady"
+
+	portNameHTTP  = "http"
+	portNameCQL   = "cql"
+	portNameAPI   = "api"
+	portNameAgent = "agent"
+
+	volumeData          = "data"
+	volumeConfig        = "config"
+	volumeTLSCerts      = "tls-certs"
+	volumeTimeseriesTLS = "timeseries-tls"
+	volumeSearchTLS     = "search-tls"
+
+	secretKeyPassword = "password"
+	keystoreJKS       = "keystore.jks"
+	truststoreJKS     = "truststore.jks"
+	keystoreP12       = "keystore.p12"
+	truststoreP12     = "truststore.p12"
+	tlsCertKey        = "tls.crt"
+	tlsKeyKey         = "tls.key"
+	tlsCAKey          = "ca.crt"
+
+	bashPath                = "/bin/bash"
+	bashExecFlag            = "-ec"
+	healthcheckReadinessCmd = "/usr/local/bin/healthcheck.sh readiness"
+	serverHealthzPath       = "/api/v1/healthz"
+
+	stringTrue = "true"
 )
 
 // AxonOpsPlatformReconciler reconciles a AxonOpsPlatform object
@@ -195,9 +231,7 @@ func (r *AxonOpsPlatformReconciler) ensureClusterIssuer(
 
 	issuerName := r.ClusterIssuerName
 	clusterIssuer := &certmanagerv1.ClusterIssuer{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: issuerName,
-		},
+		Name: issuerName,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, clusterIssuer, func() error {
@@ -209,18 +243,14 @@ func (r *AxonOpsPlatformReconciler) ensureClusterIssuer(
 		if server.Spec.TLS.Issuer.CASecretRef != "" {
 			// CA-backed issuer
 			clusterIssuer.Spec = certmanagerv1.IssuerSpec{
-				IssuerConfig: certmanagerv1.IssuerConfig{
-					CA: &certmanagerv1.CAIssuer{
-						SecretName: server.Spec.TLS.Issuer.CASecretRef,
-					},
+				CA: &certmanagerv1.CAIssuer{
+					SecretName: server.Spec.TLS.Issuer.CASecretRef,
 				},
 			}
 		} else {
 			// SelfSigned issuer
 			clusterIssuer.Spec = certmanagerv1.IssuerSpec{
-				IssuerConfig: certmanagerv1.IssuerConfig{
-					SelfSigned: &certmanagerv1.SelfSignedIssuer{},
-				},
+				SelfSigned: &certmanagerv1.SelfSignedIssuer{},
 			}
 		}
 		return nil
@@ -349,7 +379,7 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		msg := fmt.Sprintf("spec.server must be configured when %s is enabled", strings.Join(components, " and "))
 		log.Info("Invalid configuration: database components require server", "components", components)
 		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
+			Type:               condTypeReady,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: server.Generation,
 			Reason:             "InvalidConfiguration",
@@ -362,6 +392,9 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
+	// Kept outside server.Status so it survives the re-fetches before each status update.
+	var certManagerReadyCond *metav1.Condition
+
 	// Verify cert-manager CRDs are available (only needed for internal database/workload resources)
 	if needsInternalResources(server) {
 		if !r.isCertManagerAvailable() {
@@ -370,7 +403,7 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
 			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-				Type:               "CertManagerReady",
+				Type:               condTypeCertManagerReady,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: server.Generation,
 				Reason:             "CertManagerUnavailable",
@@ -392,7 +425,7 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 					return ctrl.Result{}, client.IgnoreNotFound(fetchErr)
 				}
 				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-					Type:               "CertManagerReady",
+					Type:               condTypeCertManagerReady,
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: server.Generation,
 					Reason:             "FailedToCreateIssuer",
@@ -406,13 +439,14 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		}
-		meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-			Type:               "CertManagerReady",
+		certManagerReadyCond = &metav1.Condition{
+			Type:               condTypeCertManagerReady,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: server.Generation,
 			Reason:             "IssuerReady",
 			Message:            "cert-manager is available and ClusterIssuer is ready",
-		})
+		}
+		meta.SetStatusCondition(&server.Status.Conditions, *certManagerReadyCond)
 	}
 
 	var timeSeriesSecretName, searchSecretName string
@@ -436,7 +470,7 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				msg := "external TimeSeries requires credentials: set spec.timeSeries.authentication.secretRef or spec.timeSeries.authentication.username/password"
 				log.Info("Missing external TimeSeries credentials", "message", msg)
 				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-					Type:               "Ready",
+					Type:               condTypeReady,
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: server.Generation,
 					Reason:             "MissingExternalCredentials",
@@ -457,7 +491,7 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				msg := "external TimeSeries TLS verification requires spec.timeSeries.external.tls.certSecretRef"
 				log.Info("Missing external TimeSeries TLS cert secret", "message", msg)
 				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-					Type:               "Ready",
+					Type:               condTypeReady,
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: server.Generation,
 					Reason:             "MissingExternalTLSCert",
@@ -527,7 +561,7 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				msg := "external Search requires credentials: set spec.search.authentication.secretRef or spec.search.authentication.username/password"
 				log.Info("Missing external Search credentials", "message", msg)
 				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-					Type:               "Ready",
+					Type:               condTypeReady,
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: server.Generation,
 					Reason:             "MissingExternalCredentials",
@@ -548,7 +582,7 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				msg := "external Search TLS verification requires spec.search.external.tls.certSecretRef"
 				log.Info("Missing external Search TLS cert secret", "message", msg)
 				meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
-					Type:               "Ready",
+					Type:               condTypeReady,
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: server.Generation,
 					Reason:             "MissingExternalTLSCert",
@@ -620,6 +654,9 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if err := r.Get(ctx, req.NamespacedName, server); err != nil {
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
+			if certManagerReadyCond != nil {
+				meta.SetStatusCondition(&server.Status.Conditions, *certManagerReadyCond)
+			}
 			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
 				Type:               "ServerReady",
 				Status:             metav1.ConditionFalse,
@@ -663,6 +700,9 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if err := r.Get(ctx, req.NamespacedName, server); err != nil {
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
+			if certManagerReadyCond != nil {
+				meta.SetStatusCondition(&server.Status.Conditions, *certManagerReadyCond)
+			}
 			meta.SetStatusCondition(&server.Status.Conditions, metav1.Condition{
 				Type:               "DashboardReady",
 				Status:             metav1.ConditionFalse,
@@ -704,6 +744,11 @@ func (r *AxonOpsPlatformReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		server.Status.SearchSecretName != searchSecretName ||
 		server.Status.TimeSeriesCertSecretName != timeSeriesCertSecretName ||
 		server.Status.SearchCertSecretName != searchCertSecretName
+
+	if certManagerReadyCond != nil {
+		meta.SetStatusCondition(&server.Status.Conditions, *certManagerReadyCond)
+		statusChanged = true
+	}
 
 	// Set ServerReady and DashboardReady conditions — must be done after the
 	// re-fetch above, otherwise SetStatusCondition changes are discarded.
@@ -962,10 +1007,8 @@ func (r *AxonOpsPlatformReconciler) ensureAuthenticationSecret(
 
 	// Create or update the secret
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: server.Namespace,
-		},
+		Name:      secretName,
+		Namespace: server.Namespace,
 	}
 
 	retain := r.shouldRetainCredentials(ctx, storageConfig)
@@ -1043,7 +1086,7 @@ func (r *AxonOpsPlatformReconciler) ensureKeystorePasswordSecret(
 	var password string
 	if err == nil {
 		// Secret exists, preserve existing password
-		if p, ok := existingSecret.Data["password"]; ok {
+		if p, ok := existingSecret.Data[secretKeyPassword]; ok {
 			password = string(p)
 		}
 	} else if !errors.IsNotFound(err) {
@@ -1059,10 +1102,8 @@ func (r *AxonOpsPlatformReconciler) ensureKeystorePasswordSecret(
 	}
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: server.Namespace,
-		},
+		Name:      secretName,
+		Namespace: server.Namespace,
 	}
 
 	retain := r.shouldRetainCredentials(ctx, storageConfig)
@@ -1079,7 +1120,7 @@ func (r *AxonOpsPlatformReconciler) ensureKeystorePasswordSecret(
 		secret.Labels = r.buildLabels(server, component)
 		secret.Type = corev1.SecretTypeOpaque
 		secret.Data = map[string][]byte{
-			"password": []byte(password),
+			secretKeyPassword: []byte(password),
 		}
 		return nil
 	}, "secret")
@@ -1118,10 +1159,8 @@ func (r *AxonOpsPlatformReconciler) ensureTLSCertificate(
 
 	// Build the Certificate resource
 	cert := &certmanagerv1.Certificate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      certName,
-			Namespace: server.Namespace,
-		},
+		Name:      certName,
+		Namespace: server.Namespace,
 	}
 
 	err := r.createOrUpdate(ctx, cert, func() error {
@@ -1134,7 +1173,7 @@ func (r *AxonOpsPlatformReconciler) ensureTLSCertificate(
 		if cert.Labels == nil {
 			cert.Labels = make(map[string]string)
 		}
-		cert.Labels["app.kubernetes.io/name"] = "axonops"
+		cert.Labels[labelName] = appName
 		cert.Labels["app.kubernetes.io/component"] = component
 		cert.Labels["app.kubernetes.io/managed-by"] = appManagedBy
 
@@ -1193,7 +1232,7 @@ func (r *AxonOpsPlatformReconciler) ensureTLSCertificate(
 						LocalObjectReference: cmmeta.LocalObjectReference{
 							Name: keystorePasswordSecretName,
 						},
-						Key: "password",
+						Key: secretKeyPassword,
 					},
 				},
 				PKCS12: &certmanagerv1.PKCS12Keystore{
@@ -1202,7 +1241,7 @@ func (r *AxonOpsPlatformReconciler) ensureTLSCertificate(
 						LocalObjectReference: cmmeta.LocalObjectReference{
 							Name: keystorePasswordSecretName,
 						},
-						Key: "password",
+						Key: secretKeyPassword,
 					},
 				},
 			}
@@ -1235,14 +1274,14 @@ func (r *AxonOpsPlatformReconciler) cleanupInternalSearchResources(ctx context.C
 		name string
 		obj  client.Object
 	}{
-		{name: "Search StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentSearch), Namespace: server.Namespace}}},
-		{name: "Search headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentSearch), Namespace: server.Namespace}}},
-		{name: "Search ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentSearch), Namespace: server.Namespace}}},
-		{name: "Search TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentSearch), Namespace: server.Namespace}}},
+		{name: "Search StatefulSet", obj: &appsv1.StatefulSet{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentSearch), Namespace: server.Namespace}},
+		{name: "Search headless Service", obj: &corev1.Service{
+			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentSearch), Namespace: server.Namespace}},
+		{name: "Search ClusterIP Service", obj: &corev1.Service{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentSearch), Namespace: server.Namespace}},
+		{name: "Search TLS Secret", obj: &corev1.Secret{
+			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentSearch), Namespace: server.Namespace}},
 	}
 
 	// Only delete credential secrets if storage is not retained
@@ -1251,13 +1290,13 @@ func (r *AxonOpsPlatformReconciler) cleanupInternalSearchResources(ctx context.C
 			struct {
 				name string
 				obj  client.Object
-			}{name: "Search auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("%s-%s-auth", server.Name, componentSearch), Namespace: server.Namespace}}},
+			}{name: "Search auth Secret", obj: &corev1.Secret{
+				Name: fmt.Sprintf("%s-%s-auth", server.Name, componentSearch), Namespace: server.Namespace}},
 			struct {
 				name string
 				obj  client.Object
-			}{name: "Search keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentSearch), Namespace: server.Namespace}}},
+			}{name: "Search keystore Secret", obj: &corev1.Secret{
+				Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentSearch), Namespace: server.Namespace}},
 		)
 	} else {
 		log.Info("Retaining Search credential secrets for reuse with existing PVCs")
@@ -1293,14 +1332,14 @@ func (r *AxonOpsPlatformReconciler) cleanupInternalTimeseriesResources(ctx conte
 		name string
 		obj  client.Object
 	}{
-		{name: "TimeSeries StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries ClusterIP Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}}},
-		{name: "TimeSeries TLS Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+		{name: "TimeSeries StatefulSet", obj: &appsv1.StatefulSet{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}},
+		{name: "TimeSeries headless Service", obj: &corev1.Service{
+			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentTimeseries), Namespace: server.Namespace}},
+		{name: "TimeSeries ClusterIP Service", obj: &corev1.Service{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentTimeseries), Namespace: server.Namespace}},
+		{name: "TimeSeries TLS Secret", obj: &corev1.Secret{
+			Name: fmt.Sprintf("%s-%s-tls", server.Name, componentTimeseries), Namespace: server.Namespace}},
 	}
 
 	// Only delete credential secrets if storage is not retained
@@ -1309,13 +1348,13 @@ func (r *AxonOpsPlatformReconciler) cleanupInternalTimeseriesResources(ctx conte
 			struct {
 				name string
 				obj  client.Object
-			}{name: "TimeSeries auth Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+			}{name: "TimeSeries auth Secret", obj: &corev1.Secret{
+				Name: fmt.Sprintf("%s-%s-auth", server.Name, componentTimeseries), Namespace: server.Namespace}},
 			struct {
 				name string
 				obj  client.Object
-			}{name: "TimeSeries keystore Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentTimeseries), Namespace: server.Namespace}}},
+			}{name: "TimeSeries keystore Secret", obj: &corev1.Secret{
+				Name: fmt.Sprintf("%s-%s-keystore-password", server.Name, componentTimeseries), Namespace: server.Namespace}},
 		)
 	} else {
 		log.Info("Retaining TimeSeries credential secrets for reuse with existing PVCs")
@@ -1343,18 +1382,18 @@ func (r *AxonOpsPlatformReconciler) cleanupServerResources(ctx context.Context, 
 		name string
 		obj  client.Object
 	}{
-		{name: "Server StatefulSet", obj: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}}},
-		{name: "Server headless Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentServer), Namespace: server.Namespace}}},
-		{name: "Server agent Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-agent", server.Name, componentServer), Namespace: server.Namespace}}},
-		{name: "Server API Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s-api", server.Name, componentServer), Namespace: server.Namespace}}},
-		{name: "Server config Secret", obj: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}}},
-		{name: "Server ServiceAccount", obj: &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}}},
+		{name: "Server StatefulSet", obj: &appsv1.StatefulSet{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}},
+		{name: "Server headless Service", obj: &corev1.Service{
+			Name: fmt.Sprintf("%s-%s-headless", server.Name, componentServer), Namespace: server.Namespace}},
+		{name: "Server agent Service", obj: &corev1.Service{
+			Name: fmt.Sprintf("%s-%s-agent", server.Name, componentServer), Namespace: server.Namespace}},
+		{name: "Server API Service", obj: &corev1.Service{
+			Name: fmt.Sprintf("%s-%s-api", server.Name, componentServer), Namespace: server.Namespace}},
+		{name: "Server config Secret", obj: &corev1.Secret{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}},
+		{name: "Server ServiceAccount", obj: &corev1.ServiceAccount{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentServer), Namespace: server.Namespace}},
 	}
 
 	for _, item := range resourcesToDelete {
@@ -1379,14 +1418,14 @@ func (r *AxonOpsPlatformReconciler) cleanupDashboardResources(ctx context.Contex
 		name string
 		obj  client.Object
 	}{
-		{name: "Dashboard Deployment", obj: &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}}},
-		{name: "Dashboard Service", obj: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}}},
-		{name: "Dashboard ConfigMap", obj: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}}},
-		{name: "Dashboard ServiceAccount", obj: &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}}},
+		{name: "Dashboard Deployment", obj: &appsv1.Deployment{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}},
+		{name: "Dashboard Service", obj: &corev1.Service{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}},
+		{name: "Dashboard ConfigMap", obj: &corev1.ConfigMap{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}},
+		{name: "Dashboard ServiceAccount", obj: &corev1.ServiceAccount{
+			Name: fmt.Sprintf("%s-%s", server.Name, componentDashboard), Namespace: server.Namespace}},
 	}
 
 	for _, item := range resourcesToDelete {
@@ -1591,10 +1630,8 @@ func (r *AxonOpsPlatformReconciler) ensureServiceAccount(ctx context.Context, se
 	name := fmt.Sprintf("%s-%s", server.Name, component)
 
 	sa := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	err := r.createOrUpdate(ctx, sa, func() error {
@@ -1603,7 +1640,7 @@ func (r *AxonOpsPlatformReconciler) ensureServiceAccount(ctx context.Context, se
 		}
 
 		sa.Labels = r.buildLabels(server, component)
-		sa.AutomountServiceAccountToken = ptr(false)
+		sa.AutomountServiceAccountToken = new(false)
 		return nil
 	}, "serviceaccount")
 
@@ -1621,10 +1658,8 @@ func (r *AxonOpsPlatformReconciler) ensureHeadlessService(ctx context.Context, s
 	name := fmt.Sprintf("%s-%s-headless", server.Name, component)
 
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	err := r.createOrUpdate(ctx, svc, func() error {
@@ -1634,7 +1669,7 @@ func (r *AxonOpsPlatformReconciler) ensureHeadlessService(ctx context.Context, s
 
 		svc.Labels = r.buildLabels(server, component)
 		svc.Annotations = map[string]string{
-			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+			"service.alpha.kubernetes.io/tolerate-unready-endpoints": stringTrue,
 		}
 
 		svc.Spec = corev1.ServiceSpec{
@@ -1661,10 +1696,8 @@ func (r *AxonOpsPlatformReconciler) ensureService(ctx context.Context, server *c
 	name := fmt.Sprintf("%s-%s", server.Name, component)
 
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	err := r.createOrUpdate(ctx, svc, func() error {
@@ -1694,7 +1727,7 @@ func (r *AxonOpsPlatformReconciler) getServicePorts(component string, headless b
 	switch component {
 	case componentSearch:
 		return []corev1.ServicePort{
-			{Name: "http", Port: 9200, TargetPort: intstr.FromString("http"), Protocol: corev1.ProtocolTCP},
+			{Name: portNameHTTP, Port: 9200, TargetPort: intstr.FromString(portNameHTTP), Protocol: corev1.ProtocolTCP},
 			{Name: "transport", Port: 9300, TargetPort: intstr.FromString("transport"), Protocol: corev1.ProtocolTCP},
 			{Name: "metrics", Port: 9600, TargetPort: intstr.FromString("metrics"), Protocol: corev1.ProtocolTCP},
 		}
@@ -1702,22 +1735,22 @@ func (r *AxonOpsPlatformReconciler) getServicePorts(component string, headless b
 		if headless {
 			// Headless service only needs the CQL port for DNS resolution
 			return []corev1.ServicePort{
-				{Name: "cql", Port: 9042, TargetPort: intstr.FromString("cql"), Protocol: corev1.ProtocolTCP},
+				{Name: portNameCQL, Port: 9042, TargetPort: intstr.FromString(portNameCQL), Protocol: corev1.ProtocolTCP},
 			}
 		}
 		return []corev1.ServicePort{
-			{Name: "cql", Port: 9042, TargetPort: intstr.FromString("cql"), Protocol: corev1.ProtocolTCP},
+			{Name: portNameCQL, Port: 9042, TargetPort: intstr.FromString(portNameCQL), Protocol: corev1.ProtocolTCP},
 			{Name: "jmx", Port: 7199, TargetPort: intstr.FromString("jmx"), Protocol: corev1.ProtocolTCP},
 		}
 	case componentServer:
 		// Server has both ports in its headless service
 		return []corev1.ServicePort{
-			{Name: "api", Port: 8080, TargetPort: intstr.FromString("api"), Protocol: corev1.ProtocolTCP},
-			{Name: "agent", Port: 1888, TargetPort: intstr.FromString("agent"), Protocol: corev1.ProtocolTCP},
+			{Name: portNameAPI, Port: 8080, TargetPort: intstr.FromString(portNameAPI), Protocol: corev1.ProtocolTCP},
+			{Name: portNameAgent, Port: 1888, TargetPort: intstr.FromString(portNameAgent), Protocol: corev1.ProtocolTCP},
 		}
 	case componentDashboard:
 		return []corev1.ServicePort{
-			{Name: "http", Port: 3000, TargetPort: intstr.FromString("http"), Protocol: corev1.ProtocolTCP},
+			{Name: portNameHTTP, Port: 3000, TargetPort: intstr.FromString(portNameHTTP), Protocol: corev1.ProtocolTCP},
 		}
 	default:
 		return nil
@@ -1767,10 +1800,8 @@ func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Cont
 	fqdn := fmt.Sprintf("%s.%s.svc.cluster.local", name, server.Namespace)
 
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 	// Use OrgName from Server spec if available, otherwise fall back to CR name
 	orgName := strings.ToLower(server.Name)
@@ -1790,7 +1821,7 @@ func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Cont
 
 		sts.Labels = labels
 		sts.Spec = appsv1.StatefulSetSpec{
-			Replicas:            ptr(int32(1)),
+			Replicas:            new(int32(1)),
 			ServiceName:         headlessSvcName,
 			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
@@ -1808,7 +1839,7 @@ func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Cont
 					ServiceAccountName: name,
 					NodeSelector:       ts.NodeSelector,
 					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup: ptr(int64(999)),
+						FSGroup: new(int64(999)),
 					},
 					Containers: []corev1.Container{
 						{
@@ -1816,22 +1847,20 @@ func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Cont
 							Image:           fmt.Sprintf("%s:%s", image, tag),
 							ImagePullPolicy: pullPolicy,
 							SecurityContext: &corev1.SecurityContext{
-								ReadOnlyRootFilesystem: ptr(false),
-								RunAsNonRoot:           ptr(true),
-								RunAsUser:              ptr(int64(999)),
+								ReadOnlyRootFilesystem: new(false),
+								RunAsNonRoot:           new(true),
+								RunAsUser:              new(int64(999)),
 							},
 							Env: r.buildTimeseriesEnv(fqdn, orgName, heapSize, keystorePasswordSecretName, timeseriesAuthSecretName, ts.Env),
 							Ports: []corev1.ContainerPort{
-								{Name: "cql", ContainerPort: 9042, Protocol: corev1.ProtocolTCP},
+								{Name: portNameCQL, ContainerPort: 9042, Protocol: corev1.ProtocolTCP},
 								{Name: "jmx", ContainerPort: 7199, Protocol: corev1.ProtocolTCP},
 								{Name: "intra-node", ContainerPort: 7000, Protocol: corev1.ProtocolTCP},
 								{Name: "intra-node-tls", ContainerPort: 7001, Protocol: corev1.ProtocolTCP},
 							},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/bash", "-ec", "/usr/local/bin/healthcheck.sh liveness"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{bashPath, bashExecFlag, "/usr/local/bin/healthcheck.sh liveness"},
 								},
 								InitialDelaySeconds: 60,
 								PeriodSeconds:       30,
@@ -1840,10 +1869,8 @@ func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Cont
 								FailureThreshold:    5,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/bash", "-ec", "/usr/local/bin/healthcheck.sh readiness"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{bashPath, bashExecFlag, healthcheckReadinessCmd},
 								},
 								InitialDelaySeconds: 60,
 								PeriodSeconds:       10,
@@ -1854,11 +1881,11 @@ func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Cont
 							Resources: ts.Resources,
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "data",
+									Name:      volumeData,
 									MountPath: "/var/lib/cassandra",
 								},
 								{
-									Name:      "tls-certs",
+									Name:      volumeTLSCerts,
 									MountPath: "/etc/cassandra/certs",
 									ReadOnly:  true,
 								},
@@ -1867,19 +1894,17 @@ func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Cont
 					},
 					Volumes: append([]corev1.Volume{
 						{
-							Name: "tls-certs",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: tlsCertSecretName,
-									Items: []corev1.KeyToPath{
-										{Key: "keystore.jks", Path: "keystore.jks"},
-										{Key: "truststore.jks", Path: "truststore.jks"},
-										{Key: "keystore.p12", Path: "keystore.p12"},
-										{Key: "truststore.p12", Path: "truststore.p12"},
-										{Key: "tls.crt", Path: "tls.crt"},
-										{Key: "tls.key", Path: "tls.key"},
-										{Key: "ca.crt", Path: "ca.crt"},
-									},
+							Name: volumeTLSCerts,
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: tlsCertSecretName,
+								Items: []corev1.KeyToPath{
+									{Key: keystoreJKS, Path: keystoreJKS},
+									{Key: truststoreJKS, Path: truststoreJKS},
+									{Key: keystoreP12, Path: keystoreP12},
+									{Key: truststoreP12, Path: truststoreP12},
+									{Key: tlsCertKey, Path: tlsCertKey},
+									{Key: tlsKeyKey, Path: tlsKeyKey},
+									{Key: tlsCAKey, Path: tlsCAKey},
 								},
 							},
 						},
@@ -1888,10 +1913,8 @@ func (r *AxonOpsPlatformReconciler) ensureTimeseriesStatefulSet(ctx context.Cont
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "data",
-						Labels: labels,
-					},
+					Name:   volumeData,
+					Labels: labels,
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -1956,8 +1979,8 @@ func (r *AxonOpsPlatformReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, 
 			Name: "CASSANDRA_KEYSTORE_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: keystorePasswordSecretName},
-					Key:                  "password",
+					Name: keystorePasswordSecretName,
+					Key:  secretKeyPassword,
 				},
 			},
 		},
@@ -1965,8 +1988,8 @@ func (r *AxonOpsPlatformReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, 
 			Name: "CASSANDRA_TRUSTSTORE_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: keystorePasswordSecretName},
-					Key:                  "password",
+					Name: keystorePasswordSecretName,
+					Key:  secretKeyPassword,
 				},
 			},
 		},
@@ -1976,18 +1999,18 @@ func (r *AxonOpsPlatformReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, 
 		{Name: "CASSANDRA_CA_CERT_PATH", Value: "/etc/cassandra/certs/ca.crt"},
 		// Common TLS configuration
 		{Name: "CASSANDRA_INTERNODE_ENCRYPTION", Value: "all"},
-		{Name: "CASSANDRA_INTERNODE_CLIENT_AUTH", Value: "true"},
+		{Name: "CASSANDRA_INTERNODE_CLIENT_AUTH", Value: stringTrue},
 		{Name: "CASSANDRA_INTERNODE_PROTOCOL", Value: "TLS"},
-		{Name: "CASSANDRA_CLIENT_ENCRYPTION_ENABLED", Value: "true"},
-		{Name: "CASSANDRA_CLIENT_ENCRYPTION_OPTIONAL", Value: "true"},
+		{Name: "CASSANDRA_CLIENT_ENCRYPTION_ENABLED", Value: stringTrue},
+		{Name: "CASSANDRA_CLIENT_ENCRYPTION_OPTIONAL", Value: stringTrue},
 		{Name: "CASSANDRA_CLIENT_PROTOCOL", Value: "TLS"},
 		// Database credentials
 		{
 			Name: "AXONOPS_DB_USER",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: authSecretName},
-					Key:                  timeseriesSecretKeyUser,
+					Name: authSecretName,
+					Key:  timeseriesSecretKeyUser,
 				},
 			},
 		},
@@ -1995,8 +2018,8 @@ func (r *AxonOpsPlatformReconciler) buildTimeseriesEnv(fqdn, orgName, heapSize, 
 			Name: "AXONOPS_DB_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: authSecretName},
-					Key:                  timeseriesSecretKeyPassword,
+					Name: authSecretName,
+					Key:  timeseriesSecretKeyPassword,
 				},
 			},
 		},
@@ -2083,10 +2106,8 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 	podAnnotations := mergeAnnotationsWithChecksum(search.Annotations, "checksum/auth", authHash)
 
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, sts, func() error {
@@ -2103,7 +2124,7 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 		}
 
 		sts.Spec = appsv1.StatefulSetSpec{
-			Replicas:            ptr(int32(1)),
+			Replicas:            new(int32(1)),
 			ServiceName:         headlessSvcName,
 			PodManagementPolicy: appsv1.ParallelPodManagement,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
@@ -2120,11 +2141,11 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 				Spec: corev1.PodSpec{
 					ServiceAccountName:            name,
 					NodeSelector:                  search.NodeSelector,
-					AutomountServiceAccountToken:  ptr(false),
-					TerminationGracePeriodSeconds: ptr(int64(120)),
+					AutomountServiceAccountToken:  new(false),
+					TerminationGracePeriodSeconds: new(int64(120)),
 					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup:   ptr(int64(999)),
-						RunAsUser: ptr(int64(999)),
+						FSGroup:   new(int64(999)),
+						RunAsUser: new(int64(999)),
 					},
 					Affinity: &corev1.Affinity{
 						PodAntiAffinity: &corev1.PodAntiAffinity{
@@ -2136,14 +2157,14 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 										LabelSelector: &metav1.LabelSelector{
 											MatchExpressions: []metav1.LabelSelectorRequirement{
 												{
-													Key:      "app.kubernetes.io/instance",
+													Key:      labelInstance,
 													Operator: metav1.LabelSelectorOpIn,
 													Values:   []string{server.Name},
 												},
 												{
-													Key:      "app.kubernetes.io/name",
+													Key:      labelName,
 													Operator: metav1.LabelSelectorOpIn,
-													Values:   []string{"axonops"},
+													Values:   []string{appName},
 												},
 											},
 										},
@@ -2160,11 +2181,11 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 							Command:         []string{"sh", "-c"},
 							Args:            []string{"chown -R 999:999 /var/lib/opensearch"},
 							SecurityContext: &corev1.SecurityContext{
-								RunAsUser: ptr(int64(0)),
+								RunAsUser: new(int64(0)),
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "data",
+									Name:      volumeData,
 									MountPath: "/var/lib/opensearch",
 								},
 							},
@@ -2176,23 +2197,21 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 							Image:           fmt.Sprintf("%s:%s", image, tag),
 							ImagePullPolicy: pullPolicy,
 							SecurityContext: &corev1.SecurityContext{
-								RunAsNonRoot: ptr(true),
-								RunAsUser:    ptr(int64(999)),
+								RunAsNonRoot: new(true),
+								RunAsUser:    new(int64(999)),
 								Capabilities: &corev1.Capabilities{
 									Add: []corev1.Capability{"IPC_LOCK"},
 								},
 							},
 							Env: r.buildSearchEnv(fqdn, headlessSvcName, clusterName, heapSize, keystorePasswordSecretName, searchAuthSecretName, search.Env),
 							Ports: []corev1.ContainerPort{
-								{Name: "http", ContainerPort: 9200, Protocol: corev1.ProtocolTCP},
+								{Name: portNameHTTP, ContainerPort: 9200, Protocol: corev1.ProtocolTCP},
 								{Name: "transport", ContainerPort: 9300, Protocol: corev1.ProtocolTCP},
 								{Name: "metrics", ContainerPort: 9600, Protocol: corev1.ProtocolTCP},
 							},
 							StartupProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/bash", "-ec", "/usr/local/bin/healthcheck.sh startup"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{bashPath, bashExecFlag, "/usr/local/bin/healthcheck.sh startup"},
 								},
 								InitialDelaySeconds: 20,
 								PeriodSeconds:       10,
@@ -2200,10 +2219,8 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 								FailureThreshold:    30,
 							},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/bash", "-ec", "/usr/local/bin/healthcheck.sh readiness"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{bashPath, bashExecFlag, healthcheckReadinessCmd},
 								},
 								InitialDelaySeconds: 30,
 								PeriodSeconds:       20,
@@ -2212,10 +2229,8 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 								FailureThreshold:    10,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/bash", "-ec", "/usr/local/bin/healthcheck.sh readiness"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{bashPath, bashExecFlag, healthcheckReadinessCmd},
 								},
 								PeriodSeconds:    5,
 								TimeoutSeconds:   3,
@@ -2224,11 +2239,11 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 							Resources: search.Resources,
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "data",
+									Name:      volumeData,
 									MountPath: "/usr/share/opensearch/data",
 								},
 								{
-									Name:      "tls-certs",
+									Name:      volumeTLSCerts,
 									MountPath: "/etc/opensearch/certs",
 									ReadOnly:  true,
 								},
@@ -2237,19 +2252,17 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 					},
 					Volumes: append([]corev1.Volume{
 						{
-							Name: "tls-certs",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: tlsCertSecretName,
-									Items: []corev1.KeyToPath{
-										{Key: "keystore.jks", Path: "keystore.jks"},
-										{Key: "truststore.jks", Path: "truststore.jks"},
-										{Key: "keystore.p12", Path: "keystore.p12"},
-										{Key: "truststore.p12", Path: "truststore.p12"},
-										{Key: "tls.crt", Path: "tls.crt"},
-										{Key: "tls.key", Path: "tls.key"},
-										{Key: "ca.crt", Path: "ca.crt"},
-									},
+							Name: volumeTLSCerts,
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: tlsCertSecretName,
+								Items: []corev1.KeyToPath{
+									{Key: keystoreJKS, Path: keystoreJKS},
+									{Key: truststoreJKS, Path: truststoreJKS},
+									{Key: keystoreP12, Path: keystoreP12},
+									{Key: truststoreP12, Path: truststoreP12},
+									{Key: tlsCertKey, Path: tlsCertKey},
+									{Key: tlsKeyKey, Path: tlsKeyKey},
+									{Key: tlsCAKey, Path: tlsCAKey},
 								},
 							},
 						},
@@ -2258,10 +2271,8 @@ func (r *AxonOpsPlatformReconciler) ensureSearchStatefulSet(ctx context.Context,
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "data",
-						Labels: labels,
-					},
+					Name:   volumeData,
+					Labels: labels,
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -2321,8 +2332,8 @@ func (r *AxonOpsPlatformReconciler) buildSearchEnv(fqdn, headlessSvc, clusterNam
 			Name: "OPENSEARCH_KEYSTORE_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: keystorePasswordSecretName},
-					Key:                  "password",
+					Name: keystorePasswordSecretName,
+					Key:  secretKeyPassword,
 				},
 			},
 		},
@@ -2330,8 +2341,8 @@ func (r *AxonOpsPlatformReconciler) buildSearchEnv(fqdn, headlessSvc, clusterNam
 			Name: "OPENSEARCH_TRUSTSTORE_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: keystorePasswordSecretName},
-					Key:                  "password",
+					Name: keystorePasswordSecretName,
+					Key:  secretKeyPassword,
 				},
 			},
 		},
@@ -2343,8 +2354,8 @@ func (r *AxonOpsPlatformReconciler) buildSearchEnv(fqdn, headlessSvc, clusterNam
 			Name: "AXONOPS_SEARCH_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: searchAuthSecretName},
-					Key:                  "AXONOPS_SEARCH_PASSWORD",
+					Name: searchAuthSecretName,
+					Key:  "AXONOPS_SEARCH_PASSWORD",
 				},
 			},
 		},
@@ -2352,8 +2363,8 @@ func (r *AxonOpsPlatformReconciler) buildSearchEnv(fqdn, headlessSvc, clusterNam
 			Name: "AXONOPS_SEARCH_USER",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: searchAuthSecretName},
-					Key:                  "AXONOPS_SEARCH_USER",
+					Name: searchAuthSecretName,
+					Key:  "AXONOPS_SEARCH_USER",
 				},
 			},
 		},
@@ -2439,10 +2450,8 @@ func (r *AxonOpsPlatformReconciler) ensureServerAgentService(ctx context.Context
 	name := fmt.Sprintf("%s-%s-agent", server.Name, componentServer)
 
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
@@ -2451,14 +2460,14 @@ func (r *AxonOpsPlatformReconciler) ensureServerAgentService(ctx context.Context
 		}
 
 		labels := r.buildLabels(server, componentServer)
-		labels["app.kubernetes.io/component"] = "agent"
+		labels["app.kubernetes.io/component"] = componentAgent
 		svc.Labels = labels
 
 		svc.Spec = corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: r.buildSelectorLabels(server, componentServer),
 			Ports: []corev1.ServicePort{
-				{Name: "agent", Port: 1888, TargetPort: intstr.FromString("agent"), Protocol: corev1.ProtocolTCP},
+				{Name: portNameAgent, Port: 1888, TargetPort: intstr.FromString(portNameAgent), Protocol: corev1.ProtocolTCP},
 			},
 		}
 		return nil
@@ -2478,10 +2487,8 @@ func (r *AxonOpsPlatformReconciler) ensureServerApiService(ctx context.Context, 
 	name := fmt.Sprintf("%s-%s-api", server.Name, componentServer)
 
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
@@ -2490,14 +2497,14 @@ func (r *AxonOpsPlatformReconciler) ensureServerApiService(ctx context.Context, 
 		}
 
 		labels := r.buildLabels(server, componentServer)
-		labels["app.kubernetes.io/component"] = "api"
+		labels["app.kubernetes.io/component"] = componentAPI
 		svc.Labels = labels
 
 		svc.Spec = corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: r.buildSelectorLabels(server, componentServer),
 			Ports: []corev1.ServicePort{
-				{Name: "api", Port: 8080, TargetPort: intstr.FromString("api"), Protocol: corev1.ProtocolTCP},
+				{Name: portNameAPI, Port: 8080, TargetPort: intstr.FromString(portNameAPI), Protocol: corev1.ProtocolTCP},
 			},
 		}
 		return nil
@@ -2565,10 +2572,8 @@ func (r *AxonOpsPlatformReconciler) ensureServerConfigSecret(ctx context.Context
 	contentHash := configStringDataHash(map[string]string{"axon-server.yml": configYAML})
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
@@ -2852,9 +2857,9 @@ func (r *AxonOpsPlatformReconciler) buildServerEnv(server *corev1alpha1.AxonOpsP
 			Name: "SEARCH_DB_USERNAME",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: searchSecretName},
-					Key:                  searchSecretKeyUser,
-					Optional:             ptr(true),
+					Name:     searchSecretName,
+					Key:      searchSecretKeyUser,
+					Optional: new(true),
 				},
 			},
 		},
@@ -2862,9 +2867,9 @@ func (r *AxonOpsPlatformReconciler) buildServerEnv(server *corev1alpha1.AxonOpsP
 			Name: "SEARCH_DB_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: searchSecretName},
-					Key:                  searchSecretKeyPassword,
-					Optional:             ptr(true),
+					Name:     searchSecretName,
+					Key:      searchSecretKeyPassword,
+					Optional: new(true),
 				},
 			},
 		},
@@ -2873,9 +2878,9 @@ func (r *AxonOpsPlatformReconciler) buildServerEnv(server *corev1alpha1.AxonOpsP
 			Name: "CQL_USERNAME",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: timeseriesSecretName},
-					Key:                  timeseriesSecretKeyUser,
-					Optional:             ptr(true),
+					Name:     timeseriesSecretName,
+					Key:      timeseriesSecretKeyUser,
+					Optional: new(true),
 				},
 			},
 		},
@@ -2883,9 +2888,9 @@ func (r *AxonOpsPlatformReconciler) buildServerEnv(server *corev1alpha1.AxonOpsP
 			Name: "CQL_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: timeseriesSecretName},
-					Key:                  timeseriesSecretKeyPassword,
-					Optional:             ptr(true),
+					Name:     timeseriesSecretName,
+					Key:      timeseriesSecretKeyPassword,
+					Optional: new(true),
 				},
 			},
 		},
@@ -2932,10 +2937,8 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 	podAnnotations := mergeAnnotationsWithChecksum(srv.Annotations, "checksum/config", configHash)
 
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, sts, func() error {
@@ -2947,13 +2950,13 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 		selectorLabels := r.buildSelectorLabels(server, componentServer)
 
 		serverCmd := []string{"/usr/share/axonops/axon-server", "-o", "stdout"}
-		if isDebug := os.Getenv("DEBUG"); isDebug == "true" {
+		if isDebug := os.Getenv("DEBUG"); isDebug == stringTrue {
 			serverCmd = append(serverCmd, "-v", "1")
 		}
 
 		sts.Labels = labels
 		sts.Spec = appsv1.StatefulSetSpec{
-			Replicas:    ptr(int32(1)),
+			Replicas:    new(int32(1)),
 			ServiceName: headlessSvcName,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: appsv1.RollingUpdateStatefulSetStrategyType,
@@ -2977,10 +2980,10 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 							Command:         []string{"sh", "-c"},
 							Args:            []string{fmt.Sprintf("chown -R %d:%d /var/lib/axonops", serverUserID, serverGroupID)},
 							SecurityContext: &corev1.SecurityContext{
-								RunAsUser: ptr(int64(0)),
+								RunAsUser: new(int64(0)),
 							},
 							VolumeMounts: []corev1.VolumeMount{
-								{Name: "data", MountPath: "/var/lib/axonops"},
+								{Name: volumeData, MountPath: "/var/lib/axonops"},
 							},
 						},
 					},
@@ -2991,24 +2994,22 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 							ImagePullPolicy: pullPolicy,
 							Command:         serverCmd,
 							SecurityContext: &corev1.SecurityContext{
-								ReadOnlyRootFilesystem: ptr(false),
-								RunAsNonRoot:           ptr(true),
-								RunAsUser:              ptr(serverUserID),
+								ReadOnlyRootFilesystem: new(false),
+								RunAsNonRoot:           new(true),
+								RunAsUser:              new(serverUserID),
 								Capabilities: &corev1.Capabilities{
 									Drop: []corev1.Capability{"ALL"},
 								},
 							},
 							Env: r.buildServerEnv(server, srv.Env),
 							Ports: []corev1.ContainerPort{
-								{Name: "api", ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
-								{Name: "agent", ContainerPort: 1888, Protocol: corev1.ProtocolTCP},
+								{Name: portNameAPI, ContainerPort: 8080, Protocol: corev1.ProtocolTCP},
+								{Name: portNameAgent, ContainerPort: 1888, Protocol: corev1.ProtocolTCP},
 							},
 							StartupProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/api/v1/healthz",
-										Port: intstr.FromString("api"),
-									},
+								HTTPGet: &corev1.HTTPGetAction{
+									Path: serverHealthzPath,
+									Port: intstr.FromString(portNameAPI),
 								},
 								InitialDelaySeconds: 0,
 								PeriodSeconds:       2,
@@ -3016,11 +3017,9 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 								FailureThreshold:    60,
 							},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/api/v1/healthz",
-										Port: intstr.FromString("api"),
-									},
+								HTTPGet: &corev1.HTTPGetAction{
+									Path: serverHealthzPath,
+									Port: intstr.FromString(portNameAPI),
 								},
 								InitialDelaySeconds: 30,
 								PeriodSeconds:       10,
@@ -3028,11 +3027,9 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 								FailureThreshold:    3,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/api/v1/healthz",
-										Port: intstr.FromString("api"),
-									},
+								HTTPGet: &corev1.HTTPGetAction{
+									Path: serverHealthzPath,
+									Port: intstr.FromString(portNameAPI),
 								},
 								InitialDelaySeconds: 10,
 								PeriodSeconds:       5,
@@ -3042,27 +3039,27 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 							Resources: srv.Resources,
 							VolumeMounts: func() []corev1.VolumeMount {
 								mounts := []corev1.VolumeMount{
-									{Name: "config", MountPath: "/etc/axonops"},
+									{Name: volumeConfig, MountPath: "/etc/axonops"},
 									{Name: "logs", MountPath: "/var/log/axonops"},
-									{Name: "data", MountPath: "/var/lib/axonops"},
+									{Name: volumeData, MountPath: "/var/lib/axonops"},
 								}
 								// Mount timeseries TLS certs: internal uses cert-manager secret,
 								// external uses user-provided CertSecretRef when verification is required.
 								if !isTimeSeriesExternal(server) {
-									mounts = append(mounts, corev1.VolumeMount{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true})
+									mounts = append(mounts, corev1.VolumeMount{Name: volumeTimeseriesTLS, MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true})
 								} else if server.Spec.TimeSeries != nil {
 									tsTLS := server.Spec.TimeSeries.External.TLS
 									if tsTLS.Enabled && !tsTLS.InsecureSkipVerify && tsTLS.CertSecretRef != "" {
-										mounts = append(mounts, corev1.VolumeMount{Name: "timeseries-tls", MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true})
+										mounts = append(mounts, corev1.VolumeMount{Name: volumeTimeseriesTLS, MountPath: "/etc/axonops/certs/timeseries", ReadOnly: true})
 									}
 								}
 								// Mount search TLS certs: same pattern as timeseries above.
 								if !isSearchExternal(server) {
-									mounts = append(mounts, corev1.VolumeMount{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true})
+									mounts = append(mounts, corev1.VolumeMount{Name: volumeSearchTLS, MountPath: "/etc/axonops/certs/search", ReadOnly: true})
 								} else if server.Spec.Search != nil {
 									searchTLS := server.Spec.Search.External.TLS
 									if searchTLS.Enabled && !searchTLS.InsecureSkipVerify && searchTLS.CertSecretRef != "" {
-										mounts = append(mounts, corev1.VolumeMount{Name: "search-tls", MountPath: "/etc/axonops/certs/search", ReadOnly: true})
+										mounts = append(mounts, corev1.VolumeMount{Name: volumeSearchTLS, MountPath: "/etc/axonops/certs/search", ReadOnly: true})
 									}
 								}
 								return mounts
@@ -3072,18 +3069,14 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 					Volumes: func() []corev1.Volume {
 						volumes := []corev1.Volume{
 							{
-								Name: "config",
-								VolumeSource: corev1.VolumeSource{
-									Secret: &corev1.SecretVolumeSource{
-										SecretName: configSecretName,
-									},
+								Name: volumeConfig,
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: configSecretName,
 								},
 							},
 							{
-								Name: "logs",
-								VolumeSource: corev1.VolumeSource{
-									EmptyDir: &corev1.EmptyDirVolumeSource{},
-								},
+								Name:     "logs",
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
 						}
 						// timeseries-tls volume: for internal components use the cert-manager
@@ -3091,15 +3084,13 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 						// user-supplied CertSecretRef.
 						if !isTimeSeriesExternal(server) {
 							volumes = append(volumes, corev1.Volume{
-								Name: "timeseries-tls",
-								VolumeSource: corev1.VolumeSource{
-									Secret: &corev1.SecretVolumeSource{
-										SecretName: timeseriesTLSSecretName,
-										Items: []corev1.KeyToPath{
-											{Key: "ca.crt", Path: "ca.crt"},
-											{Key: "tls.crt", Path: "tls.crt"},
-											{Key: "tls.key", Path: "tls.key"},
-										},
+								Name: volumeTimeseriesTLS,
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: timeseriesTLSSecretName,
+									Items: []corev1.KeyToPath{
+										{Key: tlsCAKey, Path: tlsCAKey},
+										{Key: tlsCertKey, Path: tlsCertKey},
+										{Key: tlsKeyKey, Path: tlsKeyKey},
 									},
 								},
 							})
@@ -3107,15 +3098,13 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 							tsTLS := server.Spec.TimeSeries.External.TLS
 							if tsTLS.Enabled && !tsTLS.InsecureSkipVerify && tsTLS.CertSecretRef != "" {
 								volumes = append(volumes, corev1.Volume{
-									Name: "timeseries-tls",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											SecretName: tsTLS.CertSecretRef,
-											Items: []corev1.KeyToPath{
-												{Key: "ca.crt", Path: "ca.crt"},
-												{Key: "tls.crt", Path: "tls.crt"},
-												{Key: "tls.key", Path: "tls.key"},
-											},
+									Name: volumeTimeseriesTLS,
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: tsTLS.CertSecretRef,
+										Items: []corev1.KeyToPath{
+											{Key: tlsCAKey, Path: tlsCAKey},
+											{Key: tlsCertKey, Path: tlsCertKey},
+											{Key: tlsKeyKey, Path: tlsKeyKey},
 										},
 									},
 								})
@@ -3124,15 +3113,13 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 						// search-tls volume: same pattern as timeseries above.
 						if !isSearchExternal(server) {
 							volumes = append(volumes, corev1.Volume{
-								Name: "search-tls",
-								VolumeSource: corev1.VolumeSource{
-									Secret: &corev1.SecretVolumeSource{
-										SecretName: searchTLSSecretName,
-										Items: []corev1.KeyToPath{
-											{Key: "ca.crt", Path: "ca.crt"},
-											{Key: "tls.crt", Path: "tls.crt"},
-											{Key: "tls.key", Path: "tls.key"},
-										},
+								Name: volumeSearchTLS,
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: searchTLSSecretName,
+									Items: []corev1.KeyToPath{
+										{Key: tlsCAKey, Path: tlsCAKey},
+										{Key: tlsCertKey, Path: tlsCertKey},
+										{Key: tlsKeyKey, Path: tlsKeyKey},
 									},
 								},
 							})
@@ -3140,15 +3127,13 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 							searchTLS := server.Spec.Search.External.TLS
 							if searchTLS.Enabled && !searchTLS.InsecureSkipVerify && searchTLS.CertSecretRef != "" {
 								volumes = append(volumes, corev1.Volume{
-									Name: "search-tls",
-									VolumeSource: corev1.VolumeSource{
-										Secret: &corev1.SecretVolumeSource{
-											SecretName: searchTLS.CertSecretRef,
-											Items: []corev1.KeyToPath{
-												{Key: "ca.crt", Path: "ca.crt"},
-												{Key: "tls.crt", Path: "tls.crt"},
-												{Key: "tls.key", Path: "tls.key"},
-											},
+									Name: volumeSearchTLS,
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: searchTLS.CertSecretRef,
+										Items: []corev1.KeyToPath{
+											{Key: tlsCAKey, Path: tlsCAKey},
+											{Key: tlsCertKey, Path: tlsCertKey},
+											{Key: tlsKeyKey, Path: tlsKeyKey},
 										},
 									},
 								})
@@ -3160,10 +3145,8 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "data",
-						Labels: labels,
-					},
+					Name:   volumeData,
+					Labels: labels,
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -3205,8 +3188,8 @@ func (r *AxonOpsPlatformReconciler) ensureServerStatefulSet(ctx context.Context,
 // buildLabels builds standard labels for a component
 func (r *AxonOpsPlatformReconciler) buildLabels(server *corev1alpha1.AxonOpsPlatform, component string) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/name":       "axonops",
-		"app.kubernetes.io/instance":   server.Name,
+		labelName:                      appName,
+		labelInstance:                  server.Name,
 		"app.kubernetes.io/component":  component,
 		"app.kubernetes.io/managed-by": appManagedBy,
 	}
@@ -3244,7 +3227,7 @@ func (r *AxonOpsPlatformReconciler) shouldRetainCredentials(ctx context.Context,
 			return false
 		}
 		for i := range scList.Items {
-			if scList.Items[i].Annotations["storageclass.kubernetes.io/is-default-class"] == "true" {
+			if scList.Items[i].Annotations["storageclass.kubernetes.io/is-default-class"] == stringTrue {
 				scName = scList.Items[i].Name
 				break
 			}
@@ -3266,8 +3249,8 @@ func (r *AxonOpsPlatformReconciler) shouldRetainCredentials(ctx context.Context,
 // buildSelectorLabels builds selector labels for a component
 func (r *AxonOpsPlatformReconciler) buildSelectorLabels(server *corev1alpha1.AxonOpsPlatform, component string) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/name":      "axonops",
-		"app.kubernetes.io/instance":  server.Name,
+		labelName:                     appName,
+		labelInstance:                 server.Name,
 		"app.kubernetes.io/component": component,
 	}
 }
@@ -3341,10 +3324,8 @@ axon-dash:
 	contentHash := configStringDataHash(configData)
 
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
@@ -3396,10 +3377,8 @@ func (r *AxonOpsPlatformReconciler) ensureDashboardDeployment(ctx context.Contex
 	podAnnotations := mergeAnnotationsWithChecksum(dash.Annotations, "checksum/config", configHash)
 
 	deploy := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: server.Namespace,
-		},
+		Name:      name,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, deploy, func() error {
@@ -3430,15 +3409,13 @@ func (r *AxonOpsPlatformReconciler) ensureDashboardDeployment(ctx context.Contex
 							Image:           fmt.Sprintf("%s:%s", image, tag),
 							ImagePullPolicy: pullPolicy,
 							Ports: []corev1.ContainerPort{
-								{Name: "http", ContainerPort: 3000, Protocol: corev1.ProtocolTCP},
+								{Name: portNameHTTP, ContainerPort: 3000, Protocol: corev1.ProtocolTCP},
 							},
 							Env: dash.Env,
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/",
-										Port: intstr.FromString("http"),
-									},
+								HTTPGet: &corev1.HTTPGetAction{
+									Path: "/",
+									Port: intstr.FromString(portNameHTTP),
 								},
 								InitialDelaySeconds: 10,
 								PeriodSeconds:       10,
@@ -3446,11 +3423,9 @@ func (r *AxonOpsPlatformReconciler) ensureDashboardDeployment(ctx context.Contex
 								FailureThreshold:    3,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/",
-										Port: intstr.FromString("http"),
-									},
+								HTTPGet: &corev1.HTTPGetAction{
+									Path: "/",
+									Port: intstr.FromString(portNameHTTP),
 								},
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       5,
@@ -3459,7 +3434,7 @@ func (r *AxonOpsPlatformReconciler) ensureDashboardDeployment(ctx context.Contex
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "config",
+									Name:      volumeConfig,
 									MountPath: "/etc/axonops",
 									ReadOnly:  true,
 								},
@@ -3469,13 +3444,9 @@ func (r *AxonOpsPlatformReconciler) ensureDashboardDeployment(ctx context.Contex
 					},
 					Volumes: []corev1.Volume{
 						{
-							Name: "config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: configMapName,
-									},
-								},
+							Name: volumeConfig,
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								Name: configMapName,
 							},
 						},
 					},
@@ -3533,18 +3504,16 @@ func (r *AxonOpsPlatformReconciler) ensureIngress(ctx context.Context, server *c
 
 		rules = append(rules, networkingv1.IngressRule{
 			Host: host,
-			IngressRuleValue: networkingv1.IngressRuleValue{
-				HTTP: &networkingv1.HTTPIngressRuleValue{
-					Paths: []networkingv1.HTTPIngressPath{
-						{
-							Path:     path,
-							PathType: &pathType,
-							Backend: networkingv1.IngressBackend{
-								Service: &networkingv1.IngressServiceBackend{
-									Name: svcName,
-									Port: networkingv1.ServiceBackendPort{
-										Number: servicePort,
-									},
+			HTTP: &networkingv1.HTTPIngressRuleValue{
+				Paths: []networkingv1.HTTPIngressPath{
+					{
+						Path:     path,
+						PathType: &pathType,
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: svcName,
+								Port: networkingv1.ServiceBackendPort{
+									Number: servicePort,
 								},
 							},
 						},
@@ -3555,10 +3524,8 @@ func (r *AxonOpsPlatformReconciler) ensureIngress(ctx context.Context, server *c
 	}
 
 	ingress := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ingressName,
-			Namespace: server.Namespace,
-		},
+		Name:      ingressName,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, ingress, func() error {
@@ -3625,10 +3592,8 @@ func (r *AxonOpsPlatformReconciler) ensureHTTPRoute(ctx context.Context, server 
 	}
 
 	httpRoute := &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      routeName,
-			Namespace: server.Namespace,
-		},
+		Name:      routeName,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, httpRoute, func() error {
@@ -3666,12 +3631,8 @@ func (r *AxonOpsPlatformReconciler) ensureHTTPRoute(ctx context.Context, server 
 			{
 				BackendRefs: []gatewayv1.HTTPBackendRef{
 					{
-						BackendRef: gatewayv1.BackendRef{
-							BackendObjectReference: gatewayv1.BackendObjectReference{
-								Name: gatewayv1.ObjectName(serviceName),
-								Port: &portNum,
-							},
-						},
+						Name: gatewayv1.ObjectName(serviceName),
+						Port: &portNum,
 					},
 				},
 			},
@@ -3699,10 +3660,8 @@ func (r *AxonOpsPlatformReconciler) ensureGateway(ctx context.Context, server *c
 	}
 
 	gateway := &gatewayv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gatewayName,
-			Namespace: server.Namespace,
-		},
+		Name:      gatewayName,
+		Namespace: server.Namespace,
 	}
 
 	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, gateway, func() error {
@@ -3796,11 +3755,6 @@ func (r *AxonOpsPlatformReconciler) ensureServerApiGateway(ctx context.Context, 
 
 	// Create HTTPRoute
 	return r.ensureHTTPRoute(ctx, server, routeName, serviceName, 8080, componentServer, server.Spec.Server.ApiGateway)
-}
-
-// ptr returns a pointer to the given value
-func ptr[T any](v T) *T {
-	return &v
 }
 
 // resolveInitImage returns the init container image to use.

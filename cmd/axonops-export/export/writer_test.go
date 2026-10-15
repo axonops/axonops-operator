@@ -26,9 +26,9 @@ import (
 
 func TestWriteDryRun(t *testing.T) {
 	resources := []Resource{
-		{Kind: "AxonOpsMetricAlert", Name: "alert-1"},
-		{Kind: "AxonOpsMetricAlert", Name: "alert-2"},
-		{Kind: "Secret", Name: "my-secret"},
+		{Kind: kindMetricAlert, Name: testAlertName},
+		{Kind: kindMetricAlert, Name: "alert-2"},
+		{Kind: kindSecret, Name: testSecretName},
 	}
 
 	var buf bytes.Buffer
@@ -53,15 +53,15 @@ func TestWriteDir(t *testing.T) {
 	outDir := filepath.Join(dir, "exported")
 
 	resources := []Resource{
-		{Kind: "Secret", Name: "my-secret", Object: map[string]any{
-			"apiVersion": "v1",
-			"kind":       "Secret",
-			"metadata":   map[string]any{"name": "my-secret"},
+		{Kind: kindSecret, Name: testSecretName, Object: map[string]any{
+			fieldAPIVersion: "v1",
+			fieldKind:       kindSecret,
+			"metadata":      map[string]any{"name": testSecretName},
 		}},
-		{Kind: "AxonOpsMetricAlert", Name: "alert-1", Object: map[string]any{
-			"apiVersion": "alerts.axonops.com/v1alpha1",
-			"kind":       "AxonOpsMetricAlert",
-			"metadata":   map[string]any{"name": "alert-1"},
+		{Kind: kindMetricAlert, Name: testAlertName, Object: map[string]any{
+			fieldAPIVersion: alertsAPIVersion,
+			fieldKind:       kindMetricAlert,
+			"metadata":      map[string]any{"name": testAlertName},
 		}},
 	}
 
@@ -96,13 +96,13 @@ func TestWriteStream(t *testing.T) {
 	outFile := filepath.Join(dir, "out.yaml")
 
 	resources := []Resource{
-		{Kind: "Secret", Name: "s1", Object: map[string]any{
-			"apiVersion": "v1",
-			"kind":       "Secret",
+		{Kind: kindSecret, Name: "s1", Object: map[string]any{
+			fieldAPIVersion: "v1",
+			fieldKind:       kindSecret,
 		}},
-		{Kind: "AxonOpsMetricAlert", Name: "a1", Object: map[string]any{
-			"apiVersion": "alerts.axonops.com/v1alpha1",
-			"kind":       "AxonOpsMetricAlert",
+		{Kind: kindMetricAlert, Name: "a1", Object: map[string]any{
+			fieldAPIVersion: alertsAPIVersion,
+			fieldKind:       kindMetricAlert,
 		}},
 	}
 
@@ -119,10 +119,10 @@ func TestWriteStream(t *testing.T) {
 	if !strings.Contains(content, "---") {
 		t.Error("multi-doc YAML should contain ---")
 	}
-	if !strings.Contains(content, "Secret") {
+	if !strings.Contains(content, kindSecret) {
 		t.Error("output should contain Secret")
 	}
-	if !strings.Contains(content, "AxonOpsMetricAlert") {
+	if !strings.Contains(content, kindMetricAlert) {
 		t.Error("output should contain AxonOpsMetricAlert")
 	}
 }

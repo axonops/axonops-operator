@@ -25,8 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 )
 
@@ -38,7 +36,7 @@ var _ = Describe("AxonOpsCommitlogArchive Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default",
+			Namespace: testNamespace,
 		}
 		commitlogArchive := &alertsv1alpha1.AxonOpsCommitlogArchive{}
 
@@ -47,17 +45,15 @@ var _ = Describe("AxonOpsCommitlogArchive Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, commitlogArchive)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &alertsv1alpha1.AxonOpsCommitlogArchive{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
+					Name:      resourceName,
+					Namespace: testNamespace,
 					Spec: alertsv1alpha1.AxonOpsCommitlogArchiveSpec{
-						ConnectionRef: "test-connection",
-						ClusterName:   "test-cluster",
-						ClusterType:   "cassandra",
+						ConnectionRef: testConnectionName,
+						ClusterName:   testClusterName,
+						ClusterType:   testClusterType,
 						RemoteType:    "local",
 						RemotePath:    "/mnt/commitlogs",
-						Datacenters:   []string{"dc1"},
+						Datacenters:   []string{testDatacenter},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -115,7 +111,7 @@ var _ = Describe("AxonOpsCommitlogArchive Controller", func() {
 			resource := &alertsv1alpha1.AxonOpsCommitlogArchive{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
 			Expect(resource.Status.Conditions).NotTo(BeEmpty())
-			failedCond := findCondition(resource.Status.Conditions, "Failed")
+			failedCond := findCondition(resource.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(string(failedCond.Status)).To(Equal("True"))
 			Expect(failedCond.Reason).To(Equal(ReasonConnectionError))
@@ -123,19 +119,17 @@ var _ = Describe("AxonOpsCommitlogArchive Controller", func() {
 
 		It("should set Failed condition when remoteType=s3 but no S3 config", func() {
 			s3Name := "test-s3-no-config"
-			s3NN := types.NamespacedName{Name: s3Name, Namespace: "default"}
+			s3NN := types.NamespacedName{Name: s3Name, Namespace: testNamespace}
 			resource := &alertsv1alpha1.AxonOpsCommitlogArchive{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      s3Name,
-					Namespace: "default",
-				},
+				Name:      s3Name,
+				Namespace: testNamespace,
 				Spec: alertsv1alpha1.AxonOpsCommitlogArchiveSpec{
-					ConnectionRef: "test-connection",
-					ClusterName:   "test-cluster",
-					ClusterType:   "cassandra",
+					ConnectionRef: testConnectionName,
+					ClusterName:   testClusterName,
+					ClusterType:   testClusterType,
 					RemoteType:    "s3",
 					RemotePath:    "s3://bucket/path",
-					Datacenters:   []string{"dc1"},
+					Datacenters:   []string{testDatacenter},
 					// S3 config intentionally nil
 				},
 			}

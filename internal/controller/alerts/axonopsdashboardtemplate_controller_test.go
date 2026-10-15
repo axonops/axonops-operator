@@ -26,8 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 )
 
@@ -39,7 +37,7 @@ var _ = Describe("AxonOpsDashboardTemplate Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default",
+			Namespace: testNamespace,
 		}
 		dashboardTemplate := &alertsv1alpha1.AxonOpsDashboardTemplate{}
 
@@ -48,14 +46,12 @@ var _ = Describe("AxonOpsDashboardTemplate Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, dashboardTemplate)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &alertsv1alpha1.AxonOpsDashboardTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
+					Name:      resourceName,
+					Namespace: testNamespace,
 					Spec: alertsv1alpha1.AxonOpsDashboardTemplateSpec{
-						ConnectionRef: "test-connection",
-						ClusterName:   "test-cluster",
-						ClusterType:   "cassandra",
+						ConnectionRef: testConnectionName,
+						ClusterName:   testClusterName,
+						ClusterType:   testClusterType,
 						DashboardName: "CPU Overview",
 						Source: alertsv1alpha1.DashboardSource{
 							Inline: &alertsv1alpha1.DashboardInline{
@@ -126,7 +122,7 @@ var _ = Describe("AxonOpsDashboardTemplate Controller", func() {
 			resource := &alertsv1alpha1.AxonOpsDashboardTemplate{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
 			Expect(resource.Status.Conditions).NotTo(BeEmpty())
-			failedCond := findCondition(resource.Status.Conditions, "Failed")
+			failedCond := findCondition(resource.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(string(failedCond.Status)).To(Equal("True"))
 			Expect(failedCond.Reason).To(Equal(ReasonConnectionError))
@@ -135,16 +131,14 @@ var _ = Describe("AxonOpsDashboardTemplate Controller", func() {
 		It("should set Failed condition when source is invalid (neither set)", func() {
 			By("Creating a resource with empty source")
 			emptySourceName := "test-empty-source"
-			emptySourceNN := types.NamespacedName{Name: emptySourceName, Namespace: "default"}
+			emptySourceNN := types.NamespacedName{Name: emptySourceName, Namespace: testNamespace}
 			resource := &alertsv1alpha1.AxonOpsDashboardTemplate{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      emptySourceName,
-					Namespace: "default",
-				},
+				Name:      emptySourceName,
+				Namespace: testNamespace,
 				Spec: alertsv1alpha1.AxonOpsDashboardTemplateSpec{
-					ConnectionRef: "test-connection",
-					ClusterName:   "test-cluster",
-					ClusterType:   "cassandra",
+					ConnectionRef: testConnectionName,
+					ClusterName:   testClusterName,
+					ClusterType:   testClusterType,
 					DashboardName: "Empty Source",
 					Source:        alertsv1alpha1.DashboardSource{},
 				},

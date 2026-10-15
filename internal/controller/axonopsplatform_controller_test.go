@@ -34,6 +34,16 @@ import (
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
 )
 
+const (
+	testNamespace         = "default"
+	testClusterIssuerName = "axonops-selfsigned"
+	testSearchHost        = "https://opensearch.example.com:9200"
+	testTimeseriesHost    = "cassandra-node1.example.com:9042"
+	testOrgName           = "test-org"
+	testLabelApp          = "app"
+	testImageBusybox      = "busybox"
+)
+
 // mockRESTMapper wraps the real RESTMapper but mocks cert-manager availability
 // to enable tests to run without cert-manager CRDs installed.
 type mockRESTMapper struct {
@@ -86,7 +96,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: testNamespace, // TODO(user):Modify as needed
 		}
 		axonopsplatform := &corev1alpha1.AxonOpsPlatform{}
 
@@ -95,10 +105,8 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, axonopsplatform)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &corev1alpha1.AxonOpsPlatform{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
+					Name:      resourceName,
+					Namespace: testNamespace,
 					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -119,7 +127,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
-				ClusterIssuerName: "axonops-selfsigned",
+				ClusterIssuerName: testClusterIssuerName,
 				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
@@ -138,42 +146,36 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
 				Name:      resourceName,
-				Namespace: "default",
+				Namespace: testNamespace,
 			}
 
 			// Create a search auth secret for external search
 			searchSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "external-search-secret",
-					Namespace: "default",
-				},
+				Name:      "external-search-secret",
+				Namespace: testNamespace,
 				Data: map[string][]byte{
-					"AXONOPS_SEARCH_USER":     []byte("admin"),
-					"AXONOPS_SEARCH_PASSWORD": []byte("password123"),
+					searchSecretKeyUser:     []byte("admin"),
+					searchSecretKeyPassword: []byte("password123"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, searchSecret)).To(Succeed())
 
 			// Create AxonOpsPlatform with external search configured
 			resource := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
+				Name:      resourceName,
+				Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					Search: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"https://opensearch.example.com:9200"},
-								TLS: corev1alpha1.AxonTLSConfig{
-									Enabled:            false,
-									InsecureSkipVerify: false,
-								},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{testSearchHost},
+							TLS: corev1alpha1.AxonTLSConfig{
+								Enabled:            false,
+								InsecureSkipVerify: false,
 							},
-							Authentication: corev1alpha1.AxonAuthentication{
-								SecretRef: "external-search-secret",
-							},
+						},
+						Authentication: corev1alpha1.AxonAuthentication{
+							SecretRef: "external-search-secret",
 						},
 					},
 				},
@@ -184,7 +186,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
-				ClusterIssuerName: "axonops-selfsigned",
+				ClusterIssuerName: testClusterIssuerName,
 				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
@@ -197,7 +199,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			searchSts := &appsv1.StatefulSet{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      resourceName + "-search",
-				Namespace: "default",
+				Namespace: testNamespace,
 			}, searchSts)
 			Expect(errors.IsNotFound(err)).To(BeTrue())
 
@@ -219,25 +221,21 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
 				Name:      resourceName,
-				Namespace: "default",
+				Namespace: testNamespace,
 			}
 
 			// Create AxonOpsPlatform with external search but no credentials
 			resource := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
+				Name:      resourceName,
+				Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					Search: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"https://opensearch.example.com:9200"},
-							},
-							Authentication: corev1alpha1.AxonAuthentication{
-								// No SecretRef or Username
-							},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{testSearchHost},
+						},
+						Authentication: corev1alpha1.AxonAuthentication{
+							// No SecretRef or Username
 						},
 					},
 				},
@@ -248,7 +246,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
-				ClusterIssuerName: "axonops-selfsigned",
+				ClusterIssuerName: testClusterIssuerName,
 				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
@@ -269,7 +267,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			managedSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      resourceName + "-search-auth",
-				Namespace: "default",
+				Namespace: testNamespace,
 			}, managedSecret)
 			Expect(errors.IsNotFound(err)).To(BeTrue())
 
@@ -282,45 +280,37 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
 				Name:      resourceName,
-				Namespace: "default",
+				Namespace: testNamespace,
 			}
 
 			// Create a search auth secret
 			searchSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "search-cred-secret",
-					Namespace: "default",
-				},
+				Name:      "search-cred-secret",
+				Namespace: testNamespace,
 				Data: map[string][]byte{
-					"AXONOPS_SEARCH_USER":     []byte("admin"),
-					"AXONOPS_SEARCH_PASSWORD": []byte("password123"),
+					searchSecretKeyUser:     []byte("admin"),
+					searchSecretKeyPassword: []byte("password123"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, searchSecret)).To(Succeed())
 
 			// Create AxonOpsPlatform with external search and minimal server config
 			resource := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
+				Name:      resourceName,
+				Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					Search: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"https://opensearch.example.com:9200"},
-							},
-							Authentication: corev1alpha1.AxonAuthentication{
-								SecretRef: "search-cred-secret",
-							},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{testSearchHost},
+						},
+						Authentication: corev1alpha1.AxonAuthentication{
+							SecretRef: "search-cred-secret",
 						},
 					},
 					Server: &corev1alpha1.AxonServerComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-						},
-						OrgName: "test-org",
+						Enabled: new(true),
+						OrgName: testOrgName,
 					},
 				},
 			}
@@ -330,7 +320,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
-				ClusterIssuerName: "axonops-selfsigned",
+				ClusterIssuerName: testClusterIssuerName,
 				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
@@ -343,7 +333,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			serverSts := &appsv1.StatefulSet{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      resourceName + "-server",
-				Namespace: "default",
+				Namespace: testNamespace,
 			}, serverSts)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -369,42 +359,36 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
 				Name:      resourceName,
-				Namespace: "default",
+				Namespace: testNamespace,
 			}
 
 			// Create a timeseries auth secret for external timeseries
 			timeseriesSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "external-timeseries-secret",
-					Namespace: "default",
-				},
+				Name:      "external-timeseries-secret",
+				Namespace: testNamespace,
 				Data: map[string][]byte{
-					"AXONOPS_DB_USER":     []byte("axonops"),
-					"AXONOPS_DB_PASSWORD": []byte("cassandra123"),
+					timeseriesSecretKeyUser:     []byte("axonops"),
+					timeseriesSecretKeyPassword: []byte("cassandra123"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, timeseriesSecret)).To(Succeed())
 
 			// Create AxonOpsPlatform with external timeseries configured
 			resource := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
+				Name:      resourceName,
+				Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"cassandra-node1.example.com:9042", "cassandra-node2.example.com:9042"},
-								TLS: corev1alpha1.AxonTLSConfig{
-									Enabled:            false,
-									InsecureSkipVerify: false,
-								},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{testTimeseriesHost, "cassandra-node2.example.com:9042"},
+							TLS: corev1alpha1.AxonTLSConfig{
+								Enabled:            false,
+								InsecureSkipVerify: false,
 							},
-							Authentication: corev1alpha1.AxonAuthentication{
-								SecretRef: "external-timeseries-secret",
-							},
+						},
+						Authentication: corev1alpha1.AxonAuthentication{
+							SecretRef: "external-timeseries-secret",
 						},
 					},
 				},
@@ -415,7 +399,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
-				ClusterIssuerName: "axonops-selfsigned",
+				ClusterIssuerName: testClusterIssuerName,
 				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
@@ -428,7 +412,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			timeseriesSts := &appsv1.StatefulSet{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      resourceName + "-timeseries",
-				Namespace: "default",
+				Namespace: testNamespace,
 			}, timeseriesSts)
 			Expect(errors.IsNotFound(err)).To(BeTrue())
 
@@ -450,25 +434,21 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
 				Name:      resourceName,
-				Namespace: "default",
+				Namespace: testNamespace,
 			}
 
 			// Create AxonOpsPlatform with external timeseries but no credentials
 			resource := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
+				Name:      resourceName,
+				Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"cassandra-node1.example.com:9042"},
-							},
-							Authentication: corev1alpha1.AxonAuthentication{
-								// No SecretRef or Username
-							},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{testTimeseriesHost},
+						},
+						Authentication: corev1alpha1.AxonAuthentication{
+							// No SecretRef or Username
 						},
 					},
 				},
@@ -479,7 +459,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
-				ClusterIssuerName: "axonops-selfsigned",
+				ClusterIssuerName: testClusterIssuerName,
 				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
@@ -500,7 +480,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			managedSecret := &corev1.Secret{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      resourceName + "-timeseries-auth",
-				Namespace: "default",
+				Namespace: testNamespace,
 			}, managedSecret)
 			Expect(errors.IsNotFound(err)).To(BeTrue())
 
@@ -513,45 +493,37 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
 				Name:      resourceName,
-				Namespace: "default",
+				Namespace: testNamespace,
 			}
 
 			// Create a timeseries auth secret
 			timeseriesSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "timeseries-cred-secret",
-					Namespace: "default",
-				},
+				Name:      "timeseries-cred-secret",
+				Namespace: testNamespace,
 				Data: map[string][]byte{
-					"AXONOPS_DB_USER":     []byte("axonops"),
-					"AXONOPS_DB_PASSWORD": []byte("cassandra123"),
+					timeseriesSecretKeyUser:     []byte("axonops"),
+					timeseriesSecretKeyPassword: []byte("cassandra123"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, timeseriesSecret)).To(Succeed())
 
 			// Create AxonOpsPlatform with external timeseries and minimal server config
 			resource := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
+				Name:      resourceName,
+				Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"cassandra-node1.example.com:9042"},
-							},
-							Authentication: corev1alpha1.AxonAuthentication{
-								SecretRef: "timeseries-cred-secret",
-							},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{testTimeseriesHost},
+						},
+						Authentication: corev1alpha1.AxonAuthentication{
+							SecretRef: "timeseries-cred-secret",
 						},
 					},
 					Server: &corev1alpha1.AxonServerComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-						},
-						OrgName: "test-org",
+						Enabled: new(true),
+						OrgName: testOrgName,
 					},
 				},
 			}
@@ -561,7 +533,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
-				ClusterIssuerName: "axonops-selfsigned",
+				ClusterIssuerName: testClusterIssuerName,
 				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
@@ -574,7 +546,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			serverSts := &appsv1.StatefulSet{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      resourceName + "-server",
-				Namespace: "default",
+				Namespace: testNamespace,
 			}, serverSts)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -602,7 +574,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 				Scheme: k8sClient.Scheme(),
 			}
 
-			ready, err := reconciler.isStatefulSetReady(ctx, "default", "nonexistent-sts")
+			ready, err := reconciler.isStatefulSetReady(ctx, testNamespace, "nonexistent-sts")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ready).To(BeFalse())
 		})
@@ -616,26 +588,24 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 
 			// Create a StatefulSet with 1 replica but 0 ready
 			sts := &appsv1.StatefulSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "sts-not-ready",
-					Namespace: "default",
-				},
+				Name:      "sts-not-ready",
+				Namespace: testNamespace,
 				Spec: appsv1.StatefulSetSpec{
-					Replicas: ptr(int32(1)),
+					Replicas: new(int32(1)),
 					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"app": "test"},
+						MatchLabels: map[string]string{testLabelApp: "test"},
 					},
 					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{testLabelApp: "test"}},
 						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{{Name: "c", Image: "busybox"}},
+							Containers: []corev1.Container{{Name: "c", Image: testImageBusybox}},
 						},
 					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, sts)).To(Succeed())
 
-			ready, err := reconciler.isStatefulSetReady(ctx, "default", "sts-not-ready")
+			ready, err := reconciler.isStatefulSetReady(ctx, testNamespace, "sts-not-ready")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ready).To(BeFalse())
 
@@ -651,19 +621,17 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 
 			// Create a StatefulSet
 			sts := &appsv1.StatefulSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "sts-ready",
-					Namespace: "default",
-				},
+				Name:      "sts-ready",
+				Namespace: testNamespace,
 				Spec: appsv1.StatefulSetSpec{
-					Replicas: ptr(int32(1)),
+					Replicas: new(int32(1)),
 					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"app": "test-ready"},
+						MatchLabels: map[string]string{testLabelApp: "test-ready"},
 					},
 					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test-ready"}},
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{testLabelApp: "test-ready"}},
 						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{{Name: "c", Image: "busybox"}},
+							Containers: []corev1.Container{{Name: "c", Image: testImageBusybox}},
 						},
 					},
 				},
@@ -675,7 +643,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			sts.Status.Replicas = 1
 			Expect(k8sClient.Status().Update(ctx, sts)).To(Succeed())
 
-			ready, err := reconciler.isStatefulSetReady(ctx, "default", "sts-ready")
+			ready, err := reconciler.isStatefulSetReady(ctx, testNamespace, "sts-ready")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ready).To(BeTrue())
 
@@ -690,8 +658,8 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			}
 
 			server := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{Name: "dep-test", Namespace: "default"},
-				Spec:       corev1alpha1.AxonOpsPlatformSpec{
+				Name: "dep-test", Namespace: testNamespace,
+				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					// TimeSeries and Search are nil (disabled)
 				},
 			}
@@ -717,22 +685,18 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			}
 
 			server := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{Name: "dep-external-test", Namespace: "default"},
+				Name: "dep-external-test", Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"cassandra:9042"},
-							},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{"cassandra:9042"},
 						},
 					},
 					Search: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"https://elastic:9200"},
-							},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{"https://elastic:9200"},
 						},
 					},
 				},
@@ -753,11 +717,11 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			}
 
 			server := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{Name: "dep-internal-test", Namespace: "default"},
+				Name: "dep-internal-test", Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
 						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
+							Enabled: new(true),
 							// No external hosts = internal
 						},
 					},
@@ -780,60 +744,52 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			ctx := context.Background()
 			typeNamespacedName := types.NamespacedName{
 				Name:      resourceName,
-				Namespace: "default",
+				Namespace: testNamespace,
 			}
 
 			// Create auth secrets for external components
 			tsSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "dep-ts-secret", Namespace: "default"},
+				Name: "dep-ts-secret", Namespace: testNamespace,
 				Data: map[string][]byte{
-					"AXONOPS_DB_USER":     []byte("user"),
-					"AXONOPS_DB_PASSWORD": []byte("pass"),
+					timeseriesSecretKeyUser:     []byte("user"),
+					timeseriesSecretKeyPassword: []byte("pass"),
 				},
 			}
 			searchSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "dep-search-secret", Namespace: "default"},
+				Name: "dep-search-secret", Namespace: testNamespace,
 				Data: map[string][]byte{
-					"AXONOPS_SEARCH_USER":     []byte("user"),
-					"AXONOPS_SEARCH_PASSWORD": []byte("pass"),
+					searchSecretKeyUser:     []byte("user"),
+					searchSecretKeyPassword: []byte("pass"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, tsSecret)).To(Succeed())
 			Expect(k8sClient.Create(ctx, searchSecret)).To(Succeed())
 
 			resource := &corev1alpha1.AxonOpsPlatform{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
+				Name:      resourceName,
+				Namespace: testNamespace,
 				Spec: corev1alpha1.AxonOpsPlatformSpec{
 					TimeSeries: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"cassandra:9042"},
-							},
-							Authentication: corev1alpha1.AxonAuthentication{
-								SecretRef: "dep-ts-secret",
-							},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{"cassandra:9042"},
+						},
+						Authentication: corev1alpha1.AxonAuthentication{
+							SecretRef: "dep-ts-secret",
 						},
 					},
 					Search: &corev1alpha1.AxonDbComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-							External: corev1alpha1.AxonExternalConfig{
-								Hosts: []string{"https://elastic:9200"},
-							},
-							Authentication: corev1alpha1.AxonAuthentication{
-								SecretRef: "dep-search-secret",
-							},
+						Enabled: new(true),
+						External: corev1alpha1.AxonExternalConfig{
+							Hosts: []string{"https://elastic:9200"},
+						},
+						Authentication: corev1alpha1.AxonAuthentication{
+							SecretRef: "dep-search-secret",
 						},
 					},
 					Server: &corev1alpha1.AxonServerComponent{
-						AxonBaseComponent: corev1alpha1.AxonBaseComponent{
-							Enabled: ptr(true),
-						},
-						OrgName: "test-org",
+						Enabled: new(true),
+						OrgName: testOrgName,
 					},
 				},
 			}
@@ -843,7 +799,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			controllerReconciler := &AxonOpsPlatformReconciler{
 				Client:            k8sClient,
 				Scheme:            k8sClient.Scheme(),
-				ClusterIssuerName: "axonops-selfsigned",
+				ClusterIssuerName: testClusterIssuerName,
 				RESTMapper:        &mockRESTMapper{delegate: k8sClient.RESTMapper()},
 			}
 
@@ -856,7 +812,7 @@ var _ = Describe("AxonOpsPlatform Controller", func() {
 			serverSts := &appsv1.StatefulSet{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      resourceName + "-server",
-				Namespace: "default",
+				Namespace: testNamespace,
 			}, serverSts)
 			Expect(err).NotTo(HaveOccurred())
 

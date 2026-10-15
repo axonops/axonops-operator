@@ -41,10 +41,8 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 
 	newLogCollectorCR := func(name, filename string) *alertsv1alpha1.AxonOpsLogCollector {
 		return &alertsv1alpha1.AxonOpsLogCollector{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: testNamespace,
-			},
+			Name:      name,
+			Namespace: testNamespace,
 			Spec: alertsv1alpha1.AxonOpsLogCollectorSpec{
 				ConnectionRef: connName,
 				ClusterName:   testClusterName,
@@ -75,7 +73,7 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 			cleanup := createTestConnectionAndSecret(ctx, connName, server)
 			defer cleanup()
 
-			cr := newLogCollectorCR("lc-create-test", "/var/log/cassandra/gc.log")
+			cr := newLogCollectorCR("lc-create-test", testGCLogPath)
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 			defer func() { _ = k8sClient.Delete(ctx, cr) }()
 
@@ -110,7 +108,7 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 				switch r.Method {
 				case http.MethodGet:
 					collectors := []axonops.LogCollector{
-						{UUID: existingUUID, Filename: "/var/log/cassandra/gc.log", Name: "Old Name"},
+						{UUID: existingUUID, Filename: testGCLogPath, Name: "Old Name"},
 					}
 					data, _ := json.Marshal(collectors)
 					w.WriteHeader(http.StatusOK)
@@ -126,7 +124,7 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 			cleanup := createTestConnectionAndSecret(ctx, connReuse, server)
 			defer cleanup()
 
-			cr := newLogCollectorCR("lc-reuse-uuid", "/var/log/cassandra/gc.log")
+			cr := newLogCollectorCR("lc-reuse-uuid", testGCLogPath)
 			cr.Spec.ConnectionRef = connReuse
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
 			defer func() { _ = k8sClient.Delete(ctx, cr) }()
@@ -149,7 +147,7 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 				switch r.Method {
 				case http.MethodGet:
 					collectors := []axonops.LogCollector{
-						{UUID: "uuid-1", Filename: "/var/log/cassandra/gc.log", Name: "GC"},
+						{UUID: "uuid-1", Filename: testGCLogPath, Name: "GC"},
 						{UUID: "uuid-2", Filename: "/var/log/cassandra/sys.log", Name: "Sys"},
 					}
 					data, _ := json.Marshal(collectors)
@@ -169,7 +167,7 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 			cleanup := createTestConnectionAndSecret(ctx, connPreserve, server)
 			defer cleanup()
 
-			cr := newLogCollectorCR("lc-preserve", "/var/log/cassandra/gc.log")
+			cr := newLogCollectorCR("lc-preserve", testGCLogPath)
 			cr.Spec.ConnectionRef = connPreserve
 			cr.Spec.Name = "Updated GC"
 			Expect(k8sClient.Create(ctx, cr)).To(Succeed())
@@ -184,7 +182,7 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 			Expect(putPayload).To(HaveLen(2))
 			var gcFound, sysFound bool
 			for _, lc := range putPayload {
-				if lc.Filename == "/var/log/cassandra/gc.log" {
+				if lc.Filename == testGCLogPath {
 					gcFound = true
 					Expect(lc.Name).To(Equal("Updated GC"))
 					Expect(lc.UUID).To(Equal("uuid-1"))
@@ -377,9 +375,9 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
-			Expect(failedCond.Reason).To(Equal("FailedToResolveConnection"))
+			Expect(failedCond.Reason).To(Equal(reasonFailedToResolveConnection))
 		})
 	})
 
@@ -413,9 +411,9 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
-			Expect(failedCond.Reason).To(Equal("SyncFailed"))
+			Expect(failedCond.Reason).To(Equal(reasonSyncFailed))
 		})
 	})
 
@@ -457,9 +455,9 @@ var _ = Describe("AxonOpsLogCollector Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
-			Expect(failedCond.Reason).To(Equal("SyncFailed"))
+			Expect(failedCond.Reason).To(Equal(reasonSyncFailed))
 		})
 	})
 })

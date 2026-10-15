@@ -21,8 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	alertsv1alpha1 "github.com/axonops/axonops-operator/api/alerts/v1alpha1"
 	"github.com/axonops/axonops-operator/internal/axonops"
 )
@@ -48,14 +46,10 @@ func exportAdaptiveRepair(ctx context.Context, client *axonops.Client, opts *Opt
 	maxSegPerTable := settings.MaxSegmentsPerTable
 
 	obj := &alertsv1alpha1.AxonOpsAdaptiveRepair{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "alerts.axonops.com/v1alpha1",
-			Kind:       "AxonOpsAdaptiveRepair",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: opts.Namespace,
-		},
+		APIVersion: alertsAPIVersion,
+		Kind:       "AxonOpsAdaptiveRepair",
+		Name:       name,
+		Namespace:  opts.Namespace,
 		Spec: alertsv1alpha1.AxonOpsAdaptiveRepairSpec{
 			ConnectionRef:       opts.ConnectionName,
 			ClusterName:         opts.ClusterName,
@@ -98,14 +92,10 @@ func exportScheduledRepairs(ctx context.Context, client *axonops.Client, opts *O
 		name := toDNSLabel(opts.ClusterName + "-" + tag)
 
 		obj := &alertsv1alpha1.AxonOpsScheduledRepair{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "alerts.axonops.com/v1alpha1",
-				Kind:       "AxonOpsScheduledRepair",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: opts.Namespace,
-			},
+			APIVersion: alertsAPIVersion,
+			Kind:       "AxonOpsScheduledRepair",
+			Name:       name,
+			Namespace:  opts.Namespace,
 			Spec: alertsv1alpha1.AxonOpsScheduledRepairSpec{
 				ConnectionRef:       opts.ConnectionName,
 				ClusterName:         opts.ClusterName,
@@ -225,8 +215,8 @@ func backupV1alpha1(
 	}
 
 	return map[string]any{
-		"apiVersion": "backups.axonops.com/v1alpha1",
-		"kind":       "AxonOpsBackup",
+		fieldAPIVersion: "backups.axonops.com/v1alpha1",
+		fieldKind:       "AxonOpsBackup",
 		"metadata": map[string]any{
 			"name":      name,
 			"namespace": opts.Namespace,

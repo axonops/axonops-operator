@@ -171,7 +171,7 @@ func (r *AxonOpsAdaptiveRepairReconciler) checkDrift(ctx context.Context, repair
 	currentSettings, err := apiClient.GetAdaptiveRepair(ctx, repair.Spec.ClusterType, repair.Spec.ClusterName)
 	if err != nil {
 		log.Error(err, "Failed to perform drift check")
-		r.setFailedCondition(ctx, repair, "DriftCheckFailed", common.SafeConditionMsg("Failed to check for drift", err))
+		r.setFailedCondition(ctx, repair, reasonDriftCheckFailed, common.SafeConditionMsg("Failed to check for drift", err))
 		return ctrl.Result{RequeueAfter: common.DriftCheckInterval}, true, nil
 	}
 	desired := r.buildAdaptiveRepairSettings(repair)
@@ -181,7 +181,7 @@ func (r *AxonOpsAdaptiveRepairReconciler) checkDrift(ctx context.Context, repair
 	}
 	log.Info("Drift detected: adaptive repair settings have changed externally")
 	meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
-		Type:               "DriftDetected",
+		Type:               condTypeDriftDetected,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: repair.Generation,
 		Reason:             "SettingsChanged",
@@ -288,10 +288,10 @@ func (r *AxonOpsAdaptiveRepairReconciler) updateReadyStatus(ctx context.Context,
 		Type:               condTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: syncedGeneration,
-		Reason:             "Synced",
+		Reason:             reasonSynced,
 		Message:            "Adaptive repair settings synced with AxonOps",
 	})
-	meta.RemoveStatusCondition(&repair.Status.Conditions, "Failed")
+	meta.RemoveStatusCondition(&repair.Status.Conditions, condTypeFailed)
 
 	if err := r.Status().Update(ctx, repair); err != nil {
 		logf.FromContext(ctx).Error(err, "Failed to update status")
@@ -304,7 +304,7 @@ func (r *AxonOpsAdaptiveRepairReconciler) updateReadyStatus(ctx context.Context,
 // setFailedCondition sets a failed condition on the adaptive repair CR
 func (r *AxonOpsAdaptiveRepairReconciler) setFailedCondition(ctx context.Context, repair *alertsv1alpha1.AxonOpsAdaptiveRepair, reason, message string) {
 	meta.SetStatusCondition(&repair.Status.Conditions, metav1.Condition{
-		Type:               "Failed",
+		Type:               condTypeFailed,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: repair.Generation,
 		Reason:             reason,

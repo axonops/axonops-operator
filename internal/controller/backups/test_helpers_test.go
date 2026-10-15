@@ -23,7 +23,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1alpha1 "github.com/axonops/axonops-operator/api/v1alpha1"
@@ -46,10 +45,8 @@ func createTestConnectionAndSecret(ctx context.Context, connName string, server 
 	secretName := connName + "-api-key"
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: testNamespace,
-		},
+		Name:      secretName,
+		Namespace: testNamespace,
 		Data: map[string][]byte{
 			"api_key": []byte("test-api-key-value"),
 		},
@@ -57,10 +54,8 @@ func createTestConnectionAndSecret(ctx context.Context, connName string, server 
 	Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
 	conn := &corev1alpha1.AxonOpsConnection{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      connName,
-			Namespace: testNamespace,
-		},
+		Name:      connName,
+		Namespace: testNamespace,
 		Spec: corev1alpha1.AxonOpsConnectionSpec{
 			OrgID: testOrgID,
 			APIKeyRef: corev1alpha1.AxonOpsSecretKeyRef{

@@ -40,20 +40,18 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 	const connName = "http-hc-conn"
 	newHTTPHealthcheckCR := func(name string) *alertsv1alpha1.AxonOpsHealthcheckHTTP {
 		return &alertsv1alpha1.AxonOpsHealthcheckHTTP{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: testNamespace,
-			},
+			Name:      name,
+			Namespace: testNamespace,
 			Spec: alertsv1alpha1.AxonOpsHealthcheckHTTPSpec{
 				ConnectionRef:  connName,
 				ClusterName:    testClusterName,
-				ClusterType:    "kafka",
+				ClusterType:    testClusterTypeKafka,
 				Name:           "test-http-healthcheck",
 				URL:            "http://localhost:8080/health",
 				Method:         "GET",
 				ExpectedStatus: 200,
 				Interval:       "1m",
-				Timeout:        "30s",
+				Timeout:        testHealthcheckTimeout,
 			},
 		}
 	}
@@ -119,7 +117,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			readyCond := meta.FindStatusCondition(cr.Status.Conditions, "Ready")
 			Expect(readyCond).NotTo(BeNil())
 			Expect(readyCond.Status).To(Equal(metav1.ConditionTrue))
-			Expect(readyCond.Reason).To(Equal("Synced"))
+			Expect(readyCond.Reason).To(Equal(reasonSynced))
 		})
 	})
 
@@ -230,7 +228,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Status).To(Equal(metav1.ConditionTrue))
 			Expect(failedCond.Reason).To(Equal(ReasonConnectionError))
@@ -267,7 +265,7 @@ var _ = Describe("AxonOpsHealthcheckHTTP Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			Expect(k8sClient.Get(ctx, nn, cr)).To(Succeed())
-			failedCond := meta.FindStatusCondition(cr.Status.Conditions, "Failed")
+			failedCond := meta.FindStatusCondition(cr.Status.Conditions, condTypeFailed)
 			Expect(failedCond).NotTo(BeNil())
 			Expect(failedCond.Reason).To(Equal(ReasonAPIError))
 		})

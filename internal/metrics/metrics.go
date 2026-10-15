@@ -6,6 +6,8 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
+const labelResourceType = "resource_type"
+
 var (
 	// ReconcileDuration measures the duration of reconciliation operations in seconds.
 	ReconcileDuration = prometheus.NewHistogramVec(
@@ -14,7 +16,7 @@ var (
 			Help:    "Duration of reconciliation in seconds",
 			Buckets: []float64{0.1, 0.5, 1, 5, 10, 30, 60},
 		},
-		[]string{"resource_type", "result"},
+		[]string{labelResourceType, "result"},
 	)
 
 	// ReconcileTotal counts the total number of reconciliations.
@@ -23,7 +25,7 @@ var (
 			Name: "axonops_reconciliation_total",
 			Help: "Total number of reconciliations",
 		},
-		[]string{"resource_type", "result"},
+		[]string{labelResourceType, "result"},
 	)
 
 	// ResourceCreatedTotal counts resources created by the operator.
@@ -32,7 +34,7 @@ var (
 			Name: "axonops_resource_created_total",
 			Help: "Total resources created",
 		},
-		[]string{"resource_type"},
+		[]string{labelResourceType},
 	)
 
 	// ResourceUpdatedTotal counts resources updated by the operator.
@@ -41,7 +43,7 @@ var (
 			Name: "axonops_resource_updated_total",
 			Help: "Total resources updated",
 		},
-		[]string{"resource_type"},
+		[]string{labelResourceType},
 	)
 
 	// ResourceDeletedTotal counts resources deleted by the operator.
@@ -50,7 +52,7 @@ var (
 			Name: "axonops_resource_deleted_total",
 			Help: "Total resources deleted",
 		},
-		[]string{"resource_type"},
+		[]string{labelResourceType},
 	)
 
 	// ReconcileErrorsTotal counts reconciliation errors by type.

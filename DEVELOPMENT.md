@@ -25,7 +25,7 @@ This guide covers everything you need to get started contributing to the AxonOps
 
 | Tool | Version | Notes |
 |---|---|---|
-| Go | 1.25.3+ | Version in `go.mod` is authoritative |
+| Go | 1.27.2+ | Version in `go.mod` is authoritative |
 | Docker | Any recent | Required for building images and running Kind |
 | Kind | Latest | Required for E2E tests only |
 | kubectl | 1.28+ | Points at a cluster or Kind node |
