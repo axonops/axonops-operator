@@ -81,6 +81,8 @@ helm upgrade --install axonops-operator \
 
 To see available versions, check the [releases page](https://github.com/axonops/axonops-operator/releases) or the [package registry](https://github.com/axonops/axonops-operator/pkgs/container/charts%2Faxonops-operator).
 
+Release images, charts and files are signed and ship with build provenance; the image and release files also ship with an SBOM. See [SECURITY.md](SECURITY.md#verifying-release-artifacts) for verification steps.
+
 **Install from local chart source:**
 
 ```bash
@@ -293,3 +295,5 @@ make undeploy                       # Remove the operator from the cluster
 © 2026 AxonOps Limited. All rights reserved.
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
+
+Maintained by [AxonOps](https://axonops.com). Support at [axonops.com/contact](https://axonops.com/contact).

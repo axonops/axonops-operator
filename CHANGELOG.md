@@ -7,6 +7,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Added
+- Release images, Helm charts and release files are signed with cosign keyless signing and ship with SLSA build provenance
+- SBOMs for the container image and release files
+- `Security` workflow running govulncheck, CodeQL and a Trivy image scan on pull requests, pushes to `main` and weekly
+- `OpenSSF Scorecard` workflow
+- `SECURITY.md` with vulnerability reporting and signature verification instructions
+
+### Changed
+- Releases fail unless the tag points at a commit on `main`, and run `make lint` and `make test` before publishing
+
 ## [0.1.0] — 2026-04-09
 
 Initial public release of the AxonOps Kubernetes Operator.
