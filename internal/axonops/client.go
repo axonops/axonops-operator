@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,7 +36,66 @@ import (
 const (
 	// DefaultTimeout is the default HTTP client timeout for AxonOps API requests.
 	DefaultTimeout = 30 * time.Second
+
+	// MaxResponseBodyBytes is the largest response body the client will read
+	// (10 MiB). It bounds memory use when the server is hostile or misbehaving;
+	// the operator runs with a small memory limit. Larger bodies fail with
+	// ErrResponseTooLarge.
+	MaxResponseBodyBytes int64 = 10 << 20
 )
+
+// ErrResponseTooLarge is returned when a response body exceeds MaxResponseBodyBytes.
+var ErrResponseTooLarge = errors.New("response body exceeds size limit")
+
+// limitTransport enforces MaxResponseBodyBytes on every response body read
+// through the client, so no call site can read an unbounded body.
+type limitTransport struct {
+	base http.RoundTripper
+}
+
+func (t *limitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	// Reject early on a declared oversize success body. Error responses are
+	// capped while streaming instead, so callers still get the status code.
+	if resp.StatusCode/100 == 2 && req.Method != http.MethodHead && resp.ContentLength > MaxResponseBodyBytes {
+		resp.Body.Close()
+		return nil, ErrResponseTooLarge
+	}
+	resp.Body = &limitedBody{rc: resp.Body, left: MaxResponseBodyBytes}
+	return resp, nil
+}
+
+// limitedBody returns ErrResponseTooLarge, rather than silently truncating,
+// once more than the allowed number of bytes has been read.
+type limitedBody struct {
+	rc   io.ReadCloser
+	left int64
+	err  error
+}
+
+func (b *limitedBody) Read(p []byte) (int, error) {
+	if b.err != nil {
+		return 0, b.err
+	}
+	// Read one byte past the limit so an over-limit body is detected.
+	if int64(len(p)) > b.left+1 {
+		p = p[:b.left+1]
+	}
+	n, err := b.rc.Read(p)
+	b.left -= int64(n)
+	if b.left < 0 {
+		n += int(b.left)
+		b.left = 0
+		b.err = ErrResponseTooLarge
+		return n, b.err
+	}
+	return n, err
+}
+
+func (b *limitedBody) Close() error { return b.rc.Close() }
 
 // cloudHosts are the AxonOps SaaS hosts that use Bearer token authentication.
 var cloudHosts = []string{
@@ -209,6 +269,7 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 			},
 		}
 	}
+	transport = &limitTransport{base: transport}
 	if o.verbose {
 		transport = &verboseTransport{base: transport}
 	}
@@ -216,6 +277,11 @@ func NewClient(host, protocol, orgID, apiKey, tokenType string, tlsSkipVerify bo
 	httpClient := &http.Client{
 		Timeout:   o.timeout,
 		Transport: transport,
+		// Never follow redirects: they could send the API key to another host
+		// or reach internal addresses (SSRF). A 3xx surfaces as an APIError.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 
 	return &Client{
