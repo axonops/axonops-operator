@@ -17,11 +17,14 @@ limitations under the License.
 package axonops
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -491,6 +494,98 @@ func TestNewClient_Validation(t *testing.T) {
 			_, err := NewClient(tt.host, "http", tt.orgID, tt.apiKey, "Bearer", false)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestClient_ResponseBodyTooLarge(t *testing.T) {
+	var written atomic.Int64
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"metricrules":["`))
+		chunk := []byte(strings.Repeat("a", 1<<20))
+		for range 64 {
+			n, err := w.Write(chunk)
+			written.Add(int64(n))
+			if err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	_, err := newTLSTestClient(t, server).GetMetricAlertRules(context.Background(), "cassandra", "c1")
+	if !errors.Is(err, ErrResponseTooLarge) {
+		t.Fatalf("err = %v, want ErrResponseTooLarge", err)
+	}
+	if written.Load() >= 64<<20 {
+		t.Errorf("server wrote full %d bytes; body was fully consumed", written.Load())
+	}
+}
+
+func TestClient_ResponseBodyTooLarge_ContentLength(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "104857600")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	_, err := newTLSTestClient(t, server).GetMetricAlertRules(context.Background(), "cassandra", "c1")
+	if !errors.Is(err, ErrResponseTooLarge) {
+		t.Fatalf("err = %v, want ErrResponseTooLarge", err)
+	}
+}
+
+func TestClient_RedirectToOtherHostNotFollowed(t *testing.T) {
+	var targetHit atomic.Bool
+	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetHit.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer origin.Close()
+
+	_, err := newTLSTestClient(t, origin).GetMetricAlertRules(context.Background(), "cassandra", "c1")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != http.StatusFound {
+		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusFound)
+	}
+	if targetHit.Load() {
+		t.Error("redirect target was contacted")
+	}
+}
+
+func TestLimitedBody_Boundary(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int64
+		wantErr error
+	}{
+		{"exactly at limit", MaxResponseBodyBytes, nil},
+		{"one byte over limit", MaxResponseBodyBytes + 1, ErrResponseTooLarge},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &limitedBody{
+				rc:   io.NopCloser(bytes.NewReader(make([]byte, tt.size))),
+				left: MaxResponseBodyBytes,
+			}
+			got, err := io.ReadAll(b)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+			if int64(len(got)) > MaxResponseBodyBytes {
+				t.Errorf("read %d bytes, want at most %d", len(got), MaxResponseBodyBytes)
 			}
 		})
 	}
