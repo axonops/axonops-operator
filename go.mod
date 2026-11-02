@@ -1,6 +1,6 @@
 module github.com/axonops/axonops-operator
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/cert-manager/cert-manager v1.20.0
