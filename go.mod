@@ -1,9 +1,9 @@
 module github.com/axonops/axonops-operator
 
-go 1.27.2
+go 1.27.3
 
 require (
-	github.com/cert-manager/cert-manager v1.20.0
+	github.com/cert-manager/cert-manager v1.20.3
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.28.0
 	github.com/onsi/gomega v1.39.1
